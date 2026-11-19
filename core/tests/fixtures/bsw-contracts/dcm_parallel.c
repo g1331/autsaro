@@ -250,6 +250,18 @@ int main(void)
 #endif
     start();
     receive(FALSE);
+    /* The request is copied at the second exit. Restart before the generation check. */
+    window(2u, MAIN, restart_while_reading);
+    assert(reads == 0u && sent_count == 0u);
+    Dcm_MainFunction();
+    const uint8 fresh_response[] = {0x62u, 0x12u, 0x34u, 0x51u, 0x51u, 0x51u, 0x51u};
+    assert(reads == 1u && sent_count == 1u && rejected_copies == 0u);
+    assert(sent_length == sizeof(fresh_response));
+    assert(memcmp(sent, fresh_response, sizeof(fresh_response)) == 0);
+    Dcm_TpTxConfirmation(TX, E_OK);
+
+    start();
+    receive(FALSE);
     /* Main exits after claiming the executor, copying the request, then before ReadData. */
     window(3u, MAIN, restart_while_reading);
     assert(reads == 1u && sent_count == 0u);

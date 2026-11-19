@@ -178,6 +178,10 @@ int main(int argc, char **argv)
             return 99;
         }
     }
+    if (strcmp(scenario, "disabled-first-start") == 0) {
+        /* The host rejects the first StartOS without starting the scheduler. */
+        DisableAllInterrupts();
+    }
     StartOS(mode);
     puts("FORBIDDEN_STARTOS_RETURN");
     return 99;

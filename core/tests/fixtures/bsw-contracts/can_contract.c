@@ -129,6 +129,7 @@ int main(void)
                                       Can_MainFunction_Mode};
     static const Det_ErrorHookType callouts[] = {report_runtime};
     static const Det_ConfigType det = {NULL_PTR, 0u, callouts, 1u};
+    static const Can_ConfigType no_sink = {NULL_PTR};
     uint8 bytes[8] = {1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u};
     const uint8 incoming[8] = {9u, 10u, 11u, 12u, 13u, 14u, 15u, 16u};
     Can_PduType pdu = {18u, 8u, 0x123u, bytes};
@@ -150,7 +151,11 @@ int main(void)
     assert(set_mode(3u, CAN_CS_STARTED) == E_NOT_OK);
     assert(write(1u, &pdu) == E_NOT_OK);
     init(NULL_PTR);
-    assert(get_mode(3u, &state) == E_NOT_OK);
+    assert(get_mode(3u, &state) == E_NOT_OK && state == CAN_CS_SLEEP);
+    /* The synchronous host policy needs a transmit sink before publishing the driver. */
+    init(&no_sink);
+    assert(get_mode(3u, &state) == E_NOT_OK && state == CAN_CS_SLEEP);
+    assert(write(1u, &pdu) == E_NOT_OK && frames == 0u && lost == 0u);
 
     /* Verifies: SWS_Can_00246, SWS_Can_00245, SWS_Can_00259, SWS_Can_00250 */
     /* Verifies[Can]: SWS_BSW_00071 */

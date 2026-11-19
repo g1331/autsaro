@@ -71,6 +71,9 @@ static uint8 received[32];
 static unsigned received_length;
 static unsigned rx_done;
 static Std_ReturnType rx_result;
+static unsigned queue_errors;
+static boolean observe_queue;
+static uint8 delivered[4];
 
 Std_ReturnType LSduR_CanTpTransmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr)
 {
@@ -120,6 +123,10 @@ BufReq_ReturnType PduR_CanTpCopyRxData(PduIdType id,
 void PduR_CanTpRxIndication(PduIdType id, Std_ReturnType result)
 {
     assert(id == UPPER_RX);
+    if (observe_queue == TRUE) {
+        assert(result == E_OK && received_length == 2u && rx_done < sizeof(delivered));
+        delivered[rx_done] = received[0];
+    }
     rx_result = result;
     ++rx_done;
 }
@@ -128,8 +135,14 @@ Std_ReturnType Det_ReportRuntimeError(uint16_t ModuleId,
                                       uint8_t ApiId,
                                       uint8_t ErrorId)
 {
-    assert(ModuleId == 35u && InstanceId == 0u && ApiId == 0x06u);
-    (void)ErrorId;
+    assert(ModuleId == 35u && InstanceId == 0u);
+    if (observe_queue == TRUE) {
+        /* R24-11 service table and runtime error table: RxIndication, CANTP_E_COM. */
+        assert(ApiId == 0x42u && ErrorId == 0xb0u);
+        ++queue_errors;
+    } else {
+        assert(ApiId == 0x06u);
+    }
     return E_OK;
 }
 
@@ -274,6 +287,17 @@ static void cancel_while_copying(void)
     assert(rx_done == 0u);
 }
 
+static void fill_receive_queue(void)
+{
+    /* Main owns the dispatcher while the lower layer delivers four consecutive SFs. */
+    for (uint8 marker = 0x51u; marker <= 0x54u; ++marker) {
+        receive(0x02u, marker, 0x42u);
+        assert(queue_errors == 0u && starts == 0u && rx_done == 0u);
+    }
+    receive(0x02u, 0x55u, 0x42u);
+    assert(queue_errors == 1u && starts == 0u && rx_done == 0u);
+}
+
 int main(void)
 {
 #if defined(_WIN32)
@@ -298,6 +322,17 @@ int main(void)
     window(3u, RECEIVE_SF, reinitialize_while_receiving);
     assert(starts == 1u && rx_done == 1u && rx_result == E_OK);
     assert(received_length == 2u && received[0] == 0x43u && received[1] == 0x44u);
+
+    start();
+    observe_queue = TRUE;
+    window(2u, MAIN, fill_receive_queue);
+    const uint8 expected[] = {0x51u, 0x52u, 0x53u, 0x54u};
+    assert(queue_errors == 1u && starts == 4u && rx_done == 4u);
+    assert(memcmp(delivered, expected, sizeof(expected)) == 0);
+    observe_queue = FALSE;
+    receive(0x02u, 0x56u, 0x42u);
+    assert(queue_errors == 1u && starts == 5u && rx_done == 5u && rx_result == E_OK);
+    assert(received_length == 2u && received[0] == 0x56u);
 
     /* Transmit exits after the request, after taking `running`, and after the header. */
     start();

@@ -14,6 +14,48 @@ static StatusType line(const char *text) {
     return status;
 }
 
+static void reject_invalid_arguments(void)
+{
+    Ecu_BatchCommand command = ECU_BATCH_RX;
+    assert(line("BEGIN 3") == E_OK);
+    assert(Ecu_HostBatchParse(NULL, "COMMIT", 6u, &command) == E_OS_ILLEGAL_ADDRESS);
+    assert(Ecu_HostBatchParse(&batch, NULL, 6u, &command) == E_OS_ILLEGAL_ADDRESS);
+    assert(Ecu_HostBatchParse(&batch, "COMMIT", 6u, NULL) == E_OS_ILLEGAL_ADDRESS);
+    assert(command == ECU_BATCH_RX);
+    assert(batch.open == 1u && batch.rejected == 0u && batch.executing == 0u);
+    assert(batch.epoch == UINT64_C(3) && batch.count == 0u && batch.sequence == UINT64_C(0));
+    assert(line("COMMIT") == E_OK);
+    assert(Ecu_HostBatchComplete(&batch) == E_OK);
+}
+
+static void reject_line(const char *text, StatusType expected)
+{
+    Ecu_BatchCommand command = ECU_BATCH_BEGIN;
+    assert(Ecu_HostBatchParse(&batch, text, strlen(text), &command) == expected);
+    assert(command == ECU_BATCH_BEGIN);
+}
+
+static void reject_whitespace_in_open_batch(void)
+{
+    reject_line("COMMIT", E_OS_STATE);
+    reject_line("   ", E_OS_VALUE);
+    assert(batch.open == 0u && batch.rejected == 0u);
+    assert(line("BEGIN 4") == E_OK);
+    assert(line("RX 800 4 78563412") == E_OK);
+    reject_line("   ", E_OS_VALUE);
+    assert(batch.open == 1u && batch.rejected == 1u && batch.count == 1u);
+    reject_line("RX 801 4 12345678", E_OS_VALUE);
+    assert(batch.count == 1u && batch.frames[0].id == 800u);
+    reject_line("COMMIT", E_OS_VALUE);
+    assert(batch.open == 0u && batch.rejected == 0u && batch.executing == 0u);
+    assert(batch.count == 0u && batch.sequence == UINT64_C(1));
+    assert(batch.completed_epoch == UINT64_C(3) && batch.batch_id == UINT64_C(1));
+    assert(line("BEGIN 4") == E_OK);
+    assert(line("COMMIT") == E_OK);
+    assert(Ecu_HostBatchComplete(&batch) == E_OK);
+    assert(batch.completed_epoch == UINT64_C(4) && batch.batch_id == UINT64_C(2));
+}
+
 int main(void) {
     unsigned index;
     static const char *const malformed[] = {
@@ -101,6 +143,9 @@ int main(void) {
         assert(Ecu_HostBatchParse(&batch, "BEGIN 0", 129u, &command) == E_OS_VALUE);
         assert(command == ECU_BATCH_RX);
     }
+    Ecu_HostBatchInitialize(&batch);
+    reject_invalid_arguments();
+    reject_whitespace_in_open_batch();
     return (printf(
                 "host_batch_codec boundaries=256/257,1000/1001 numeric/sequence/recovery=pass\n") <
             0)
