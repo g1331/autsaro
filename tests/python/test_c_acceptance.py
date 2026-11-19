@@ -1455,11 +1455,10 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(context["formalStatus"], "approved")
         cases = {(row["target"], row["caseId"]): row["inputIdentity"]
                  for row in context["cases"]}
-        # The freeze records two libc6-dev package versions for these cases.
-        self.assertEqual(cases[TARGET, "standard-ecu"],
-                         "a27c0feb0581b8a3c1e46c8214a24a80b36677adff7ef846a29c5974b32549d0")
-        self.assertEqual(cases[TARGET, "user-application"],
-                         "0d3a7b4169fb817475048bb13f1e18f1a6b2e87721133bac45c3ad8b64915792")
+        # Both Linux artifacts used the same libc6-dev version and kernel closure.
+        reviewed = "8f7b570f5236fa6f2fc11b2eefd7fe79859cd8bca490cce8d88acd3ffad28d37"
+        self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
+        self.assertEqual(cases[TARGET, "user-application"], reviewed)
 
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
