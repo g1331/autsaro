@@ -925,6 +925,9 @@ class AcceptanceTests(unittest.TestCase):
             self.summary, self.project, metadata, self.root, kernel)
         self.assertEqual(set(positions), {(0, 0)})
         self.assertEqual(obligations[0]["location"], {"file": name, "line": 54})
+        header["version"] += "-new"
+        self.assertEqual(c_acceptance._sdk_positions(
+            self.summary, self.project, metadata, self.root, kernel), (positions, obligations))
         for change in ("macro", "file", "line", "category", "value", "definitionLine"):
             changed = copy.deepcopy(diagnostic)
             if change in {"macro", "category", "value", "definitionLine"}:
@@ -939,6 +942,34 @@ class AcceptanceTests(unittest.TestCase):
         definition["file"] = "project.h"
         self.assertRaises(ValueError, c_acceptance._sdk_positions,
                           self.summary, self.project, metadata, self.root, kernel)
+
+    def test_sdk_header_content_is_checked_independently_of_package_version(self):
+        self.sdk_inputs()
+        self.bind_sdk(status="pending")
+        original = self.evaluate()
+        self.assertEqual(original["status"], "blocked")
+        self.assertEqual(len(original["sdkObligations"]), 2)
+        identity = c_acceptance.sdk_identity(self.summary, self.project, self.root)
+
+        self.sdk_header["version"] += "-new"
+        updated = self.evaluate()
+        self.assertEqual(updated["status"], "blocked", updated["objects"])
+        self.assertEqual(updated["sdkObligations"], original["sdkObligations"])
+        self.assertEqual(c_acceptance.sdk_identity(self.summary, self.project, self.root), identity)
+
+        location = self.sdk_name + ":1"
+        definition = self.summary["scope"]["sdkMacroInputs"][self.sdk_name][location]["sa_sigaction"]
+        for row, field, value in ((self.sdk_header, "sha256", "f" * 64),
+                                  (definition, "value", "changed_member")):
+            with self.subTest(field=field):
+                old = row[field]
+                row[field] = value
+                self.sdk_header["key"] = c_sdk.header_key(self.sdk_header)
+                result = self.evaluate()
+                self.assertEqual(result["status"], "error")
+                self.assertEqual(result["objects"][-1]["reason"],
+                                 f"SDK integration definition differs: {location}:sa_sigaction")
+                row[field] = old
 
     def test_sdk_changed_source_and_owner_are_rejected_after_rebinding(self):
         self.sdk_inputs()
@@ -975,7 +1006,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("Incomplete SDK source provenance", result["objects"][-1]["reason"])
 
-    def test_sdk_changed_package_version_and_record_body_invalidate_evidence(self):
+    def test_sdk_changed_record_body_invalidates_evidence(self):
         self.sdk_inputs()
         before = self.identity()
         path = self.root / c_acceptance.SDK
@@ -983,10 +1014,6 @@ class AcceptanceTests(unittest.TestCase):
             stream.write("Changed integration assessment.\n")
         self.assertNotEqual(before, self.identity())
         self.assertEqual(self.evaluate()["occurrences"][0]["assessment"], "blocked")
-        self.sdk_header["version"] = "new-package"
-        self.sdk_header["key"] = c_sdk.header_key(self.sdk_header)
-        self.bind_sdk()
-        self.assertIn("definition differs", self.evaluate()["objects"][-1]["reason"])
 
     def test_sdk_mixed_diagnostic_checks_each_physical_location(self):
         self.sdk_inputs()

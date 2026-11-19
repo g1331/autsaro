@@ -628,6 +628,8 @@ def evidence_identity(summary: dict, project: Path, group: str, root: Path = ROO
                               for name in ("source-manifest.json", "posix-source-manifest.json")}
     if group == "sdk-integration":
         # The SDK assessment inventories every use, including zero-warning sites.
+        value["sdkHeaders"] = [{key: item for key, item in row.items() if key != "version"}
+                               for row in value["sdkHeaders"]]
         value["sdkMacros"] = scope.get("sdkMacroInputs")
         value["diagnostics"] = sorted(_hash(row) for row in summary["diagnostics"])
     if matrix_scope is not None:
@@ -729,7 +731,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
             if (row["symbol"] != "sigaction" or not re.search(r"\bsigaction\b", row["text"])
                     or name not in scope["sdkTranslationUnits"]
                     or not any(all(sdk_headers[header].get(field) == expected[field]
-                                   for field in ("header", "provider", "version", "sha256"))
+                                   for field in ("header", "provider", "sha256"))
                                for header in scope["sdkTranslationUnits"][name])):
                 raise ValueError("SDK sigaction interface provenance differs")
         else:
@@ -745,7 +747,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
                             or {field: actual.get(field) for field in ("line", "value", "function")}
                             != {field: definition[field] for field in ("line", "value", "function")}
                             or any(header.get(field) != definition[field]
-                                   for field in ("header", "provider", "version", "sha256"))):
+                                   for field in ("header", "provider", "sha256"))):
                         raise ValueError(f"SDK integration definition differs: {location}:{symbol}")
         obligations.append({"rule": row["rule"], "location": {"file": name, "line": row["line"]},
                             "entity": row["symbol"], "record": SDK})
