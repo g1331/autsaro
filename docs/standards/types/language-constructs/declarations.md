@@ -136,53 +136,54 @@ GCC／Cppcheck 输入。Windows 以实际检出的换行重算，原始 summary 
 {
   "id": "checker-obligations-547-r59",
   "evidence": {
-    "head": "877563f50970b13e4aca50ea6e0789dbd7c3d855",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44567323884/attempts/1"
+    "head": "6eb62e6b06cb30c3a182385853d69fb6cac2dcab",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44591712928"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "1e8b8f8dff07f449988c00569597591c6e51950db3a522d10eefe37f5fa9404b"
+      "inputIdentity": "a06078342cedc0a7a80f9260647a54a10205745abad516e4d958b2715fdef92f"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "e1976a0212020aaca50da19291afc95aff21701643b15a3d43880308ce178399"
+      "inputIdentity": "00a798c9e4a40b6fd5b393126ea2ef532f9cfb0ffeed7375f1024f167ab09fcc"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "185e6775483a888c3cd8c31d03c1708d1c79b52813c6c69e7219557a61eaa2b9"
+      "inputIdentity": "aa601c31b27e99888cf69bcd1216da325c5316142da9b5a2438c9723acc2344a"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "5d639167b6a9636f86f92954f98bb44fa3e8f79f59f689c8e04c113336febe44"
+      "inputIdentity": "4ee9312da55e5919a22b79b04a180062dbacba2a1edbb4c0e2ca7a27ad20d856"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "5c321ad36c9779ed86373ee5ed7713950c7e2fecd553d5f62cf92616bc95750c"
+      "inputIdentity": "38f72d2cd95d6c5713502ad5abbe350eb34cc9a6f4a562e3441256a01c756247"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "e7189b6fd950bb0edbd54cfb2e42fec99d8be842ccff32b86e402bf791f06ef2"
+      "inputIdentity": "6ad6fc84cb24149804942063aa2629cd6336f8c61d281af3685d0557d47405f8"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "dfc450e6f9de605b64b80e881ee976b074dd51a2a55c2a41751c6a0da402f377"
+      "inputIdentity": "1d6303f0a166290aca5d4fda78a876721a12a7578afe659ef68228dc55be47a6"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "6c71d039ac1416a6e5c3157cbde3bf735b002f413e5c1f3add658ca7d3601a6a"
+      "inputIdentity": "de71552a215c56766c1505f739a8907401c6c39616bc163686b9c2204339bf37"
     }
   ],
   "records": {
-    "kind": "checker-obligations"
+    "kind": "checker-obligations",
+    "retainedSha256": "dc145841e206867098e08d05e5abcde4d7294e2542b05c15e40252e17f1d7944"
   },
   "formalStatus": "approved"
 }
