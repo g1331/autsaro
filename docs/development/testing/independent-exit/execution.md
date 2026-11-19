@@ -171,7 +171,8 @@ if ($LASTEXITCODE -ne 0) { throw "Could not record the sender seals" }
 
 接收端使用空目录所在的独立主机环境，只带四个样本、脚本、可信清单、已安装的 Python、受控 GCC／binutils 与 Git。
 断开网卡，移除共享 checkout／挂载，保留隔离记录。解析四个固定相对路径并逐个比较发送端摘要，缺项或不符即停止。
-预检通过后，即使构建或运行失败也再比较同样的四条摘要。保留前后摘要、比较错误和各阶段退出码。
+预检通过后，即使构建或运行失败也再比较同样的四条摘要。`seal-after.json` 保留四个固定路径的实际摘要或读取错误，
+某个路径缺失时仍记录其他路径。保留前后摘要、比较错误和各阶段退出码。
 正常 `test_offline_delivery.py` 的矩阵补充 Python 兼容性和发送端路径检查。
 
 Linux 在独立 Bash 会话中进入接收目录。把 `RECEIVER_PYTHON` 改成预装 CPython 的绝对路径：

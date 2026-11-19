@@ -40,19 +40,26 @@ def digest(path: Path) -> str:
         return hashlib.file_digest(source, "sha256").hexdigest()
 
 
-def regression_seals(root: Path) -> dict[str, str]:
-    paths = [(Path(sample) / SEAL).as_posix() for sample in SAMPLES]
-    return {name: digest(root / name) for name in paths}
+def regression_seals(root: Path) -> dict[str, str | dict[str, str]]:
+    actual = {}
+    for sample in SAMPLES:
+        name = (Path(sample) / SEAL).as_posix()
+        try:
+            actual[name] = digest(root / name)
+        except OSError as error:
+            actual[name] = {"error": str(error)}
+    return actual
 
 
-def check_seals(actual: dict[str, str], expected: dict[str, str]) -> None:
+def check_seals(actual: dict[str, str | dict[str, str]], expected: object) -> None:
     if not isinstance(expected, dict) or actual.keys() != expected.keys():
         raise ValueError("trusted seal inventory must contain exactly the four fixed paths")
-    mismatches = [
-        f"{name}: expected {expected[name]}, found {sha}"
-        for name, sha in actual.items()
-        if sha != expected[name]
-    ]
+    mismatches = []
+    for name, observed in actual.items():
+        if isinstance(observed, dict):
+            mismatches.append(f"{name}: could not read seal: {observed['error']}")
+        elif observed != expected[name]:
+            mismatches.append(f"{name}: expected {expected[name]}, found {observed}")
     if mismatches:
         raise ValueError("\n".join(mismatches))
 
@@ -219,9 +226,11 @@ def main() -> None:
             rehearse(args)
         else:
             actual = regression_seals(args.root)
-            if args.expected:
-                check_seals(actual, json.loads(args.expected.read_text(encoding="utf-8")))
             print(json.dumps(actual, indent=2))
+            expected = actual
+            if args.expected:
+                expected = json.loads(args.expected.read_text(encoding="utf-8"))
+            check_seals(actual, expected)
     except (ValueError, OSError, KeyError) as error:
         parser.exit(1, f"{error}\n")
 

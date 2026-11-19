@@ -1,16 +1,17 @@
 """Exercise the standalone receiver without building a native program."""
 
+import json
 import os
 import runpy
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-RECEIVER = runpy.run_path(
-    str(Path(__file__).resolve().parents[2] / "scripts/rehearse_ecu_handoff.py")
-)
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts/rehearse_ecu_handoff.py"
+RECEIVER = runpy.run_path(str(SCRIPT))
 READY = "READY HostBatchV1\n"
 COMMIT_STATUS = (
     " status=0 input_status=0 transport_status=0 transport_epoch=0 transport_count=0\n"
@@ -83,8 +84,40 @@ class ReceiverTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "no-diagnostic/meta/files.sha256"):
                 check(RECEIVER["regression_seals"](root), trusted)
             seal.unlink()
-            with self.assertRaises(FileNotFoundError):
-                RECEIVER["regression_seals"](root)
+            with self.assertRaisesRegex(ValueError, "no-diagnostic/meta/files.sha256: could not read"):
+                check(RECEIVER["regression_seals"](root), trusted)
+
+    def test_seal_receipt_includes_missing_and_changed_seals(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            names = [f"{sample}/meta/files.sha256" for sample in RECEIVER["SAMPLES"]]
+            for name in names:
+                seal = root / name
+                seal.parent.mkdir(parents=True)
+                seal.write_bytes(name.encode())
+            trusted = RECEIVER["regression_seals"](root)
+            before = root / "seal-before.json"
+            before.write_text(json.dumps(trusted), encoding="utf-8")
+            (root / names[2]).unlink()
+            for name in (names[0], names[3]):
+                (root / name).write_bytes(b"changed seal")
+            result = subprocess.run(
+                [sys.executable, "-I", "-S", str(SCRIPT), "seals", str(root),
+                 "--expected", str(before)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 1)
+            observed = json.loads(result.stdout)
+            self.assertEqual(list(observed), names)
+            self.assertEqual(observed[names[1]], trusted[names[1]])
+            self.assertIn("error", observed[names[2]])
+            self.assertIn(f"{names[2]}: could not read seal", result.stderr)
+            for name in (names[0], names[3]):
+                self.assertEqual(observed[name], RECEIVER["digest"](root / name))
+                self.assertNotEqual(observed[name], trusted[name])
+                self.assertIn(f"{name}: expected {trusted[name]}, found {observed[name]}", result.stderr)
 
     def test_environment_excludes_ambient_path_and_build_overrides(self):
         python = Path(sys.executable).absolute()
