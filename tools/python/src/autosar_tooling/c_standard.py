@@ -27,6 +27,8 @@ MANUAL_ASSESSMENT_SOURCES = (
 CHECKER_LIMITATION_GUIDELINES = frozenset({
     "R5.1", "R5.5", "R5.7", "R8.8", "R10.1", "R10.3", "R10.6", "R13.5", "R14.4", "R20.1", "R21.8",
 })
+CHECKER_RETAINED_BEGIN = "<!-- misra-checker-retained-begin -->"
+CHECKER_RETAINED_END = "<!-- misra-checker-retained-end -->"
 # Extracted from the hash-verified 2.21.0 getAddonRules/getCppcheckRules mapping.
 # This is checker availability, not an assessment or approval of these guidelines.
 CHECKER_UNCOVERED = frozenset({
@@ -133,6 +135,50 @@ def supplementary_assessment(rules: list[dict], limitations: list[dict], root: P
                               "documents": identities}}
 
 
+def _checker_retained(names: list[str], root: Path) -> dict:
+    records = {}
+    for name in names:
+        active = False
+        for line, text in enumerate((root / name).read_text(encoding="utf-8").splitlines(), 1):
+            if text == CHECKER_RETAINED_BEGIN and not active:
+                active = True
+            elif text == CHECKER_RETAINED_END and active:
+                active = False
+            elif text in {CHECKER_RETAINED_BEGIN, CHECKER_RETAINED_END}:
+                raise ValueError(f"Invalid checker retained block: {name}:{line}")
+            elif active and text.strip():
+                row = json.loads(text)
+                if (not isinstance(row, dict) or set(row) != {"rule", "approval", "cases"}
+                        or not isinstance(row["rule"], str) or row["rule"] in records
+                        or not isinstance(row["approval"], str) or not row["approval"]
+                        or not isinstance(row["cases"], dict) or not any(row["cases"].values())):
+                    raise ValueError(f"Invalid checker retained evidence: {name}:{line}")
+                for case, entities in row["cases"].items():
+                    if not case or not isinstance(entities, list):
+                        raise ValueError(f"Invalid checker retained case: {name}:{line}")
+                    positions = set()
+                    for entity in entities:
+                        if (not isinstance(entity, dict)
+                                or set(entity) != {"file", "line", "name", "diagnostics"}
+                                or not isinstance(entity["file"], str) or not entity["file"]
+                                or type(entity["line"]) is not int or entity["line"] < 1
+                                or not isinstance(entity["name"], str) or not IDENTIFIER.fullmatch(entity["name"])
+                                or not isinstance(entity["diagnostics"], dict) or not entity["diagnostics"]
+                                or any(not isinstance(columns, list) or not columns
+                                       or any(type(column) is not int or column < 0 for column in columns)
+                                       or columns != sorted(set(columns))
+                                       for columns in entity["diagnostics"].values())):
+                            raise ValueError(f"Invalid checker retained entity: {name}:{line}")
+                        position = entity["file"], entity["line"], entity["name"]
+                        if position in positions:
+                            raise ValueError(f"Duplicate checker retained entity: {name}:{line}")
+                        positions.add(position)
+                records[row["rule"]] = {"approval": row["approval"], "cases": row["cases"]}
+        if active:
+            raise ValueError(f"Unclosed checker retained block: {name}")
+    return records
+
+
 def checker_obligations(rules: list[dict], root: Path = ROOT) -> dict:
     """Account for covered guidelines independently of the fixed eleven omissions.
 
@@ -149,22 +195,24 @@ def checker_obligations(rules: list[dict], root: Path = ROOT) -> dict:
     names = []
     for path in sorted((root / "docs/standards").rglob("*.md")):
         text = path.read_text(encoding="utf-8")
-        if ("<!-- misra-checker-obligations-begin -->" in text
-                or "<!-- misra-checker-obligations-end -->" in text):
+        if any(marker in text for marker in ("<!-- misra-checker-obligations-begin -->",
+                                             "<!-- misra-checker-obligations-end -->",
+                                             CHECKER_RETAINED_BEGIN, CHECKER_RETAINED_END)):
             names.append(path.relative_to(root).as_posix())
     records, identities = _assessment_records(root, names, "checker-obligations")
     if set(records) - wanted:
         raise ValueError("Checker obligations contain an unknown or separately owned guideline")
     if any(row["category"] != covered[key] for key, row in records.items()):
         raise ValueError("Checker obligation category differs from the fixed catalog")
-    if any(row["status"] == "retained" for row in records.values()):
-        raise ValueError("Checker obligations do not authorize retained violations")
+    retained = _checker_retained(names, root)
+    if set(retained) != {key for key, row in records.items() if row["status"] == "retained"}:
+        raise ValueError("Checker obligation status differs from retained entity records")
     rows = [records.get(row["id"], {
         "id": row["id"], "category": row["category"], "status": "not_assessed",
         "conclusion": ("Current capability/applicability and necessary manual evidence missing; "
                        "owner #443"),
     }) for row in rules if row["id"] in wanted]
-    return {"format": "misra-checker-obligations-v1", "records": rows,
+    return {"format": "misra-checker-obligations-v1", "records": rows, "retained": retained,
             "inputIdentity": {
                 "parserSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                 "selectionSha256": hashlib.sha256("\n".join(names).encode()).hexdigest(),

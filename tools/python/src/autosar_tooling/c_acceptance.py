@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 from ecu_tools.build import (
@@ -71,6 +72,18 @@ def _blocks(text: str) -> list[str]:
     return blocks
 
 
+def _context_records(records: dict) -> bool:
+    if records in ({"kind": "generated-retention", "cohortSha256": c_retention.COHORT_SHA256},
+                   {"kind": "manual-assessment"}, {"kind": "checker-limitations"},
+                   {"kind": "checker-obligations"}, {"kind": "owned-source"},
+                   {"kind": "freertos-integration"}, {"kind": "sdk-integration"}):
+        return True
+    return (isinstance(records, dict) and set(records) == {"kind", "retainedSha256"}
+            and records["kind"] == "checker-obligations"
+            and isinstance(records["retainedSha256"], str)
+            and SHA256.fullmatch(records["retainedSha256"]) is not None)
+
+
 def contexts(root: Path = ROOT) -> list[dict]:
     """Only repository standards documents can supply assessment bindings."""
     result = []
@@ -89,13 +102,7 @@ def contexts(root: Path = ROOT) -> list[dict]:
                     or not re.fullmatch(r"[0-9a-f]{40}", row["evidence"]["head"])
                     or not isinstance(row["evidence"]["receipt"], str) or not row["evidence"]["receipt"]
                     or row["formalStatus"] not in ("pending", "approved")
-                    or row["records"] not in ({"kind": "generated-retention", "cohortSha256": c_retention.COHORT_SHA256},
-                                              {"kind": "manual-assessment"},
-                                              {"kind": "checker-limitations"},
-                                              {"kind": "checker-obligations"},
-                                              {"kind": "owned-source"},
-                                              {"kind": "freertos-integration"},
-                                              {"kind": "sdk-integration"})
+                    or not _context_records(row["records"])
                     or not isinstance(row["cases"], list) or not row["cases"]):
                 raise ValueError(f"Invalid source assessment context: {path}")
             identifiers.add(row["id"])
@@ -320,6 +327,72 @@ def _positions(diagnostics: list[dict]):
             continue
         for position, location in enumerate(diagnostic["locations"] or [None]):
             yield index, position, diagnostic, location
+
+
+def _retained_checker_entities(summary: dict, occurrences: list[dict], rule: str,
+                               entities: list[dict]) -> bool:
+    """Require the exact project diagnostic positions and their named source entities."""
+    expected = Counter()
+    programs = {row["name"]: row["translationUnits"] for row in summary["programs"]}
+    dependencies = summary["scope"].get("projectTranslationUnits", {})
+    for entity in entities:
+        name, line = entity["file"], entity["line"]
+        for program, columns in entity["diagnostics"].items():
+            if not any(unit == name or name in dependencies.get(unit, ())
+                       for unit in programs.get(program, ())):
+                return False
+            for column in columns:
+                key = name, line, column, program, entity["name"]
+                if key in expected:
+                    return False
+                expected[key] = 1
+    actual = Counter()
+    for occurrence in occurrences:
+        if occurrence["rule"] != "misra-c2012-" + rule[1:] or occurrence["status"] == "out_of_scope":
+            continue
+        diagnostic = summary["diagnostics"][occurrence["diagnostic"]]
+        if diagnostic.get("sourceCategory") in {"sdk", "adopted-freertos"}:
+            continue
+        location = occurrence["location"]
+        if location is None or occurrence["status"] not in {"record_matched", "owned_record_matched"}:
+            return False
+        for program in occurrence["programs"]:
+            key = (location["file"], int(location["line"]), int(location.get("column") or 0),
+                   program, occurrence["entity"])
+            actual[key] += 1
+    return actual == expected
+
+
+def _checker_obligation_result(summary: dict, occurrences: list[dict], obligations: dict,
+                               selected: dict, group_reason: str | None) -> tuple[dict, dict]:
+    context, case = selected.get("checker-obligations", (None, None))
+    retained = obligations["retained"]
+    approval = context["records"].get("retainedSha256") if context is not None else None
+    if (retained or approval is not None) and approval != _hash(retained):
+        group_reason = group_reason or "checker_retained_approval_mismatch"
+    reasons = {}
+    counts = Counter()
+    applied = {}
+    for row in obligations["records"]:
+        rule, status = row["id"], row["status"]
+        reason = group_reason if status != "not_assessed" else "checker-obligation_not_assessed"
+        if status == "retained" and reason is None:
+            record = retained[rule]
+            entities = record["cases"].get(case["caseId"])
+            if record["approval"] != context["id"]:
+                reason = "checker_retained_approval_mismatch"
+            elif entities is None or not _retained_checker_entities(summary, occurrences, rule, entities):
+                reason = "checker_retained_entities_mismatch"
+            elif entities:
+                applied[rule] = {"approval": context["id"], "entities": entities}
+            else:
+                status = "satisfied"
+        if reason:
+            reasons[rule] = reason
+        counts["not_assessed" if reason else status] += 1
+    return ({"statusCounts": dict(sorted(counts.items())), "retainedRules": applied,
+             "conformanceAssessment": ("not_established" if reasons else
+                                       "compliant_with_deviations" if applied else "compliant")}, reasons)
 
 
 def _grp_positions(
@@ -1034,19 +1107,15 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
         if summary["coverage"]["manualAssessment"] != manual:
             add("manual", "inputIdentity", "manual_records_changed_since_analysis")
         supplementary = c_standard.supplementary_assessment(rules, summary["coverage"]["knownCheckerLimitations"], root)
-        obligations = c_standard.checker_obligations(rules, root)
         assessments = (
             ("manual-assessment", "manual", manual["checkerUncovered"]["records"]),
             ("checker-limitations", "checker-limitation", supplementary["records"]),
-            ("checker-obligations", "checker-obligation", obligations["records"]),
         )
         for group, kind, rows in assessments:
             for row in rows:
-                reason = kind + "_" + row["status"] if row["status"] not in {"satisfied", "not_applicable", "retained"} else group_reasons.get(group)
+                reason = kind + "_" + row["status"] if row["status"] == "not_assessed" else group_reasons.get(group)
                 if reason:
-                    add(kind, row["id"], reason, source=row.get("source"),
-                        **({"owner": "#443", "conclusion": row["conclusion"]}
-                           if group == "checker-obligations" else {}))
+                    add(kind, row["id"], reason, source=row.get("source"))
         if summary.get("sourceClassification", {}).get("complete") is not True:
             add("source-classification", "sdk", "sdk_source_or_macro_provenance_incomplete")
         retention = c_retention.analyze(summary["diagnostics"], project, result["target"])
@@ -1184,6 +1253,13 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
             if reason:
                 add("diagnostic", index, reason, rule=occurrence["rule"], location=location,
                     entity=occurrence["entity"], programs=occurrence["programs"], record=occurrence["record"])
+        obligations = c_standard.checker_obligations(rules, root)
+        result["checkerObligations"], checker_reasons = _checker_obligation_result(
+            summary, result["occurrences"], obligations, selected, group_reasons.get("checker-obligations"))
+        for row in obligations["records"]:
+            if reason := checker_reasons.get(row["id"]):
+                add("checker-obligation", row["id"], reason, source=row.get("source"),
+                    owner="#443", conclusion=row["conclusion"])
         result["status"] = "blocked" if result["objects"] else "accepted"
     except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError) as error:
         result["status"] = "error"

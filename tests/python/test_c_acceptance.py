@@ -1097,6 +1097,87 @@ class AcceptanceTests(unittest.TestCase):
         self.obligation_path.write_text(text, encoding="utf-8", newline="\n")
         self.assertEqual(self.identity(), identity)
 
+    def test_checker_retained_requires_current_entities_and_explicit_formal_approval(self):
+        self.synthetic_complete_inputs()
+        table = self.obligation_path.read_text(encoding="utf-8")
+        rule_line = next(line for line in table.splitlines() if line.startswith("| R2.5 |"))
+        retained_line = rule_line.replace("| satisfied |", "| retained |")
+        table = table.replace(rule_line, retained_line)
+        record = {"approval": "frozen-checker-obligations", "cases": {CASE: [{
+            "file": self.retained["delivered"], "line": 2, "name": self.retained["name"],
+            "diagnostics": {"host-batch": [0], "probe": [0]},
+        }], "no-diagnostic": []}}
+
+        def assess(*, evidence=record, approval=True, status="approved", case=CASE,
+                   diagnostic_status="approved"):
+            block = (c_standard.CHECKER_RETAINED_BEGIN + "\n"
+                     + json.dumps({"rule": "R2.5", **evidence}) + "\n"
+                     + c_standard.CHECKER_RETAINED_END + "\n")
+            self.obligation_path.write_text(table + block, encoding="utf-8", newline="\n")
+            self.bind_groups(groups=tuple(group for group in c_acceptance.GROUPS
+                                          if group != "checker-obligations"),
+                             cases=dict.fromkeys(c_acceptance.GROUPS, case),
+                             statuses={"generated-retention": diagnostic_status})
+            context = self.context(group="checker-obligations", status=status, case=case)
+            if approval:
+                context["records"]["retainedSha256"] = c_acceptance._hash({"R2.5": evidence})
+            self.bind(context)
+            before = copy.deepcopy(self.summary)
+            result = self.evaluate()
+            self.assertEqual(self.summary, before)
+            return result
+
+        result = assess()
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["checkerObligations"], {
+            "statusCounts": {"retained": 1, "satisfied": 143},
+            "retainedRules": {"R2.5": {"approval": record["approval"], "entities": record["cases"][CASE]}},
+            "conformanceAssessment": "compliant_with_deviations",
+        })
+        blocked = assess(diagnostic_status="pending")
+        self.assertEqual(blocked["checkerObligations"], result["checkerObligations"])
+        self.assertEqual(blocked["status"], "blocked")
+        self.assertEqual(blocked["occurrences"][0]["reason"], "formal_deviation_pending")
+
+        missing = copy.deepcopy(record)
+        missing["cases"][CASE] = []
+        # Keep another profile populated so the mutated manifest is still valid.
+        missing["cases"]["no-diagnostic"] = record["cases"][CASE]
+        wrong_name = copy.deepcopy(record)
+        wrong_name["cases"][CASE][0]["name"] = "OtherDeclaration"
+        wrong_program = copy.deepcopy(record)
+        del wrong_program["cases"][CASE][0]["diagnostics"]["probe"]
+        for options, reason in (
+            ({"evidence": missing}, "checker_retained_entities_mismatch"),
+            ({"evidence": wrong_name}, "checker_retained_entities_mismatch"),
+            ({"evidence": wrong_program}, "checker_retained_entities_mismatch"),
+            ({"approval": False}, "checker_retained_approval_mismatch"),
+            ({"status": "pending"}, "formal_assessment_pending"),
+        ):
+            with self.subTest(options=options):
+                result = assess(**options)
+                self.assertEqual(result["status"], "blocked")
+                self.assertEqual(result["checkerObligations"]["retainedRules"], {})
+                self.assertTrue(any(row["id"] == "R2.5" and row["reason"] == reason
+                                    for row in result["objects"]))
+
+        for replacement, error in (
+            (retained_line.replace("Advisory", "Mandatory"), "Invalid or duplicate"),
+            (rule_line, "status differs from retained entity records"),
+        ):
+            self.obligation_path.write_text(table.replace(retained_line, replacement)
+                                           + c_standard.CHECKER_RETAINED_BEGIN + "\n"
+                                           + json.dumps({"rule": "R2.5", **record}) + "\n"
+                                           + c_standard.CHECKER_RETAINED_END + "\n", encoding="utf-8")
+            result = self.evaluate()
+            self.assertEqual(result["status"], "error")
+            self.assertIn(error, result["objects"][0]["reason"])
+
+        self.summary["diagnostics"] = []
+        result = assess(case="no-diagnostic")
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["checkerObligations"]["statusCounts"], {"satisfied": 144})
+
     def test_real_checker_records_keep_gaps_and_c99_applicability_separate(self):
         self.owned_inputs()
         self.summary["diagnostics"] = []
