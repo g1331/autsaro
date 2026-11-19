@@ -1102,7 +1102,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         objects = [row for row in result["objects"] if row["kind"] == "checker-obligation"]
         expected_gaps = {
-            "R1.2", "R1.3", "R2.1", "R2.2", "R2.3", "R2.4", "R2.5", "R5.3", "R5.6",
+            "R1.2", "R1.3", "R2.1", "R2.2", "R2.3", "R2.4", "R2.5", "R5.6",
             "R5.9", "R8.2", "R8.3", "R8.7",
             "R8.9", "R8.13", "R9.1", "R9.2", "R9.3", "R10.4", "R10.7",
             "R11.1", "R11.2", "R11.3", "R11.4", "R11.5", "R11.8", "R11.9",
@@ -1112,13 +1112,13 @@ class AcceptanceTests(unittest.TestCase):
             "R20.10", "R21.1",
             "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 46)
+        self.assertEqual(len(expected_gaps), 45)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 46)
+        self.assertEqual(len(objects), 45)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 46)
+        self.assertEqual(len(located), 45)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1134,7 +1134,7 @@ class AcceptanceTests(unittest.TestCase):
             self.assertEqual(row["source"]["file"],
                              "docs/standards/types/language-constructs/" + filename)
         satisfied = {row["id"]: row for row in records if row["status"] == "satisfied"}
-        lexical = {"R2.6", "R3.1", "R4.1", "R4.2", "R5.2", "R5.4", "R6.1", "R6.2"}
+        lexical = {"R2.6", "R3.1", "R4.1", "R4.2", "R5.2", "R5.3", "R5.4", "R6.1", "R6.2"}
         declarations = {"R8.4", "R8.5", "R8.6", "R8.10", "R8.11", "R8.12", "R8.14", "R9.4", "R9.5"}
         expressions = {"R10.2", "R10.5", "R10.8", "R11.6", "R11.7", "R13.1",
                        "R13.3", "R13.4", "R13.6"}
@@ -1167,8 +1167,8 @@ class AcceptanceTests(unittest.TestCase):
                            "R2.7", "R5.3", "R5.6", "R5.8", "R5.9", "R7.1", "R7.2",
                            "R7.3", "R7.4"}
         self.assertEqual(len(batch), 24)
-        self.assertEqual(sum(by_id[key]["status"] == "satisfied" for key in batch), 14)
-        self.assertEqual(sum(by_id[key]["status"] == "not_assessed" for key in batch), 10)
+        self.assertEqual(sum(by_id[key]["status"] == "satisfied" for key in batch), 15)
+        self.assertEqual(sum(by_id[key]["status"] == "not_assessed" for key in batch), 9)
         blocked = {"R8.2", "R8.3", "R8.7", "R8.9", "R8.13",
                    "R9.1", "R9.2", "R9.3"}
         for guideline in declarations | blocked:
@@ -1214,7 +1214,8 @@ class AcceptanceTests(unittest.TestCase):
             "R2.4": ("not_assessed", "#547", "QueuePointers／SemaphoreData"),
             "R2.5": ("not_assessed", "#547", "define／undef"),
             "R2.7": ("satisfied", "878", "975", "void"),
-            "R5.3": ("not_assessed", "#547", "嵌套 scope"),
+            "R5.3": ("satisfied", "AMD2.36", "452 份 GCC 展开", "嵌套 scope",
+                     "宏展开声明", "范围内无同 namespace 遮蔽", "ADR 0030"),
             "R5.6": ("not_assessed", "#547", "Rte_Instance"),
             "R5.8": ("satisfied", "HostBatch／probe", "物理 owner"),
             "R5.9": ("not_assessed", "#547", "36 个", "7 个", "53 个", "Os_Backend.c:53"),
@@ -1232,6 +1233,19 @@ class AcceptanceTests(unittest.TestCase):
             "R9.2": ("not_assessed", "#547", "208", "compound literal"),
             "R9.3": ("not_assessed", "#547", "容量—元素"),
         }
+        lexical_text = (self.root / satisfied["R5.3"]["source"]["file"]).read_text(encoding="utf-8")
+        _, _, shadow_evidence = lexical_text.partition("### R5.3 实际声明与作用域\n")
+        shadow_evidence = shadow_evidence.split("\n### ", 1)[0]
+        for evidence in ("44513871093", "888 个 TU", "228／224", "63 字符",
+                         "各自 struct／union", "RTE 应用", "Det 回调形参",
+                         "Os_HostLinux.c:1175", "unistd.h:287",
+                         "ecu_host_batch.c:13/95", "rpcndr.h:93", "主机专用实现",
+                         "范围内没有发现遮蔽。", "Os_Backend.c` | 37／39 |",
+                         "Os_HostLinux.c` | 46／48 |", "Os_LinuxNative.c` | 47／49 |",
+                         "Os_StackLinux.c` | 49／51 |", "16 份完整 TU 重放均无解析错误或缺失节点。",
+                         "跳过声明数为 0，交付头中的声明随各自 TU",
+                         "120 份受影响 Windows TU 完整重放后，解析错误和跳过声明数均为 0"):
+            self.assertIn(evidence, shadow_evidence)
         self.assertEqual(len(declaration_evidence), 25)
         for guideline, (status, *evidence) in declaration_evidence.items():
             with self.subTest(declaration=guideline):
@@ -1473,12 +1487,10 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(context["formalStatus"], "approved")
         cases = {(row["target"], row["caseId"]): row["inputIdentity"]
                  for row in context["cases"]}
-        # The hosted Linux standard and user-application samples used
-        # libc6-dev 2.39-0ubuntu8.12 and 2.39-0ubuntu8.9, respectively.
-        self.assertEqual(cases[TARGET, "standard-ecu"],
-                         "5726048924b407930af80deb3ffaa2bdd930b9008e2f75ec3e7962b4705a8a56")
-        self.assertEqual(cases[TARGET, "user-application"],
-                         "034e8b3edb5e5b96f0b9715332848095978eb5835de3957c3d58cffd4440933b")
+        # These two hosted Linux samples share libc6-dev 2.39-0ubuntu8.9 and the kernel closure.
+        reviewed = "aeeefc52b5f961cc2973cfc654437fa169848258a03f78c04f1af34892d2b0ec"
+        self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
+        self.assertEqual(cases[TARGET, "user-application"], reviewed)
 
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
