@@ -6,6 +6,7 @@ import json
 import shutil
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -98,11 +99,11 @@ def fill_capacity(project):
 
 
 def normal_consumers():
-    run_case("host", "host-batch")
-    run_case("probe", "probe")
-    run_case("task-and-isr", "probe", record_from_tick_isr, isr_records=True)
+    yield partial(run_case, "host", "host-batch")
+    yield partial(run_case, "probe", "probe")
+    yield partial(run_case, "task-and-isr", "probe", record_from_tick_isr, isr_records=True)
     for mode in ("host-batch", "probe"):
-        run_case(mode + "-capacity", mode, fill_capacity, capacity=True)
+        yield partial(run_case, mode + "-capacity", mode, fill_capacity, capacity=True)
 
 
 def notification_mutations():
@@ -113,9 +114,9 @@ def notification_mutations():
         ("pdu", "observer(PduId, result);", "observer((PduIdType)(PduId + 1u), result);", 1),
         ("result", "observer(id, result);", "observer(id, E_OK);", 1),
     ]:
-        run_case(name, "probe",
-                 lambda p, b=before, a=after, c=count: edit(p, "bsw/src/Com.c", b, a, c),
-                 killed=True)
+        yield partial(run_case, name, "probe",
+                      lambda p, b=before, a=after, c=count: edit(p, "bsw/src/Com.c", b, a, c),
+                      killed=True)
 
 
 def remove_drain(project, mode):
@@ -128,17 +129,21 @@ def remove_drain(project, mode):
 
 def drain_mutations():
     for mode in ("host-batch", "probe"):
-        run_case(mode + "-drain", mode, lambda p, m=mode: remove_drain(p, m), killed=True)
-        run_case(mode + "-output", mode,
-                 lambda p: edit(p, "integration/src/Ecu_ComRejection.c",
-                                "return (text.failed == 0) ? "
-                                "Os_HostWriteBytes(1, text.data, text.length) : 0;",
-                                "(void)text; return 0;", 2), killed=True, output_failure=True)
+        yield partial(run_case, mode + "-drain", mode,
+                      lambda p, m=mode: remove_drain(p, m), killed=True)
+        yield partial(run_case, mode + "-output", mode,
+                      lambda p: edit(p, "integration/src/Ecu_ComRejection.c",
+                                     "return (text.failed == 0) ? "
+                                     "Os_HostWriteBytes(1, text.data, text.length) : 0;",
+                                     "(void)text; return 0;", 2),
+                      killed=True, output_failure=True)
 
 
-# Private projects and outputs let two independent groups share the original 900 s watchdog.
+# Every case builds in a private project and output directory, so the 14 cases are scheduled
+# one by one: two workers finish in 7 builds instead of the 9 that three uneven groups need
+# (measured on the 4 vCPU Windows runner: one build is about 31 CPU seconds).
+cases = [case for group in (normal_consumers, notification_mutations, drain_mutations)
+         for case in group()]
 with ThreadPoolExecutor(max_workers=2) as pool:
-    groups = (normal_consumers, notification_mutations, drain_mutations)
-    futures = [pool.submit(group) for group in groups]
-    for future in futures:
+    for future in [pool.submit(case) for case in cases]:
         future.result()
