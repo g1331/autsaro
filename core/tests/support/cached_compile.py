@@ -26,7 +26,14 @@ def cached_object(bucket, name, cc, flags, source, logs, dependency_name, digest
         dependencies = json.loads(
             (candidate / "inputs.json").read_text(encoding="utf-8")
         )
-        if all(digest(path) == expected for path, expected in dependencies.items()):
+        try:
+            matches = all(
+                digest(path) == expected for path, expected in dependencies.items()
+            )
+        except FileNotFoundError:
+            # A quoted relative include can resolve outside the declared include directories.
+            continue
+        if matches:
             return candidate / "unit.o"
 
     with tempfile.TemporaryDirectory(dir=bucket.parent) as temporary:
@@ -94,19 +101,37 @@ def compile_units(argv: list[str], logs: Path, fresh: list[str]) -> None:
         prefix, _, suffix = name.partition("/")
         path = {"project": project, "build": output}.get(prefix)
         actual = path / suffix if path is not None else Path(name)
-        return hashlib.sha256(actual.read_bytes()).hexdigest()
+        data = actual.read_bytes()
+        value = hashlib.sha256(data)
+        # Relative traversal and existence probes can see names beyond GCC's -I roots.
+        logical_lines = data.replace(b"\\\r\n", b"").replace(b"\\\n", b"")
+        if any(
+            marker in logical_lines
+            for marker in (b"../", b"..\\", b"__has_include", b"__has_embed")
+        ):
+            value.update(full_layout)
+        return value.hexdigest()
 
     # The seal and patched-kernel checks have verified the file inventories. Include names
     # guard against a newly added header shadowing one that a previous build resolved.
+    search_dirs = {Path(source).parent for source in args[first : end - 1]}
     normalized = []
     for index, arg in enumerate(flags):
         if arg.startswith("-ffile-prefix-map="):
             root, replacement = arg.removeprefix("-ffile-prefix-map=").rsplit("=", 1)
             arg = f"-ffile-prefix-map={dependency_name(Path(root))}={replacement}"
         elif index and flags[index - 1] == "-I":
+            search_dirs.add(Path(arg))
             arg = dependency_name(Path(arg))
         normalized.append(arg)
-    inventory = (project / "meta/files.list").read_text(encoding="utf-8")
+    prefixes = tuple(dependency_name(path) + "/" for path in search_dirs)
+    sealed_names = (
+        (project / "meta/files.list").read_text(encoding="utf-8").splitlines()
+    )
+    full_layout = content_key(sealed_names).encode("ascii")
+    inventory = [
+        name for name in sealed_names if ("project/" + name).startswith(prefixes)
+    ]
     context = content_key(
         [
             cc,
@@ -118,7 +143,9 @@ def compile_units(argv: list[str], logs: Path, fresh: list[str]) -> None:
     )
     objects = Path(os.environ["AUTOSAR_TEST_OBJECTS"])
     if not objects.is_absolute():
-        raise ValueError("AUTOSAR_TEST_OBJECTS requires an absolute path to the job directory")
+        raise ValueError(
+            "AUTOSAR_TEST_OBJECTS requires an absolute path to the job directory"
+        )
     link = []
     for source in args[first : end - 1]:
         path = Path(source)

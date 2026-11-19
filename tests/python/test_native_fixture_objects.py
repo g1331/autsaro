@@ -53,6 +53,10 @@ class NativeFixtureObjects(unittest.TestCase):
                 "src/other.h",
                 "src/unused.h",
             ]
+            description = "generated/descriptions/" + label + ".md"
+            files.append(description)
+            (project / description).parent.mkdir(parents=True)
+            (project / description).write_text(label)
             if added:
                 files.append("src/override.h")
                 (src / "override.h").write_text("new include candidate")
@@ -102,7 +106,18 @@ class NativeFixtureObjects(unittest.TestCase):
             self.assertEqual(build("header", "2", "a", "mutated"), 3)
             self.assertEqual(build("runtime", "2", "b", "mutated"), 4)
             self.assertEqual(build("added", "2", "b", "mutated", added=True), 6)
+            self.assertEqual(build("probe", "2", "__has_inclu\\\nde", "mutated"), 7)
+            self.assertEqual(build("new names", "2", "__has_inclu\\\nde", "mutated"), 8)
         self.assertEqual(
             compiled,
-            ["runtime.c", "other.c", "runtime.c", "runtime.c", "runtime.c", "other.c"],
+            [
+                "runtime.c",
+                "other.c",
+                "runtime.c",
+                "runtime.c",
+                "runtime.c",
+                "other.c",
+                "runtime.c",
+                "runtime.c",
+            ],
         )
