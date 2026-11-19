@@ -10,7 +10,7 @@ Det 接收 BSW 的开发错误和运行时错误。`Det_ReportRuntimeError` 把�
 
 `Det_Init` 重置并选择不可变配置；NULL 表示空 hooks。并发 Init 不受支持，配置对象及 hook 数组须存活到使用它们的最后一次报告完成。运行时和开发报告在 `DET_STATE` 中只读取状态，随后在区外调用 hooks；报告可并发，运行时 callout 可再次报告。当前不记录日志，不提供读记录、故障注入或清空记录等标准外公开 API。`Det_Start` 存在；所选实现没有需要它启动的存储，因而无需额外动作。
 
-MISRA C:2012 Rule 8.2 的 `Det_ValidHooks` 诊断是误报。定义的参数 `hooks`、`count` 和 `Det_ErrorHookType` 的四个参数均具名。主文页 64–66／PDF 72–74、TC2.10／12 和 AMD3.63 支持该判断。固定 Cppcheck 2.21.0 错误解析了函数指针 typedef 外层参数。最小反例保留名字仍报告，换成普通对象数组不报告，真正无名的负对照仍报告。双平台四样本的两个程序均在 `bsw/src/Det.c:16:39` 报告。验收对照该位置的声明和实际包含的封存 `Det.h`；形参、声明、来源或包含路径变化时重评。原始报告仍保留。
+MISRA C:2012 Rule 8.2 的 `Det_ValidHooks` 诊断是误报。定义的参数 `hooks`、`count` 和 `Det_ErrorHookType` 的四个参数均具名。主文页 64–66／PDF 72–74、TC2.10／12 和 AMD3.63 支持该判断。固定 Cppcheck 2.21.0 错误解析了函数指针 typedef 外层参数。最小反例保留名字仍报告，换成普通对象数组不报告，真正无名的负对照仍报告。双平台四样本的两个程序均在 `bsw/src/Det.c:16:39` 报告。验收核对报告形状、规范化换行后的封存 `Det.c` 与 `Det.h` 字节，以及实际包含路径和编译条件。首个 include 为 `Det.h`，其回调 typedef 仅受头保护约束。声明、来源或编译条件变化时重评。原始报告仍保留。
 
 生成器要求显式 Det 模块及 `DetGeneral/DetVersionInfoApi=false`，`DetForwardToDlt` 可省略或为 false。`DetNotification/DetReportRuntimeErrorCallout` 必须恰为 `Ecu_DetRuntimeCallout`，该 callout 把 CanTp 的发送／接收超时送入 HostBatch 收据；其他模块、API 或错误不会改变收据。它在 `generated/include/Det_Externals.h` 声明，在 `generated/src/Det_Callouts.c` 定义，使用独立的 `DET_START_SEC_ECU_DETRUNTIMECALLOUT_CODE` 段。
 

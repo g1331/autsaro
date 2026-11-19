@@ -149,6 +149,7 @@ def _assessment_inputs(summary: dict, root: Path) -> dict:
     rules = _catalog(summary, root)
     supplementary = c_standard.supplementary_assessment(rules, summary["coverage"]["knownCheckerLimitations"], root)
     obligations = c_standard.checker_obligations(rules, root)
+    retained_ids = {"misra-c2012-" + key[1:] for key in obligations["retained"]}
     retention_documents = [path.relative_to(root).as_posix()
                            for path in sorted((root / c_retention.RECORD_DIRECTORY).glob("*.md"))]
     if not retention_documents:
@@ -165,6 +166,10 @@ def _assessment_inputs(summary: dict, root: Path) -> dict:
                                    "documents": _document_identity(
                                        root, list(supplementary["inputIdentity"]["documents"]))},
             "checkerObligations": {"parserSha256": digest(Path(c_standard.__file__)),
+                                   **({"retainedDiagnostics": sorted(
+                                       _hash(row) for row in summary["diagnostics"]
+                                       if row["id"] in retained_ids)}
+                                      if retained_ids else {}),
                                    "documents": _document_identity(
                                        root, list(obligations["inputIdentity"]["documents"]))}}
 
@@ -339,8 +344,11 @@ def _retained_checker_entities(summary: dict, occurrences: list[dict], rule: str
                 expected[key] = 1
     actual = Counter()
     for occurrence in occurrences:
-        if occurrence["rule"] != "misra-c2012-" + rule[1:] or occurrence["status"] in {
-                "out_of_scope", "owned_false_positive"}:
+        if occurrence["rule"] != "misra-c2012-" + rule[1:] or occurrence["status"] == "out_of_scope":
+            continue
+        if occurrence.get("recordValid") is False:
+            return False
+        if occurrence["status"] == "owned_false_positive":
             continue
         diagnostic = summary["diagnostics"][occurrence["diagnostic"]]
         if occurrence["status"] == "freertos_record_matched":
@@ -455,25 +463,31 @@ def _grp_positions(
 
 
 def _det_r82_hook_type(summary: dict, project: Path, root: Path, metadata: dict,
-                       owners: dict, unit: str) -> bool:
-    """Verify the named callback type used at Det's known Cppcheck false positive."""
+                       owners: dict, unit: str, source: str) -> bool:
+    """Match the audited Det sources, including the callback's unconditional declaration."""
     original = "runtime/bsw/include/Det.h"
     delivered = "bsw/include/Det.h"
     scope = summary["scope"]
     record = root / "docs/standards/det.md"
+    # Det.h is the first include. Reject options or predefined macros that can bypass its guard.
+    audited_options = {"-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror", "-fexceptions", "-pthread"}
     if (metadata["originalBswSources"].get(original) != delivered
             or delivered not in scope.get("projectTranslationUnits", {}).get(unit, ())
+            or "-std=c99" not in scope["compilerFlags"]
+            or not set(scope["compilerFlags"]) <= audited_options
+            or any(flag.split("=", 1)[0] == "-DDET_H"
+                   for flag in scope.get("compilerDiscoveredDefines", {}).get(unit, ()))
             or not record.is_file() or "MISRA C:2012 Rule 8.2" not in record.read_text(encoding="utf-8")
             or not (root / original).is_file() or not (project / delivered).is_file()):
         return False
     sha256 = digest(project / delivered)
     if sha256 != owners.get(delivered, {}).get("sha256") or sha256 != digest(root / original):
         return False
-    source = (project / delivered).read_text(encoding="utf-8")
-    declaration = ("typedef Std_ReturnType (*Det_ErrorHookType)(uint16 ModuleId, "
-                   "uint8 InstanceId, uint8 ApiId, uint8 ErrorId);")
-    return " " + " ".join(c_standard.code_words(declaration)) + " " in " " + " ".join(
-        c_standard.code_words(source)) + " "
+    header = (project / delivered).read_text(encoding="utf-8")
+    return (hashlib.sha256(source.encode("utf-8")).hexdigest()
+            == "6766f42004c73ba9b0aaf3e7a4ec57a4aa87e40223d50fe5004207c5be67fb30"
+            and hashlib.sha256(header.encode("utf-8")).hexdigest()
+            == "f6f0ec3467df710e95ff382bb269eecab45e2cfad47afecfeed0ee51cc086dd8")
 
 
 def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
@@ -581,10 +595,11 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
                                        if category == "Mandatory"
                                        else "formal_deviation_pending"}
         elif (diagnostic["id"] == "misra-c2012-8.2"
-              and original == "runtime/bsw/src/Det.c" and column == 39
-              and c_standard.code_words(lines[line - 1]) == c_standard.code_words(
-                  "static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16 count)")
-              and _det_r82_hook_type(summary, project, root, metadata, owners, name)):
+              and original == "runtime/bsw/src/Det.c" and (line, column) == (16, 39)
+              and diagnostic["locations"] == [location]
+              and diagnostic.get("severity") == "style"
+              and diagnostic.get("message") == "misra violation (use --rule-texts=<file> to get proper output)"
+              and _det_r82_hook_type(summary, project, root, metadata, owners, name, source)):
             result[index, position] = {"entity": "Det_ValidHooks", "reason": None, "falsePositive": True,
                 "record": {"file": "docs/standards/det.md", "text": "MISRA C:2012 Rule 8.2"}}
         elif (diagnostic["id"] == "misra-c2012-17.3"
@@ -1223,6 +1238,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                 ruling = freertos_positions[index, position]
                 occurrence.update(status="freertos_record_matched", entity=ruling["entity"],
                                   record=ruling["record"])
+                if ruling["reason"] == "freertos_record_invalid":
+                    occurrence["recordValid"] = False
                 context = selected.get("freertos-integration")
                 reason = ("freertos_integration_context_unbound_or_stale" if context is None
                           else "assessment_case_mismatch" if len(case_ids) != 1
@@ -1235,6 +1252,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                 occurrence.update(status=("owned_false_positive" if ruling.get("falsePositive")
                                           else "owned_record_matched"), entity=ruling["entity"],
                                   record=ruling["record"])
+                if ruling["reason"] == "owned_source_record_invalid":
+                    occurrence["recordValid"] = False
                 context = selected.get("owned-source")
                 reason = ("owned_source_context_unbound_or_stale" if context is None
                           else "assessment_case_mismatch" if len(case_ids) != 1

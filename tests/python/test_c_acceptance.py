@@ -2229,7 +2229,10 @@ class AcceptanceTests(unittest.TestCase):
     def test_det_r82_false_positive_requires_the_current_named_callback_type(self):
         self.owned_inputs()
         self.select_owned("runtime/bsw/src/Det.c", "8.2", "static DET_CODE boolean Det_ValidHooks")
-        self.summary["diagnostics"][0]["locations"][0]["column"] = 39
+        report = self.summary["diagnostics"][0]
+        report["locations"][0]["column"] = 39
+        observed_message = "misra violation (use --rule-texts=<file> to get proper output)"
+        report.update(message=observed_message, severity="style")
         self.summary["scope"]["translationUnits"].append("bsw/src/Det.c")
         for program in self.summary["programs"]:
             program["translationUnits"].append("bsw/src/Det.c")
@@ -2241,10 +2244,22 @@ class AcceptanceTests(unittest.TestCase):
         owner = {"path": delivered, "owner": "runtime", "producerId": "runtime"}
         owners["files"].append(owner)
 
-        self.assertIn(b"uint8 ErrorId", header)
-        for body, status in ((header, "owned_false_positive"),
-                             (header.replace(b"uint8 ErrorId", b"uint8"), "unmatched")):
-            with self.subTest(status=status):
+        start = header.index(b"typedef Std_ReturnType (*Det_ErrorHookType)")
+        end = header.index(b";", start) + 1
+        named = header[start:end]
+        unnamed = named.replace(b"uint8 ErrorId", b"uint8")
+        disabled = b"#if 0\n" + named + b"\n#endif\n" + unnamed
+        for shape, line, message, status in (
+            (named, 16, observed_message, "owned_false_positive"),
+            (unnamed, 16, observed_message, "unmatched"),
+            (disabled, 16, observed_message, "unmatched"),
+            (named, 15, observed_message, "unmatched"),
+            (named, 16, "different diagnostic", "unmatched"),
+        ):
+            with self.subTest(shape=shape, line=line, message=message):
+                body = header[:start] + shape + header[end:]
+                report["locations"][0]["line"] = line
+                report["message"] = message
                 (self.root / original).write_bytes(body)
                 self.files[delivered] = body
                 owner["sha256"] = c_acceptance.digest(self.root / original)
@@ -2259,6 +2274,53 @@ class AcceptanceTests(unittest.TestCase):
                 self.assertEqual(occurrence["assessment"],
                                  "accepted" if status == "owned_false_positive" else "blocked")
                 self.assertEqual(self.summary, raw)
+
+    def test_r82_formal_approval_binds_reports_and_rejects_invalid_shape(self):
+        self.owned_inputs()
+        path = "generated/include/Rte_EchoApplication.h"
+        declaration = ("EchoApplication_CODE Std_ReturnType "
+                       "EchoApplication_ReadData(Dcm_DataElement_ApplicationValueType);")
+        prefix = ("/* MR12 RULE 2.5 VIOLATION: publish the fixed instance handle. */\n"
+                  "#define Rte_Inst_EchoApplication (&Rte_Instance_EchoApplication)\n"
+                  + "\n" * 83 + "/* MR12 RULE 8.2 VIOLATION: fixed RTE role. */\n")
+        self.summary["diagnostics"] = [
+            {"id": "misra-c2012-8.2", "message": "original report",
+             "locations": [{"file": path, "line": 87, "column": column}],
+             "programs": ["host-batch", "probe"]} for column in (61, 62)]
+        records = c_standard.checker_obligations(self.rules, self.root)["retained"]
+
+        def bind(declaration_text, formal=None):
+            source = (prefix + declaration_text + "\n").encode()
+            self.files[path] = source
+            self.files["meta/workbench-ownership.json"] = json.dumps({"files": [
+                {"path": path, "sha256": hashlib.sha256(source).hexdigest(),
+                 "owner": "generated", "producerId": "autosar-generator"},
+            ]}).encode()
+            self.seal()
+            self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
+            self.bind_groups(groups=tuple(group for group in c_acceptance.GROUPS
+                                          if group != "checker-obligations"))
+            self.bind(self.context(group="owned-source", status="approved"))
+            if formal is None:
+                formal = self.context(group="checker-obligations", status="approved")
+                formal["id"] = records["R8.2"]["approval"]
+                formal["records"]["retainedSha256"] = c_acceptance._hash(records)
+            self.bind(formal)
+            return formal
+
+        formal = bind(declaration)
+        result = self.evaluate()
+        self.assertTrue(all(row.get("formalContextId") == formal["id"] for row in result["occurrences"]),
+                        result["occurrences"])
+        self.summary["diagnostics"][0]["message"] = "changed report"
+        bind(declaration, formal)
+        result = self.evaluate()
+        self.assertNotIn("R8.2", result["checkerObligations"]["retainedRules"])
+        self.assertTrue(all(row["reason"] == "formal_deviation_pending" for row in result["occurrences"]))
+        bind(declaration.replace("Type);", "Type data);"))
+        result = self.evaluate()
+        self.assertNotIn("R8.2", result["checkerObligations"]["retainedRules"])
+        self.assertTrue(all(row["reason"] == "owned_source_record_invalid" for row in result["occurrences"]))
 
     def test_owned_position_cannot_overflow_into_a_record_on_the_next_line(self):
         self.owned_inputs()
