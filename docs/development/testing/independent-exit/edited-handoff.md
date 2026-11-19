@@ -7,7 +7,7 @@
 | 场景 | 通过判据 |
 | --- | --- |
 | 单 SWC `seven-source-standard-variant` | 从内置单 SWC 工程把 CAN ID 改成 1104／1105、周期改成 20 ms，保存并重开。断言实际重开值，导出 `GatewayReference-source` |
-| 多 SWC `composition-shared-editing-and-source-protection` | 从三组件 Pipeline 输入编辑事件名称及链接，保存并重开。断言长名称对应的周期值 `0.0100`，导出 `Pipeline-source`，核对封存的应用源码字节 |
+| 多 SWC `composition-shared-editing-and-source-protection` | 从三组件 Pipeline 输入编辑事件名称及链接，保存并重开。断言长名称对应的周期值 `0.0100` 和 `IngressObserve` 的提供者目标路径及 DEST，导出 `Pipeline-source`，核对封存的应用源码字节 |
 | 同包运行 | 每个编辑收据保存原输入副本、重开值、按逻辑路径核对的重开与封存输入 SHA-256、生成目录和封存摘要。脚本核对收据目录和摘要，分别构建并运行两个 main。HostBatch 准备就绪、确认单笔合法空批次并正常关闭，probe 完成 20 ticks |
 
 只筛选上述两个场景。标准交付文件随后还有一个会搬移该包的场景，单独运行 B3 全套时另起结果目录。

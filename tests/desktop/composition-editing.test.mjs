@@ -212,10 +212,23 @@ check('composition-shared-editing-and-source-protection', async () => {
       field.objectId === reopenedEvent.objectId && field.definitionId === 'TIMING-EVENT#PERIOD',
   ).current.value.lexeme;
   assert.equal(reopenedPeriod, '0.0100');
+  const reopenedConnector = reopened.objects.find((object) => object.path === connector.path);
+  const reopenedEndpoint = [provider, port].map(({ definitionId }) => {
+    const { rawPath, dest } = reopened.fields.find(
+      (field) =>
+        field.objectId === reopenedConnector.objectId && field.definitionId === definitionId,
+    ).reference;
+    return { path: rawPath, dest };
+  });
+  assert.deepEqual(
+    reopenedEndpoint,
+    [instanceTarget, portTarget].map(({ path, dest }) => ({ path, dest })),
+  );
   const delivered = await exportSource('Pipeline-source');
   await recordEditedDelivery(delivered, pipeline.directory, original, await sourceBytes(reopened), {
     event: reopenedEvent.path,
     period: reopenedPeriod,
+    provider: reopenedEndpoint,
   });
   for (const file of users) {
     assert.deepEqual(await readFile(path.join(pipeline.directory, file.path)), file.bytes);
