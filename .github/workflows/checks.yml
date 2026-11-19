@@ -417,6 +417,8 @@ jobs:
         shell: python
         env:
           AUTOSAR_ETW_REQUIRE_CONTROLS: ${{ matrix.shard == 'rest' }}
+          # Selects the process timing baseline of this shard.
+          AUTOSAR_ETW_LABEL: native-${{ matrix.shard }}
         run: &windows-job-trace-stop |
           import os
           from pathlib import Path
