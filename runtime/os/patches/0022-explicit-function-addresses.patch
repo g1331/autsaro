@@ -1,14 +1,3 @@
---- a/tasks.c
-+++ b/tasks.c
-@@ -4566,7 +4566,7 @@
-                 TaskStatusArrayWriterContext_t xContext;
-                 xContext.pxTaskStatusArray = pxTaskStatusArray;
-                 xContext.uxIndex = 0;
--                uxTask = prvCallForEachTask( prvTaskStatusArrayWriter, &xContext );
-+                uxTask = prvCallForEachTask( &prvTaskStatusArrayWriter, &xContext );
-                 prvGetTotalRunTime( pulTotalRunTime );
-             }
-             else
 --- a/portable/MSVC-MingW/port.c
 +++ b/portable/MSVC-MingW/port.c
 @@ -372,8 +372,8 @@

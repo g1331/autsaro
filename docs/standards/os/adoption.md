@@ -45,10 +45,31 @@ lMutexNeedsReleasing赋值虽落在未改动行，根因包括项目0015修改�
 本次按自有因果一并整改，旧adopted标记及原始报告不改写。原始退出码、passed=false、221项not_assessed、seal及严格比较
 refusal保持；分析驱动或patch链变化仍按原比较器身份拒绝旧基线，不重盖旧seal。
 
+## 当前补丁链
+
+| 补丁 | Windows | Linux | 保留作用 |
+| --- | --- | --- | --- |
+| 0001、0002、0004–0006、0009–0014 | port | — | 受控启动／关闭、原生栈、事件命名、ISR 门控、handler 所有权、中断身份、分发及向量表 |
+| 0003 | 内核＋port | 内核 | 版本固定的请求 FIFO 调度 |
+| 0007 | 内核＋port | 内核 | 受控 tick 与原生测试入口 |
+| 0008 | 内核 | 内核 | 任务选择 Hook 观察点 |
+| 0015 | 内核＋port | 内核 | 静态任务／队列的真实对象类型与 Windows 具名栈访问接口 |
+| 0016、0022 | port | — | 既有端口条件与函数地址 |
+| 0018、0019 | port | — | 创建与交接失败时终止 |
+| 0020 | 内核 | 内核 | 队列头部先判后回绕 |
+| 0027 | 内核＋port | 内核 | 0020 的有界队列退步及 Windows 端口诊断类型 |
+| linux/0001–0003 | — | port | 受控 POSIX 端口、副作用时序与诊断类型 |
+
+[#503](https://github.com/g1331/autsaro/issues/503) 移除 0017、0021、0023–0026、
+0016／0022 的内核修改及 0027 对采用原件的改写。两个目标仍使用 `0015` 的静态对象布局和端口接口，
+所以 [#547](https://github.com/g1331/autsaro/issues/547) 继续跟踪队列两个未用 tag
+的 R2.4，以及 `pxCurrentTCB` 声明和定义拼写不同的 R8.3。恢复的原件行沿
+[ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md) 分类，
+其原始诊断继续输出。0025 回退后，配置关闭的接口可在头中声明，交付内核仍没有对应定义。
+
 ## 补丁诊断的具体处置
 
-正常整改以 `0027-port-diagnostic-types.patch` 及 Linux `0003-port-diagnostic-types.patch`
-追加在既有公共链及Linux端口链末尾。Windows等待返回值按DWORD比较，等待成功零下标用0U；
+Windows 的 `0027-port-diagnostic-types.patch` 和 Linux 的 `0003-port-diagnostic-types.patch` 位于各自端口链末尾。Windows等待返回值按DWORD比较，等待成功零下标用0U；
 boolean clear直接作条件，uint32请求与0U比较；调度启动结果及mutex释放标志使用其真实BaseType_t，uint32切换位图以0U清零／比较。
 分支局部seen及xThreadState移入唯一消费分支。
 等待值依据Microsoft的[单对象](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject)
@@ -56,10 +77,11 @@ boolean clear直接作条件，uint32请求与0U比较；调度启动结果及mu
 原等待对象、wait-all选择、超时／abandoned／失败拒绝保持。R7.2／R10.3／R10.4的Required义务
 按主文印刷60、86–88／PDF68、94–96及AMD2相应C11扩充核对；不改变失败与成功路径。
 
-R18.4（Advisory，主文147／PDF155）两处指针-=改为下标取址。栈填充值游标仍按
-`-portSTACK_GROWTH`推进；队列只在readFrom不等于head时退一个item，先转ptrdiff_t再
-取负，避免无符号取负回绕。所选静态队列容量与itemSize在PTRDIFF_MAX以内，原来的
-head→tail-item保护保持。R18.1的同数组边界义务保持。
+R18.4（Advisory，主文147／PDF155）的栈游标恢复减法赋值。两目标的栈填充值
+游标均按有符号的 `-portSTACK_GROWTH` 逐字节推进。队列由 0020 先判断
+`readFrom == head` 并选取 `tail - itemSize`；其余位置至少离头一个 item，
+在同一数组内减去 `itemSize`。0027 保留这一处下标写法，因为退步表达式由 0020
+加入，直接恢复减法赋值会产生自有代码 R18.4 报告。边界依据见[队列游标](platform.md#采用-queue-的前端游标)。
 既有public-types实际执行FIFO／front／overwrite／reset与零item队列，
 `test_queue_front_pointer_bounds_and_order_mutations`继续拒绝先减后判、丢失步进及错误wrap。
 `test_patched_kernel_stack_scan_uses_each_byte`从封存构建包含真实tasks.c，观察整word／
@@ -87,32 +109,10 @@ TC2.5／TC2.39修订术语），R8.7为Advisory/System（主文70／PDF78，TC2.
 | MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portEND_SWITCHING_ISR` | shape=`#define portEND_SWITCHING_ISR(requested) return (requested)` | 维护者 #383 |
 | MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portYIELD_FROM_ISR` | shape=`#define portYIELD_FROM_ISR(requested) portEND_SWITCHING_ISR(requested)` | 维护者 #383 |
 | MISRA C:2012 Rule 2.5 | `kernel/portable/ThirdParty/GCC/Posix/portmacro.h` `portENABLE_INTERRUPTS` | shape=`#define portENABLE_INTERRUPTS() vPortExitCritical()` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB` | shape=`#define tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB ( ( uint8_t ) 0 )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSTATICALLY_ALLOCATED_STACK_ONLY` | shape=`#define tskSTATICALLY_ALLOCATED_STACK_ONLY ( ( uint8_t ) 1 )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSTATICALLY_ALLOCATED_STACK_AND_TCB` | shape=`#define tskSTATICALLY_ALLOCATED_STACK_AND_TCB ( ( uint8_t ) 2 )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskRUNNING_CHAR` | shape=`#define tskRUNNING_CHAR ( 'X' )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskBLOCKED_CHAR` | shape=`#define tskBLOCKED_CHAR ( 'B' )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskREADY_CHAR` | shape=`#define tskREADY_CHAR ( 'R' )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskDELETED_CHAR` | shape=`#define tskDELETED_CHAR ( 'D' )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `tskSUSPENDED_CHAR` | shape=`#define tskSUSPENDED_CHAR ( 'S' )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_NOT_RUNNING` | shape=`#define taskTASK_NOT_RUNNING ( ( BaseType_t ) ( -1 ) )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_SCHEDULED_TO_YIELD` | shape=`#define taskTASK_SCHEDULED_TO_YIELD ( ( BaseType_t ) ( -2 ) )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD` | shape=`#define taskTASK_IS_RUNNING_OR_SCHEDULED_TO_YIELD( pxTCB ) ( ( ( pxTCB )->xTaskRunState != taskTASK_NOT_RUNNING ) ? ( pdTRUE ) : ( pdFALSE ) )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskATTRIBUTE_IS_IDLE` | shape=`#define taskATTRIBUTE_IS_IDLE ( UBaseType_t ) ( 1U << 0U )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/tasks.c` `taskBITS_PER_BYTE` | shape=`#define taskBITS_PER_BYTE ( ( size_t ) 8 )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/queue.c` `queueSEMAPHORE_QUEUE_ITEM_LENGTH` | shape=`#define queueSEMAPHORE_QUEUE_ITEM_LENGTH ( ( UBaseType_t ) 0 )` | 维护者 #383 |
-| MISRA C:2012 Rule 2.5 | `kernel/queue.c` `queueMUTEX_GIVE_BLOCK_TIME` | shape=`#define queueMUTEX_GIVE_BLOCK_TIME ( ( TickType_t ) 0U )` | 维护者 #383 |
 | MISRA C:2012 Rule 8.7 | `kernel/portable/ThirdParty/GCC/Posix/port.c` `vPortCloseRunningThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 shape=`void vPortCloseRunningThread(void *task, volatile BaseType_t *pending_yield) {` | 维护者 #383 |
 | MISRA C:2012 Rule 8.7 | `kernel/portable/ThirdParty/GCC/Posix/port.c` `vPortDeleteThread` | 保留tasks.c条件生命周期调用的外部端口出口；不按样本裁剪链接。 shape=`void vPortDeleteThread(void *task) {` | 维护者 #383 |
 | MISRA C:2012 Rule 2.5 | `kernel/portable/MSVC-MingW/port.c` `portSIMULATED_TIMER_THREAD_PRIORITY` | shape=`#define portSIMULATED_TIMER_THREAD_PRIORITY THREAD_PRIORITY_NORMAL` | 维护者 #383 |
 
-R2.5表内tasks.c／queue.c常量支撑静态／动态分配标记、统计字符、单核／多核状态及队列
-接口的既有条件分支。分配组合、统计格式化、多核／delete、计数／递归信号量分支由当前
-配置排除，实际-dM输出中没有这些定义。这里保守记录保留源定义及原始Advisory报告，
-不把每条都称为当前程序执行中的真实违反，也不只凭-dM缺席宣称R2.5通过。
-项目早前给这些常量加类型的补丁不把它们变成上游责任。
-可按当前profile物理裁剪定义或改为enum，但会扩大本次
-对固定内核可选分支的改造；保留有限既有实体及数值，使采用差异和上游更新更易核对。
 POSIX四宏保持tick单位、ISR请求返回／转发及critical解除接口，Windows一个宏保持
 既有模拟timer优先级常量；它们不宣称开启未支持运行能力。风险是失效宏与名字污染，
 由固定版本、目标选择、精确表列实体、就近说明及实际预处理／消费者限制。

@@ -214,10 +214,10 @@ int main(void)
                         argv = [argument for argument in argv if argument != ecu_build.tool_argument(task)]
                         argv = [argv[0], *sanitizer_flags(), *argv[1:]]
                         if variant == "stack-step":
-                            before = "&pucCursor[-portSTACK_GROWTH]"
+                            before = "pucStackByte -= portSTACK_GROWTH;"
                             text = task.read_text(encoding="utf-8")
                             self.assertEqual(text.count(before), 1)
-                            task.write_text(text.replace(before, "&pucCursor[-portSTACK_GROWTH + 1]"), encoding="utf-8")
+                            task.write_text(text.replace(before, "pucStackByte -= portSTACK_GROWTH - 1;"), encoding="utf-8")
                     return original(argv, logs, stage, **options)
 
                 with patch.object(ecu_build, "query", side_effect=compile_cursor):

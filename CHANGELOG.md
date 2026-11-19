@@ -218,6 +218,8 @@
 
 ### Changed
 
+- Linux and Windows controlled deliveries use a smaller FreeRTOS project patch series. Regenerate and rebuild to pick up the new patch, kernel, asset and package seal identities. The FreeRTOS V11.3.1 upstream tag and source bytes, static object layouts, linked kernel ABI and host port bytes stay the same. Optional upstream kernel declarations are visible again, while their configured-out definitions remain absent (#503)
+
 - Classify host simulation and adopted kernel diagnostics outside the MISRA acceptance and source regression gates while retaining raw reports; host-only OS providers now ship under `os/src/host/`, with unchanged public OS interfaces. (#527)
 
 - The frozen manual D4.8 record now identifies per-translation-unit pointer, object and SDK boundaries and retains the scoped Advisory noncompliances; D4.7 remains unassessed with its consumer-contract gap tracked separately (#385)
