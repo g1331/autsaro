@@ -356,7 +356,15 @@ OS_MEMMAP void Os_StackObserve(HANDLE thread, const CONTEXT *context)
                 publish_fault(record, 0u, sp, sp, 'M');
             }
             record->sp = sp;
-            saved_contexts[i] = *context;
+            /* GetThreadContext with CONTEXT_CONTROL writes only the control registers. */
+            saved_contexts[i] = (CONTEXT){
+                .ContextFlags = context->ContextFlags,
+                .SegCs = context->SegCs,
+                .SegSs = context->SegSs,
+                .EFlags = context->EFlags,
+                .Rsp = context->Rsp,
+                .Rip = context->Rip,
+            };
             record->context_valid = 1u;
             ++record->observations;
             return;

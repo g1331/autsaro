@@ -225,8 +225,48 @@ void Os_ArtiTestShutdownObserved(void)
            rejected_getters);
     arti_check(fflush(stdout) == 0);
 }
+#ifdef _WIN32
+static int check_control_context(void)
+{
+    uintptr_t sp;
+    OS_HOST_STACK_POINTER(sp);
+    Os_StackInit();
+    /* Model control-only output with already-valued, unrequested slots. No actors are running. */
+    const CONTEXT input = {
+        .P1Home = 1u,
+        .ContextFlags = CONTEXT_CONTROL,
+        .SegCs = 0x33u,
+        .SegSs = 0x2bu,
+        .EFlags = 0x202u,
+        .Rax = 1u,
+        .Rsp = sp,
+        .Rip = 1u,
+        .VectorRegister = {{1u, 1}},
+    };
+    const Os_NativeStackType *stack = Os_StackCurrent();
+    Os_StackObserve(GetCurrentThread(), &input);
+    const CONTEXT *saved = Os_StackSavedContext(stack);
+    if (saved == NULL || stack->context_valid != 1u || saved->ContextFlags != input.ContextFlags ||
+        saved->Rsp != input.Rsp || saved->Rip != input.Rip || saved->SegCs != input.SegCs ||
+        saved->SegSs != input.SegSs || saved->EFlags != input.EFlags) {
+        return 7;
+    }
+    if (saved->P1Home != 0u || saved->Rax != 0u || saved->VectorRegister[0].Low != 0u ||
+        saved->VectorRegister[0].High != 0) {
+        fprintf(stderr, "arti context published unrequested fields\n");
+        return 7;
+    }
+    return 0;
+}
+#endif
+
 int main(int argc, char **argv)
 {
+#ifdef _WIN32
+    if (argc == 2 && strcmp(argv[1], "control-context") == 0) {
+        return check_control_context();
+    }
+#endif
 #ifdef __linux__
     if (argc == 2 && strcmp(argv[1], "reject-task") == 0) {
         (void)fprintf(stderr, "arti_reject function=Os_ArtiTask selector=99\n");
