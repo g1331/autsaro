@@ -1233,7 +1233,7 @@ class AcceptanceTests(unittest.TestCase):
         expected_gaps = {
             "R1.2", "R1.3", "R2.1", "R2.2", "R2.3", "R2.4", "R2.5", "R5.6",
             "R5.9", "R8.3", "R8.7",
-            "R8.9", "R8.13", "R9.2", "R9.3", "R10.4", "R10.7",
+            "R8.9", "R8.13", "R10.4", "R10.7",
             "R11.1", "R11.2", "R11.3", "R11.4", "R11.5", "R11.8", "R11.9",
             "R12.1", "R12.2", "R12.4", "R13.2", "R14.2", "R14.3",
             "R17.2", "R17.7", "R18.1", "R18.2", "R18.3", "R18.4",
@@ -1241,13 +1241,13 @@ class AcceptanceTests(unittest.TestCase):
             "R20.10", "R21.1",
             "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 43)
+        self.assertEqual(len(expected_gaps), 41)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 43)
+        self.assertEqual(len(objects), 41)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 43)
+        self.assertEqual(len(located), 41)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1264,7 +1264,8 @@ class AcceptanceTests(unittest.TestCase):
                              "docs/standards/types/language-constructs/" + filename)
         satisfied = {row["id"]: row for row in records if row["status"] == "satisfied"}
         lexical = {"R2.6", "R3.1", "R4.1", "R4.2", "R5.2", "R5.3", "R5.4", "R6.1", "R6.2"}
-        declarations = {"R8.4", "R8.5", "R8.6", "R8.10", "R8.11", "R8.12", "R8.14", "R9.1", "R9.4", "R9.5"}
+        declarations = {"R8.4", "R8.5", "R8.6", "R8.10", "R8.11", "R8.12", "R8.14",
+                        "R9.1", "R9.2", "R9.3", "R9.4", "R9.5"}
         expressions = {"R10.2", "R10.5", "R10.8", "R11.6", "R11.7", "R13.1",
                        "R13.3", "R13.4", "R13.6"}
         control_flow = {"R14.1", "R15.1", "R15.2", "R15.3", "R17.1", "R17.6", "R18.7",
@@ -1298,7 +1299,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(len(batch), 24)
         self.assertEqual(sum(by_id[key]["status"] == "satisfied" for key in batch), 15)
         self.assertEqual(sum(by_id[key]["status"] == "not_assessed" for key in batch), 9)
-        blocked = {"R8.3", "R8.7", "R8.9", "R8.13", "R9.2", "R9.3"}
+        blocked = {"R8.3", "R8.7", "R8.9", "R8.13"}
         for guideline in declarations | blocked:
             self.assertEqual(by_id[guideline]["status"],
                              "not_assessed" if guideline in blocked else "satisfied")
@@ -1358,8 +1359,8 @@ class AcceptanceTests(unittest.TestCase):
             "R8.9": ("not_assessed", "#547", "ecu_can_driver", "ecu_comm_users"),
             "R8.13": ("not_assessed", "#547", "callback", "constPointer"),
             "R9.1": ("satisfied", "#r91-首次读取核查", "AMD4.56–57", "部分输出"),
-            "R9.2": ("not_assessed", "#547", "208", "compound literal"),
-            "R9.3": ("not_assessed", "#547", "容量—元素"),
+            "R9.2": ("satisfied", "AMD4.58", "#r92r93-类型化初始化核查", "typedef 数组"),
+            "R9.3": ("satisfied", "78–79", "#r92r93-类型化初始化核查", "容量—元素"),
         }
         lexical_text = (self.root / satisfied["R5.3"]["source"]["file"]).read_text(encoding="utf-8")
         _, _, shadow_evidence = lexical_text.partition("### R5.3 实际声明与作用域\n")
@@ -1425,6 +1426,25 @@ class AcceptanceTests(unittest.TestCase):
         ):
             with self.subTest(r91_evidence=phrase):
                 self.assertIn(phrase, evidence)
+        initialization_heading = "## R9.2／R9.3 类型化初始化核查\n"
+        self.assertIn(initialization_heading, declarations_text)
+        initialization = declarations_text.split(initialization_heading, 1)[1].split("\n## ", 1)[0]
+        for rule in ("R9.2", "R9.3"):
+            self.assertEqual(by_id[rule]["category"], "Required")
+        for phrase in (
+            "PDF 85–87", "AMD2.27", "AMD4.58", "44625907914", "452 份 GCC 展开",
+            "888 个 HostBatch／probe TU 实例", "Linux 228 份完整解析",
+            "Windows 224 份中有 120 份", "项目文件没有解析错误或损坏的初始化节点",
+            "210 项", "38 个数组列表显式覆盖全部元素", "patchedLines", "ADR 0025／0030",
+            "自动结构／union 的兼容类型表达式", "部分指定子对象例外",
+            "函数指针数组", "固定 addon 均漏报", "类型化核查检出两个实参反例",
+            "`Os_ErrorParametersType`", "由错误记录传给 ErrorHook", "计数器工作栈的根项和子项",
+            "`Ecu_OsConfig`", "`priorities[32]`", "`[30u] = 1u`", "`task_name` 使用字符串",
+            "`increments[8][8]` 整体 `{0}`", "`Os_InterruptVectorTable[32]`",
+            "Can payload 八项与 CanIf errors 两项",
+        ):
+            with self.subTest(initialization_evidence=phrase):
+                self.assertIn(phrase, initialization)
         lexical_text = (self.root / by_id["R5.9"]["source"]["file"]).read_text(encoding="utf-8")
         self.assertIn("Os_Backend.c:956", lexical_text)
         self.assertIn("OS_ACTIVATION_TESTS", lexical_text)
