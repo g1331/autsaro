@@ -1,0 +1,176 @@
+{
+ "labels": {
+  "native-protocol": {
+   "source": "Development checks runs 44541303411, 44550323807, 44551838931, 44558822646 (master, green, 2026-11-19), windows-2025-vs2026",
+   "probe_ms": 16.9,
+   "images": {
+    "as.exe": {
+     "wall_ms": 51.6,
+     "cpu_ms": 31.4
+    },
+    "cc1.exe": {
+     "wall_ms": 719.8,
+     "cpu_ms": 689.4
+    },
+    "collect2.exe": {
+     "wall_ms": 134.0,
+     "cpu_ms": 24.0
+    },
+    "conhost.exe": {
+     "wall_ms": 66.9,
+     "cpu_ms": 10.6
+    },
+    "ecu_host_batch.exe": {
+     "wall_ms": 54.6,
+     "cpu_ms": 7.4
+    },
+    "git.exe": {
+     "wall_ms": 51.5,
+     "cpu_ms": 18.1
+    },
+    "ld.exe": {
+     "wall_ms": 90.7,
+     "cpu_ms": 77.2
+    },
+    "objdump.exe": {
+     "wall_ms": 51.9,
+     "cpu_ms": 14.0
+    },
+    "wsl.exe": {
+     "wall_ms": 117.5,
+     "cpu_ms": 19.3
+    }
+   }
+  },
+  "native-projects": {
+   "source": "Development checks runs 44541303411, 44550323807, 44551838931 (master, green, 2026-11-19), windows-2025-vs2026",
+   "probe_ms": 19.1,
+   "images": {
+    "as.exe": {
+     "wall_ms": 54.9,
+     "cpu_ms": 36.9
+    },
+    "cc1.exe": {
+     "wall_ms": 175.8,
+     "cpu_ms": 153.9
+    },
+    "collect2.exe": {
+     "wall_ms": 132.8,
+     "cpu_ms": 25.9
+    },
+    "conhost.exe": {
+     "wall_ms": 90.6,
+     "cpu_ms": 13.0
+    },
+    "ecu_host_batch.exe": {
+     "wall_ms": 68.3,
+     "cpu_ms": 11.4
+    },
+    "gcc.exe": {
+     "wall_ms": 118.3,
+     "cpu_ms": 14.6
+    },
+    "git.exe": {
+     "wall_ms": 67.9,
+     "cpu_ms": 20.5
+    },
+    "ld.exe": {
+     "wall_ms": 98.4,
+     "cpu_ms": 90.0
+    },
+    "objdump.exe": {
+     "wall_ms": 60.1,
+     "cpu_ms": 16.3
+    },
+    "wsl.exe": {
+     "wall_ms": 169.2,
+     "cpu_ms": 22.1
+    }
+   }
+  },
+  "native-rest": {
+   "source": "Development checks runs 44541303411, 44550323807, 44551838931 (master, green, 2026-11-19), windows-2025-vs2026",
+   "probe_ms": 18.9,
+   "images": {
+    "as.exe": {
+     "wall_ms": 38.6,
+     "cpu_ms": 34.2
+    },
+    "cc1.exe": {
+     "wall_ms": 146.8,
+     "cpu_ms": 140.6
+    },
+    "collect2.exe": {
+     "wall_ms": 107.6,
+     "cpu_ms": 36.5
+    },
+    "conhost.exe": {
+     "wall_ms": 66.0,
+     "cpu_ms": 12.9
+    },
+    "git.exe": {
+     "wall_ms": 50.9,
+     "cpu_ms": 19.6
+    },
+    "ld.exe": {
+     "wall_ms": 68.0,
+     "cpu_ms": 61.8
+    },
+    "objdump.exe": {
+     "wall_ms": 51.1,
+     "cpu_ms": 17.7
+    },
+    "wsl.exe": {
+     "wall_ms": 56.2,
+     "cpu_ms": 22.2
+    }
+   }
+  },
+  "native-integration": {
+   "source": "Development checks runs 44541303411, 44550323807, 44551838931 (master, green, 2026-11-19), windows-2025-vs2026",
+   "probe_ms": 18.8,
+   "images": {
+    "as.exe": {
+     "wall_ms": 40.3,
+     "cpu_ms": 33.3
+    },
+    "cc1.exe": {
+     "wall_ms": 911.8,
+     "cpu_ms": 887.2
+    },
+    "cc1plus.exe": {
+     "wall_ms": 35.9,
+     "cpu_ms": 29.7
+    },
+    "collect2.exe": {
+     "wall_ms": 109.3,
+     "cpu_ms": 37.7
+    },
+    "conhost.exe": {
+     "wall_ms": 73.8,
+     "cpu_ms": 14.1
+    },
+    "ecu_probe.exe": {
+     "wall_ms": 275.2,
+     "cpu_ms": 10.9
+    },
+    "git.exe": {
+     "wall_ms": 67.2,
+     "cpu_ms": 21.8
+    },
+    "ld.exe": {
+     "wall_ms": 67.0,
+     "cpu_ms": 59.6
+    },
+    "objdump.exe": {
+     "wall_ms": 57.8,
+     "cpu_ms": 18.3
+    },
+    "wsl.exe": {
+     "wall_ms": 132.4,
+     "cpu_ms": 23.6
+    }
+   }
+  }
+ }
+}
