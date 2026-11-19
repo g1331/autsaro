@@ -125,6 +125,98 @@ static const ComM_ConfigType comm = {7u,
                                      0u};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 9u};
 static const BswM_ConfigType bswm = {7u, action};
+
+static void reject_bswm_configurations(void)
+{
+    const BswM_ConfigType missing_action = {7u, NULL_PTR};
+    BswM_Init(NULL_PTR);
+    BswM_ComM_CurrentMode(7u, COMM_FULL_COMMUNICATION);
+    assert(actions == 0u);
+    BswM_Init(&missing_action);
+    BswM_ComM_CurrentMode(7u, COMM_FULL_COMMUNICATION);
+    assert(actions == 0u);
+}
+
+static void unexpected_user_mode(ComM_ModeType mode)
+{
+    (void)mode;
+    assert(0);
+}
+
+static void reject_comm_configuration(const ComM_ConfigType *configuration)
+{
+    ComM_InitStatusType status = COMM_INIT;
+    ComM_ModeType mode = 99u;
+    ComM_Init(configuration);
+    assert(ComM_GetStatus(&status) == E_OK && status == COMM_UNINIT);
+    assert(ComM_GetCurrentComMode(17u, &mode) == E_NOT_OK && mode == 99u);
+}
+
+static void reject_comm_user_modes(void)
+{
+    static const NetworkHandleType channel[] = {7u};
+    static const NetworkHandleType wrong_channel[] = {8u};
+    const ComM_UserModeConfigType good = {17u, channel, 1u, unexpected_user_mode};
+    const ComM_UserModeConfigType bad_modes[] = {
+        {99u, channel, 1u, unexpected_user_mode},
+        {17u, channel, 1u, NULL_PTR},
+        {17u, NULL_PTR, 1u, unexpected_user_mode},
+        {17u, channel, 0u, unexpected_user_mode},
+        {17u, wrong_channel, 1u, unexpected_user_mode},
+    };
+    const ComM_UserModeConfigType duplicate[] = {good, good, good};
+    ComM_ConfigType invalid = comm;
+    invalid.user_mode_count = 1u;
+    reject_comm_configuration(&invalid);
+    for (unsigned index = 0u; index < sizeof(bad_modes) / sizeof(bad_modes[0]); ++index) {
+        invalid.user_modes = &bad_modes[index];
+        reject_comm_configuration(&invalid);
+    }
+    invalid.user_modes = duplicate;
+    invalid.user_mode_count = 2u;
+    reject_comm_configuration(&invalid);
+    invalid.user_mode_count = 3u;
+    reject_comm_configuration(&invalid);
+}
+
+static void reject_comm_configurations(void)
+{
+    const ComM_UserHandleType reserved[] = {17u, COMM_NOT_USED_USER_ID};
+    const ComM_UserHandleType duplicate[] = {17u, 17u};
+    ComM_UserHandleType too_many[33];
+    ComM_ConfigType invalid = comm;
+    for (unsigned index = 0u; index < 33u; ++index) {
+        too_many[index] = (ComM_UserHandleType)index;
+    }
+    reject_comm_configuration(NULL_PTR);
+    invalid.users = too_many;
+    invalid.user_count = 33u;
+    reject_comm_configuration(&invalid);
+    invalid = comm;
+    invalid.user_count = 0u;
+    reject_comm_configuration(&invalid);
+    invalid = comm;
+    invalid.users = NULL_PTR;
+    reject_comm_configuration(&invalid);
+    invalid.users = reserved;
+    reject_comm_configuration(&invalid);
+    invalid.users = duplicate;
+    reject_comm_configuration(&invalid);
+    invalid = comm;
+    invalid.request = NULL_PTR;
+    reject_comm_configuration(&invalid);
+    invalid = comm;
+    invalid.current = NULL_PTR;
+    reject_comm_configuration(&invalid);
+    invalid = comm;
+    invalid.dcm_silent = NULL_PTR;
+    reject_comm_configuration(&invalid);
+    invalid = comm;
+    invalid.dcm_full = NULL_PTR;
+    reject_comm_configuration(&invalid);
+    reject_comm_user_modes();
+}
+
 static void current(ComM_ModeType expected) {
     ComM_ModeType value = 99u;
     assert(ComM_GetCurrentComMode(17u, &value) == E_OK && value == expected);
@@ -193,6 +285,9 @@ int main(void) {
     assert(rx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
     assert(tx_counter(9u, &counter) == E_NOT_OK && counter == 0xa5u);
     Det_Init(&det);
+    reject_bswm_configurations();
+    reject_comm_configurations();
+    assert(errors == 0u);
     Com_Init(&com);
     Com_IpduGroupStart(0u, TRUE);
     Com_EnableReceptionDM(0u);

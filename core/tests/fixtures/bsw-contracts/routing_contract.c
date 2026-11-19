@@ -216,6 +216,133 @@ static void uninitialized(void)
     none();
 }
 
+static void reject_lsdur_configurations(void)
+{
+    const LSduR_RxRouteType missing_rx[] = {{5u, 25u, NULL_PTR}};
+    const LSduR_RxRouteType duplicate_rx[] = {ls_rx[0], {5u, 26u, PduR_CanIfRxIndication}};
+    const LSduR_TxRouteType bad_tx[] = {
+        {(LSduR_UpperType)2, 35u, 5u, cantp_conf, NULL_PTR},
+        {LSDUR_UP_PDUR, 35u, 5u, NULL_PTR, NULL_PTR},
+    };
+    const LSduR_TxRouteType duplicate_tx[] = {ls_tx[0],
+                                              {LSDUR_UP_PDUR, 35u, 6u, cantp_conf, NULL_PTR}};
+    const LSduR_PBConfigType configs[] = {
+        {40u, NULL_PTR, 1u, ls_tx, 2u},
+        {40u, ls_rx, 1u, NULL_PTR, 2u},
+        {40u, missing_rx, 1u, ls_tx, 2u},
+        {40u, duplicate_rx, 2u, ls_tx, 2u},
+        {40u, ls_rx, 1u, &bad_tx[0], 1u},
+        {40u, ls_rx, 1u, &bad_tx[1], 1u},
+        {40u, ls_rx, 1u, duplicate_tx, 2u},
+    };
+
+    for (unsigned index = 0u; index < sizeof(configs) / sizeof(configs[0]); ++index) {
+        lsdur_init(&configs[index]);
+        uninitialized();
+    }
+}
+
+static void reject_pdur_transport_configurations(void)
+{
+    const PduR_TpRouteType missing_callback[] = {
+        {35u, 45u, 35u, 55u, NULL_PTR, copy_rx, tp_rx, copy_tx, tp_conf},
+        {35u, 45u, 35u, 55u, start, NULL_PTR, tp_rx, copy_tx, tp_conf},
+        {35u, 45u, 35u, 55u, start, copy_rx, NULL_PTR, copy_tx, tp_conf},
+        {35u, 45u, 35u, 55u, start, copy_rx, tp_rx, NULL_PTR, tp_conf},
+        {35u, 45u, 35u, 55u, start, copy_rx, tp_rx, copy_tx, NULL_PTR},
+    };
+    const PduR_TpRouteType duplicate_handle[] = {
+        {35u, 46u, 36u, 56u, start, copy_rx, tp_rx, copy_tx, tp_conf},
+        {36u, 46u, 35u, 56u, start, copy_rx, tp_rx, copy_tx, tp_conf},
+        {36u, 45u, 36u, 56u, start, copy_rx, tp_rx, copy_tx, tp_conf},
+        {36u, 46u, 36u, 55u, start, copy_rx, tp_rx, copy_tx, tp_conf},
+    };
+    PduR_TpRouteType routes[] = {tp_routes[0], tp_routes[0]};
+    PduR_PBConfigType config = pdur;
+
+    for (unsigned index = 0u; index < sizeof(missing_callback) / sizeof(missing_callback[0]);
+         ++index) {
+        config.transport = &missing_callback[index];
+        pdur_init(&config);
+        uninitialized();
+    }
+    config.transport = routes;
+    config.transport_count = 2u;
+    for (unsigned index = 0u; index < sizeof(duplicate_handle) / sizeof(duplicate_handle[0]);
+         ++index) {
+        routes[1] = duplicate_handle[index];
+        pdur_init(&config);
+        uninitialized();
+    }
+}
+
+static void reject_pdur_configurations(void)
+{
+    const PduR_RxRouteType missing_rx[] = {{25u, 5u, NULL_PTR}};
+    const PduR_RxRouteType duplicate_rx[] = {pdur_rx[0], {25u, 6u, com_rx}};
+    const PduR_TxRouteType bad_tx[] = {
+        {(PduR_UpperType)2, 5u, PDUR_LO_CANTP, 35u, cantp_transmit, NULL_PTR, NULL_PTR},
+        {PDUR_UP_DCM, 5u, (PduR_LowerType)2, 35u, cantp_transmit, NULL_PTR, NULL_PTR},
+        {PDUR_UP_DCM, 5u, PDUR_LO_CANTP, 35u, NULL_PTR, NULL_PTR, NULL_PTR},
+    };
+    const PduR_TxRouteType duplicate_tx[] = {
+        pdur_tx[0], {PDUR_UP_DCM, 5u, PDUR_LO_CANTP, 36u, cantp_transmit, NULL_PTR, NULL_PTR}};
+    const PduR_PBConfigType configs[] = {
+        {41u, NULL_PTR, 1u, pdur_tx, 2u, tp_routes, 1u},
+        {41u, pdur_rx, 1u, NULL_PTR, 2u, tp_routes, 1u},
+        {41u, pdur_rx, 1u, pdur_tx, 2u, NULL_PTR, 1u},
+        {41u, missing_rx, 1u, pdur_tx, 2u, tp_routes, 1u},
+        {41u, duplicate_rx, 2u, pdur_tx, 2u, tp_routes, 1u},
+        {41u, pdur_rx, 1u, &bad_tx[0], 1u, tp_routes, 1u},
+        {41u, pdur_rx, 1u, &bad_tx[1], 1u, tp_routes, 1u},
+        {41u, pdur_rx, 1u, &bad_tx[2], 1u, tp_routes, 1u},
+        {41u, pdur_rx, 1u, duplicate_tx, 2u, tp_routes, 1u},
+    };
+
+    for (unsigned index = 0u; index < sizeof(configs) / sizeof(configs[0]); ++index) {
+        pdur_init(&configs[index]);
+        uninitialized();
+    }
+    reject_pdur_transport_configurations();
+}
+
+static void reject_oversized_route_tables(void)
+{
+    LSduR_RxRouteType lsdur_receive[33];
+    LSduR_TxRouteType lsdur_transmit[33];
+    PduR_RxRouteType pdur_receive[33];
+    PduR_TxRouteType pdur_transmit[33];
+    PduR_TpRouteType pdur_transport[33];
+    for (unsigned index = 0u; index < 33u; ++index) {
+        const PduIdType handle = (PduIdType)index;
+        lsdur_receive[index] = (LSduR_RxRouteType){handle, handle, com_rx};
+        lsdur_transmit[index] =
+            (LSduR_TxRouteType){LSDUR_UP_CANTP, handle, handle, cantp_conf, NULL_PTR};
+        pdur_receive[index] = (PduR_RxRouteType){handle, handle, com_rx};
+        pdur_transmit[index] = (PduR_TxRouteType){
+            PDUR_UP_DCM, handle, PDUR_LO_CANTP, handle, cantp_transmit, NULL_PTR, NULL_PTR};
+        pdur_transport[index] = (PduR_TpRouteType){
+            handle, handle, handle, handle, start, copy_rx, tp_rx, copy_tx, tp_conf};
+    }
+    const LSduR_PBConfigType lsdur_configs[] = {
+        {40u, lsdur_receive, 33u, ls_tx, 2u},
+        {40u, ls_rx, 1u, lsdur_transmit, 33u},
+    };
+    const PduR_PBConfigType pdur_configs[] = {
+        {41u, pdur_receive, 33u, pdur_tx, 2u, tp_routes, 1u},
+        {41u, pdur_rx, 1u, pdur_transmit, 33u, tp_routes, 1u},
+        {41u, pdur_rx, 1u, pdur_tx, 2u, pdur_transport, 33u},
+    };
+    for (unsigned index = 0u; index < sizeof(lsdur_configs) / sizeof(lsdur_configs[0]); ++index) {
+        lsdur_init(&lsdur_configs[index]);
+        uninitialized();
+    }
+    for (unsigned index = 0u; index < sizeof(pdur_configs) / sizeof(pdur_configs[0]); ++index) {
+        pdur_init(&pdur_configs[index]);
+        uninitialized();
+    }
+}
+
 int main(void)
 {
     PduInfoType pdu = info;
@@ -228,6 +355,9 @@ int main(void)
     lsdur_init(NULL_PTR);
     lsdur_init(&ls_clash);
     uninitialized();
+    reject_lsdur_configurations();
+    reject_pdur_configurations();
+    reject_oversized_route_tables();
     /* A valid Init makes the router ONLINE and identifies its configuration
      * (Verifies: SWS_PduR_00326, 00280; Verifies: CP_SWS_LSduR_00029, 00036;
      * Verifies[PduR]: SWS_BSW_00071; Verifies[LSduR]: SWS_BSW_00071). */

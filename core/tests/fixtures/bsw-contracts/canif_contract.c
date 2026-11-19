@@ -141,6 +141,65 @@ static void uninitialized(void) {
     assert(indications[0] + successes + failures + modes + bus_offs == before);
 }
 
+static void reject_configuration(const CanIf_ConfigType *configuration)
+{
+    CanIf_PduModeType pdu = CANIF_ONLINE;
+    init(configuration);
+    assert(get_pdu(0u, &pdu) == E_NOT_OK && pdu == CANIF_ONLINE);
+}
+
+static void reject_configurations(void)
+{
+    const CanIf_RxPduConfigType bad_rx[] = {
+        {0x800u, 0u, 4u},
+        {0x100u, 0u, 9u},
+    };
+    const CanIf_RxPduConfigType duplicate_rx[] = {rx[0], {0x101u, 0u, 4u}};
+    const CanIf_TxPduConfigType bad_tx[] = {
+        {0x800u, 0u, 4u},
+        {0x200u, 0u, 0u},
+        {0x200u, 0u, 9u},
+    };
+    const CanIf_TxPduConfigType duplicate_tx[] = {tx[0], {0x201u, 0u, 4u}};
+    const CanIf_ConfigType bad_configurations[] = {
+        {NULL_PTR, 2u, tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u},
+        {rx, 2u, NULL_PTR, 1u, mode, bus_off, 0u, 0u, 0u, 0u},
+        {rx, 2u, tx, 1u, NULL_PTR, bus_off, 0u, 0u, 0u, 0u},
+        {rx, 2u, tx, 1u, mode, NULL_PTR, 0u, 0u, 0u, 0u},
+        {duplicate_rx, 2u, tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u},
+        {rx, 2u, duplicate_tx, 2u, mode, bus_off, 0u, 0u, 0u, 0u},
+    };
+    CanIf_RxPduConfigType too_many_rx[33];
+    CanIf_TxPduConfigType too_many_tx[33];
+    CanIf_ConfigType config = canif;
+    for (unsigned index = 0u; index < 33u; ++index) {
+        too_many_rx[index] = (CanIf_RxPduConfigType){0x100u + index, (PduIdType)index, 4u};
+        too_many_tx[index] = (CanIf_TxPduConfigType){0x200u + index, (PduIdType)index, 4u};
+    }
+    config.receive = too_many_rx;
+    config.receive_count = 33u;
+    reject_configuration(&config);
+    config = canif;
+    config.transmit = too_many_tx;
+    config.transmit_count = 33u;
+    reject_configuration(&config);
+    config = canif;
+    for (unsigned index = 0u; index < sizeof(bad_rx) / sizeof(bad_rx[0]); ++index) {
+        config.receive = &bad_rx[index];
+        config.receive_count = 1u;
+        reject_configuration(&config);
+    }
+    config = canif;
+    for (unsigned index = 0u; index < sizeof(bad_tx) / sizeof(bad_tx[0]); ++index) {
+        config.transmit = &bad_tx[index];
+        reject_configuration(&config);
+    }
+    for (unsigned index = 0u; index < sizeof(bad_configurations) / sizeof(bad_configurations[0]);
+         ++index) {
+        reject_configuration(&bad_configurations[index]);
+    }
+}
+
 int main(void) {
     /* R24-11 BSWGeneral Appendix A.2 and the module API tables, independent of runtime. */
     assert(CANIF_MODULE_ID == 60u && CANIF_SID_TRANSMIT == 0x49u &&
@@ -151,6 +210,7 @@ int main(void) {
     Det_Init(&det);
     LSduR_Init(&ls);
     uninitialized();
+    reject_configurations();
     init(&canif);
     Can_Init(&can);
     /* Verifies: SWS_CANIF_00864: Init leaves every channel OFFLINE (Verifies: SWS_CANIF_00085)
