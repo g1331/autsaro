@@ -167,22 +167,16 @@ def changed_rows(base: str) -> tuple[str, list[dict]]:
     baseline = subprocess.check_output(
         ["git", "merge-base", base, "HEAD"], cwd=ROOT, text=True,
     ).strip()
-    statuses = {"M": "modified", "A": "added", "D": "removed"}
+    from autosar_tooling.ci_selection import git_diff_rows
+
     rows = []
     # Keep each layer: opposing edits must not hide an input from verification.
     for comparison in ([baseline, "HEAD"], ["--cached", "HEAD"], []):
-        fields = subprocess.check_output(
+        diff = subprocess.check_output(
             ["git", "diff", "--find-renames", "--name-status", "-z", *comparison, "--"],
             cwd=ROOT,
-        ).decode("utf-8").split("\0")[:-1]
-        records = iter(fields)
-        for status in records:
-            name = next(records)
-            if status.startswith("R"):
-                rows.append({"filename": next(records), "status": "renamed",
-                             "previous_filename": name})
-            else:
-                rows.append({"filename": name, "status": statuses.get(status, status)})
+        )
+        rows.extend(git_diff_rows(diff))
     untracked = subprocess.check_output(
         ["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=ROOT,
     ).decode("utf-8").split("\0")

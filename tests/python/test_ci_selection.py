@@ -35,7 +35,7 @@ UI_PATH = re.compile(r"""["'/\\]ui[/\\"']""")
 
 
 def file_listing(paths):
-    return json.dumps([[{"filename": path, "status": "modified"} for path in paths]])
+    return b"".join(b"M\0" + path.encode() + b"\0" for path in paths)
 
 
 def run_script(script):
@@ -278,6 +278,22 @@ class CiSelectionTests(unittest.TestCase):
                 cases.append(([{"filename": first, "status": "modified"},
                                {"filename": path, "status": "modified"},
                                {"filename": "README.md", "status": "modified"}], "full"))
+        python_test = "tests/python/test_c_acceptance.py"
+        behavior = "tests/python/native/test_c_analysis.py"
+        scenario = "tests/desktop/standard-delivery.test.mjs"
+        rehearsal = "scripts/rehearse_ecu_handoff.py"
+        for paths, mode in (
+            ([python_test, "README.md"], "python"),
+            ([python_test, rehearsal], "python"),
+            ([python_test, analysis[0]], "analysis"),
+            ([python_test, behavior], "analysis"),
+            ([rehearsal, scenario, "tests/desktop/support/workbench.mjs"], "application"),
+            ([python_test, scenario, page], "full"),
+            ([python_test, "docs/standards/rte/generated-retention/README.md"], "full"),
+            ([behavior, "runtime/example.c"], "full"),
+            ([python_test, "tests/python/native/test_other.py"], "full"),
+        ):
+            cases.append(([{"filename": path, "status": "modified"} for path in paths], mode))
         # Drivers and the guideline index may be imported by native tests: only edits are narrow.
         cases += [([{"filename": analysis[0], "status": status},
                     {"filename": "README.md", "status": "modified"}], "full")
@@ -286,26 +302,33 @@ class CiSelectionTests(unittest.TestCase):
                   for status in ("added", "removed", "renamed")]
         cases.append(([{"filename": page, "status": "renamed", "previous_filename": "docs/a.md"},
                        {"filename": "README.md", "status": "modified"}], "full"))
-        cases += [([{"filename": analysis[0], "status": "modified",
-                     "previous_filename": "old.py"}], "full"),
-                  ([], "full"), ([{"filename": analysis[0], "status": "modified"}] * 3000, "full")]
+        cases += [([], "full"), ([{"filename": analysis[0], "status": "modified"}] * 3000, "full")]
         for rows, mode in cases:
             with self.subTest(rows=rows[:2], mode=mode), tempfile.TemporaryDirectory() as temporary:
                 output = Path(temporary) / "output"
                 env = {"PULL_REQUEST": "1", "GITHUB_REPOSITORY": "example/repo",
                        "GITHUB_OUTPUT": str(output)}
-                result = subprocess.CompletedProcess([], 0, json.dumps([rows]))
+                statuses = {"modified": "M", "added": "A", "removed": "D", "renamed": "R100"}
+                fields = []
+                for row in rows:
+                    fields.append(statuses[row["status"]])
+                    if row["status"] == "renamed":
+                        fields.append(row.get("previous_filename", "old.py"))
+                    fields.append(row["filename"])
+                listing = b"".join(field.encode() + b"\0" for field in fields)
+                result = subprocess.CompletedProcess([], 0, listing)
                 with mock.patch.dict(os.environ, env), \
                         mock.patch.object(subprocess, "run", return_value=result), \
+                        mock.patch.object(subprocess, "check_output", return_value="parent\n"), \
                         mock.patch("builtins.print"):
                     run_script(script)
                 values = dict(line.split("=", 1) for line in output.read_text().splitlines())
                 self.assertEqual(values["code"], str(mode != "docs").lower())
-                self.assertEqual(values["analysis"], str(mode != "docs").lower())
+                self.assertEqual(values["analysis"], str(mode in {"analysis", "full"}).lower())
                 self.assertEqual(values["native"], str(mode == "full").lower())
-                self.assertEqual(values["application"], str(mode == "full").lower())
+                self.assertEqual(values["application"], str(mode in {"application", "full"}).lower())
                 if mode != "full":
-                    self.assertEqual(values["desktop"], "false")
+                    self.assertEqual(values["desktop"], str(mode == "application").lower())
                 if rows and rows[0]["filename"] == "unknown/input.txt":
                     self.assertEqual(values["desktop"], "true")
 
@@ -952,7 +975,8 @@ class CiSelectionTests(unittest.TestCase):
                     env = {"PULL_REQUEST": "91" if event == "pull_request" else "",
                            "GITHUB_REPOSITORY": "g1331/autsaro", "BASE": "base",
                            "GITHUB_SHA": "head", "GITHUB_OUTPUT": str(output)}
-                    with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run") as run:
+                    with (mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run") as run,
+                          mock.patch.object(subprocess, "check_output", return_value="parent\n")):
                         listing = file_listing([path]) if event == "pull_request" else path + "\n"
                         run.return_value = subprocess.CompletedProcess([], 0, listing)
                         runpy.run_path(str(source))
@@ -1164,6 +1188,7 @@ class CiSelectionTests(unittest.TestCase):
                 with (
                     mock.patch.dict(os.environ, environment),
                     mock.patch.object(subprocess, "run", return_value=listing),
+                    mock.patch.object(subprocess, "check_output", return_value="parent\n"),
                 ):
                     runpy.run_path(str(script_path))
                 values = dict(line.split("=", 1) for line in output.read_text().splitlines())

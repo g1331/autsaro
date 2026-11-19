@@ -2,7 +2,6 @@
 
 import contextlib
 import io
-import json
 import os
 import runpy
 import subprocess
@@ -120,24 +119,25 @@ class ChangedVerificationTests(unittest.TestCase):
                 if mode == "rename":
                     self.assertIn("previous_filename", rows[0])
                     self.assertEqual(rows[0]["previous_filename"], name)
+                identity = ("-c", "user.name=Test", "-c", "user.email=test@example.invalid")
+                self.git(root, "add", ".")
+                self.git(root, *identity, "commit", "-qm", "topic")
+                topic = self.git(root, "rev-parse", "HEAD")
+                self.git(root, "switch", "--detach", base)
+                (root / "runtime/test.c").write_text("base-only change\n")
+                self.git(root, *identity, "commit", "-qam", "target branch")
+                target = self.git(root, "rev-parse", "HEAD")
+                self.git(root, *identity, "merge", "--no-ff", topic, "-qm", "test merge")
                 output = root / "output"
                 source = root / "selector.py"
                 source.write_text(script)
-                with (mock.patch.dict(os.environ, {"PULL_REQUEST": "1",
-                       "GITHUB_REPOSITORY": "example/repo", "GITHUB_OUTPUT": str(output)}),
-                      mock.patch.object(subprocess, "run", return_value=subprocess.CompletedProcess(
-                          [], 0, json.dumps([rows]))),
-                      mock.patch.object(subprocess, "check_output", return_value="parent\n") as parent,
-                      contextlib.redirect_stdout(io.StringIO())):
+                with (mock.patch.dict(os.environ, {"PULL_REQUEST": "1", "GITHUB_OUTPUT": str(output)}),
+                      contextlib.chdir(root), contextlib.redirect_stdout(io.StringIO())):
                     runpy.run_path(str(source))
                 actual = dict(line.split("=") for line in output.read_text().splitlines())
                 expected = {key: str(value).lower() for key, value in select_changes(rows).items()}
                 self.assertEqual(actual.pop("source-parent", None),
-                                 "parent" if expected["analysis"] == "true" else None)
-                if expected["analysis"] == "true":
-                    parent.assert_called_once_with(["git", "rev-parse", "HEAD^1"], text=True)
-                else:
-                    parent.assert_not_called()
+                                 target if expected["analysis"] == "true" else None)
                 self.assertEqual(actual, expected)
                 self.assertEqual(actual["native"], str(mode == "rename").lower())
                 plan = verify.changed_commands(rows, base, root / "samples")
@@ -148,6 +148,37 @@ class ChangedVerificationTests(unittest.TestCase):
                 self.assertEqual("core:test" in names, mode == "rename")
                 self.assertEqual("ui:build" in names, mode in {"ui", "rename"})
                 self.assertEqual("desktop:ipc" in names, mode in {"ui", "rename"})
+
+    def test_target_rename_selects_the_consumer_in_the_merge_tree(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())
+        script = workflow["jobs"]["changes"]["steps"][1]["run"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.repository(root)
+            old = Path("tests/python/test_c_analysis.py")
+            new = Path("tests/python/native/test_c_analysis.py")
+            (root / old).parent.mkdir(parents=True)
+            (root / old).write_text("original")
+            identity = ("-c", "user.name=Test", "-c", "user.email=test@example.invalid")
+            self.git(root, "add", ".")
+            self.git(root, *identity, "commit", "-qm", "python test")
+            base = self.git(root, "rev-parse", "HEAD")
+            (root / old).write_text("topic change")
+            self.git(root, *identity, "commit", "-qam", "change test")
+            topic = self.git(root, "rev-parse", "HEAD")
+            self.git(root, "switch", "--detach", base)
+            (root / new).parent.mkdir()
+            self.git(root, "mv", str(old), str(new))
+            self.git(root, *identity, "commit", "-qm", "move test into native analysis")
+            self.git(root, *identity, "merge", "--no-ff", topic, "-qm", "test merge")
+            self.assertEqual((root / new).read_text(), "topic change")
+            output = root / "output"
+            source = root / "selector.py"
+            source.write_text(script)
+            with (mock.patch.dict(os.environ, {"PULL_REQUEST": "1", "GITHUB_OUTPUT": str(output)}),
+                  contextlib.chdir(root), contextlib.redirect_stdout(io.StringIO())):
+                runpy.run_path(str(source))
+            self.assertIn("analysis=true", output.read_text().splitlines())
 
     def test_unstaged_document_move_is_conservative(self):
         with tempfile.TemporaryDirectory() as temporary:

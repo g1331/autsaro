@@ -8,6 +8,13 @@ DRIVERS = {
     for name in ("c_check", "c_acceptance", "c_sdk", "c_comparison",
                  "c_addon", "c_gate", "c_baseline", "c_rename")
 }
+# These files run in the always-selected Python matrix for code changes.
+PYTHON_CHECK_INPUTS = {
+    "tests/python/test_c_" + name + ".py"
+    for name in ("acceptance", "analysis", "baseline", "comparison", "gate", "preprocessor",
+                 "rename", "retention", "sdk", "standard")
+} | {"scripts/rehearse_ecu_handoff.py", "tests/python/test_rehearse_ecu_handoff.py"}
+ANALYZER_BEHAVIOR_TEST = "tests/python/native/test_c_analysis.py"
 GUIDELINE_INDEX = ".agents/skills/misra-c2012/references/baseline-index.json"
 DESKTOP_PATHS = (
     "ui/", "src-tauri/", "core/", "runtime/", "tests/desktop/", "tools/python/",
@@ -17,6 +24,20 @@ DESKTOP_PATHS = (
     "tests/python/test_ci_selection.py", "tests/python/test_desktop_workflow.py",
 )
 NON_DESKTOP = ("docs/", "tests/python/", "scripts/", "fuzz/", ".github/", ".agents/")
+
+
+def git_diff_rows(data: bytes) -> list[dict]:
+    """Decode git diff --find-renames --name-status -z, including both rename paths."""
+    fields = iter(data.decode("utf-8", errors="surrogateescape").split("\0")[:-1])
+    statuses = {"M": "modified", "A": "added", "D": "removed"}
+    rows = []
+    for status in fields:
+        name = next(fields)
+        if status.startswith("R"):
+            rows.append({"filename": next(fields), "status": "renamed", "previous_filename": name})
+        else:
+            rows.append({"filename": name, "status": statuses.get(status, status)})
+    return rows
 
 
 def is_standard_page(path: str) -> bool:
@@ -72,12 +93,21 @@ def select_changes(rows: list[dict] | None, *, pull_request: bool = True) -> dic
     code = native = analysis = application = True
     if pull_request and reliable:
         code = not all(map(is_documentation, listing))
-        analysis_only = all(map(is_analysis_only_row, rows))
-        native = code and not analysis_only and not all(
-            is_documentation(path) or path.startswith("ui/") for path in listing
+        # Python discovery covers these inputs even when every other area is skipped.
+        remaining = [row for row in rows if row["filename"] not in PYTHON_CHECK_INPUTS
+                     and not is_documentation(row["filename"])]
+        analysis_only = bool(remaining) and all(
+            is_analysis_only_row(row) or row["filename"] == ANALYZER_BEHAVIOR_TEST
+            for row in remaining
         )
-        analysis = code and (native or analysis_only)
-        application = code and not analysis_only
+        application_only = all(
+            row["filename"].startswith("ui/") or (
+                row["filename"].startswith("tests/desktop/") and row["filename"].endswith(".mjs")
+            ) for row in remaining
+        )
+        native = bool(remaining) and not (analysis_only or application_only)
+        analysis = native or analysis_only
+        application = bool(remaining) and not analysis_only
     unknown = listing is not None and any(
         not (is_documentation(path) or is_analysis(path)
              or path.startswith(DESKTOP_PATHS + NON_DESKTOP)) for path in listing
