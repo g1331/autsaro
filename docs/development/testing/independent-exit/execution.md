@@ -3,7 +3,7 @@
 按[验收入口](README.md)冻结版本。每个平台准备同一个提交的工作台、参考工程输入和本平台封存包。发布工具及主机依赖见[开发环境](../../environment.md)
 及[交付说明](../../../architecture/targets-and-delivery.md)。工具路径用实际安装位置。Windows 使用 PowerShell 7、MSVC／WebView2，
 并按[必需 CI 的编译器安装定义](../../../../.github/actions/native-analysis-compiler/action.yml)安装同版 MinGW GCC／binutils。
-Linux 使用受控版本 GCC／binutils。目标清单要求的身份由包内 build 自行核对。接收者 Python 使用交付支持的 3.11–3.14。
+Linux 使用受控版本 GCC／binutils。目标清单要求的身份由包内 build 自行核对。接收者 Python 使用交付支持的 3.11–3.14。Linux 本地验证命令以 `nice -n 10` 串行执行。
 
 以下以空临时目录为起点。把 `FULL_MASTER_SHA` 替换为已冻结的提交。保留每个命令的退出码，失败时先保存现场再继续独立步骤。发送端的签名和链接验收还需要受控 binutils 的 `nm`。
 
@@ -54,8 +54,8 @@ uv run --locked python -B -m unittest discover -v -s tests/python/native -p test
   2>&1 | tee "$ROOT/results/A3-build-modes.log"
 uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_cmake_build.py \
   2>&1 | tee "$ROOT/results/A2-cmake.log"
-AUTOSAR_RECEIVER_PYTHON="$(command -v python3)" \
-  uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_offline_delivery.py \
+export AUTOSAR_RECEIVER_PYTHON=/absolute/path/to/receiver/python3
+uv run --locked python -B -m unittest discover -v -s tests/python/native -p test_offline_delivery.py \
   2>&1 | tee "$ROOT/results/B1-receiver-matrix.log"
 cargo test --locked -p autosar-config-core --test it -- integration:: \
   2>&1 | tee "$ROOT/results/A3-config.log"
@@ -132,7 +132,7 @@ Save-Check A3-delivery cargo @('test','--locked','-p','autosar-config-core','--t
 
 - **A1 配置往返与生成。** `c_analysis::` 生成 `standard-ecu`、`user-application`、`component-pipeline` 和 `no-diagnostic`。
   保留四个 `meta/files.sha256`、`meta/integration.json`、`target.json`。再执行 B3 的配置编辑、保存重开和真实生成，
-  核对重开值、原工程、用户 live 源码及封存应用，接收者须分别有单／多 SWC 的实际记录。
+  继续执行[编辑后交付复验](edited-handoff.md)，把单／多 SWC 保存重开后的实际导出交给两个生产 main。固定样本另做回归。
 - **A2 独立行为。** 每个封存样本的 HostBatch 与 probe 分别从新目录构建。probe 完成 20 ticks，合法批次有 COMMIT 回执。
   `standard-ecu` 的 verify 检查 CAN/DID、分段接收超时后的恢复、非法批次及 probe。`component-pipeline` 的
   `test_offline_delivery.py` 按独立帧向量核对 epoch 0／1／10／10／20，包含重复 epoch 与调度后的精确帧／DID 内容。
@@ -151,58 +151,82 @@ Save-Check A3-delivery cargo @('test','--locked','-p','autosar-config-core','--t
 
 ## B1 搬移包并实际断网
 
-发送端用文件传输介质移交四份封存树和 [接收脚本](../../../../scripts/rehearse_ecu_handoff.py)，另附 `identity.txt`、
-四份清单的独立摘要以及使用说明。发送端先核对摘要。接收端用空 VM 或空目录所在的独立主机环境，只带包、脚本、已安装的 Python、
-受控 GCC/binutils 与 Git。断开网卡，移除共享 checkout／挂载后再开始。保存网卡隔离及 checkout 不可用的记录，工具用绝对路径。
-用正常 `test_offline_delivery.py` 的矩阵补充 Python 兼容性与多组件帧向量。该 CI 入口还会检查封存字节及产物中的发送端路径。
+发送端用下列命令，从冻结的四份回归样本生成 SHA-256 清单。包、脚本、`identity.txt` 随介质移交。
+通过可信交接渠道单独发送 `sender-seals.json`，并注明冻结 SHA 和目标。收到同名的其他有效封存树也须在任何包内代码运行前拒绝。
 
-Linux 在空接收目录放入四个样本目录和脚本，设置三个工具路径后在独立 Bash 会话执行：
+Linux 发送端：
+
+```bash
+"$AUTOSAR_PYTHON" -I -S scripts/rehearse_ecu_handoff.py seals "$AUTOSAR_C_ANALYSIS_SAMPLES" \
+  > "$ROOT/results/sender-seals.json"
+```
+
+Windows 发送端：
+
+```powershell
+& $env:AUTOSAR_PYTHON -I -S scripts/rehearse_ecu_handoff.py seals $env:AUTOSAR_C_ANALYSIS_SAMPLES |
+    Set-Content -Encoding utf8 "$Root/results/sender-seals.json"
+if ($LASTEXITCODE -ne 0) { throw "Could not record the sender seals" }
+```
+
+接收端使用空目录所在的独立主机环境，只带四个样本、脚本、可信清单、已安装的 Python、受控 GCC／binutils 与 Git。
+断开网卡，移除共享 checkout／挂载，保留隔离记录。解析四个固定相对路径并逐个比较发送端摘要，缺项或不符即停止。
+运行后再比较同样的四条摘要并保留前后结果。正常 `test_offline_delivery.py` 的矩阵补充 Python 兼容性和发送端路径检查。
+
+Linux 在独立 Bash 会话中进入接收目录。把 `RECEIVER_PYTHON` 改成预装 CPython 的绝对路径：
 
 ```bash
 set -e
+RECEIVER_PYTHON=/absolute/path/to/receiver/python3
 export AUTOSAR_CC=/usr/bin/gcc-13 AUTOSAR_OBJDUMP=/usr/bin/objdump AUTOSAR_GIT=/usr/bin/git
 mkdir receipts
-sha256sum */meta/files.sha256 > receipts/seal-before.txt
-/usr/bin/python3 -I -S rehearse_ecu_handoff.py --help
-/usr/bin/python3 -I -S rehearse_ecu_handoff.py standard-ecu receipts/standard-ecu --verify
-/usr/bin/python3 -I -S rehearse_ecu_handoff.py component-pipeline receipts/component-pipeline --pipeline
+"$RECEIVER_PYTHON" -I -S -c 'import pathlib, sys; print(pathlib.Path(sys.executable).resolve()); print(sys.version)' \
+  > receipts/python.txt
+"$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py seals . --expected sender-seals.json \
+  > receipts/seal-before.json
+"$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py run standard-ecu receipts/standard-ecu --verify
+"$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py run component-pipeline receipts/component-pipeline --pipeline
 for sample in user-application no-diagnostic; do
-  /usr/bin/python3 -I -S rehearse_ecu_handoff.py "$sample" "receipts/$sample"
+  "$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py run "$sample" "receipts/$sample"
 done
-sha256sum --check receipts/seal-before.txt
+"$RECEIVER_PYTHON" -I -S rehearse_ecu_handoff.py seals . --expected receipts/seal-before.json \
+  > receipts/seal-after.json
 ```
 
-Windows 在真正断网、无宿主共享 checkout 的专用 Windows 主机／VM 中执行同一批交付，
-应由接收者从移交的说明独立完成并签录（历史 D-24）。
+Windows 在断网、无宿主共享 checkout 的专用 Windows 主机／VM 中，由接收者从移交的说明独立完成并签录（历史 D-24）。
+进入接收目录，把 `$Python` 改成预装 CPython 的绝对路径：
 
 ```powershell
 $env:AUTOSAR_CC = (Get-Command gcc.exe).Source
 $env:AUTOSAR_OBJDUMP = (Get-Command objdump.exe).Source
 $env:AUTOSAR_GIT = (Get-Command git.exe).Source
-$Python = (Get-Command python.exe).Source
+$Python = 'C:/absolute/path/to/receiver/python.exe'
 New-Item -ItemType Directory receipts | Out-Null
-$Seals = Get-FileHash */meta/files.sha256
-$Seals | Out-File receipts/seal-before.txt
-& $Python -I -S rehearse_ecu_handoff.py --help
-& $Python -I -S rehearse_ecu_handoff.py standard-ecu receipts/standard-ecu --verify
+& $Python -I -S -c 'import pathlib, sys; print(pathlib.Path(sys.executable).resolve()); print(sys.version)' |
+    Set-Content -Encoding utf8 receipts/python.txt
+if ($LASTEXITCODE -ne 0) { throw "Receiver Python is unavailable" }
+& $Python -I -S rehearse_ecu_handoff.py seals . --expected sender-seals.json |
+    Set-Content -Encoding utf8 receipts/seal-before.json
+if ($LASTEXITCODE -ne 0) { throw "Received seals differ from the trusted sender inventory" }
+& $Python -I -S rehearse_ecu_handoff.py run standard-ecu receipts/standard-ecu --verify
 if ($LASTEXITCODE -ne 0) { throw "standard-ecu handoff failed" }
-& $Python -I -S rehearse_ecu_handoff.py component-pipeline receipts/component-pipeline --pipeline
+& $Python -I -S rehearse_ecu_handoff.py run component-pipeline receipts/component-pipeline --pipeline
 if ($LASTEXITCODE -ne 0) { throw "component-pipeline handoff failed" }
 foreach ($Sample in 'user-application', 'no-diagnostic') {
-    & $Python -I -S rehearse_ecu_handoff.py $Sample "receipts/$Sample"
+    & $Python -I -S rehearse_ecu_handoff.py run $Sample "receipts/$Sample"
     if ($LASTEXITCODE -ne 0) { throw "$Sample handoff failed" }
 }
-$After = Get-FileHash */meta/files.sha256
-$After | Out-File receipts/seal-after.txt
-if (Compare-Object $Seals $After -Property Path,Hash) { throw "received seals changed" }
+& $Python -I -S rehearse_ecu_handoff.py seals . --expected receipts/seal-before.json |
+    Set-Content -Encoding utf8 receipts/seal-after.json
+if ($LASTEXITCODE -ne 0) { throw "Received seals changed during execution" }
 ```
 
-接收端检查每个目录均有 `build-host-batch.log`、`build-probe.log`、`host-batch.log` 和 `probe.log`。
-standard-ecu 另有 `verify.log` 及 `verify/` 下的原始协议记录。component-pipeline 在断网接收端直接核对五次批次确认及五帧输出，
-包括 10／20 tick 调度后的 CAN 回显及 DID 值。每个样本都要有 PASS；两平台分别保留前后清单摘要和四份 receipts。
+保留发送端清单、解释器身份和前后匹配的摘要。每个样本须有 PASS、`identity.json`（含实际解释器、版本、包摘要和受控 PATH）、
+两个 `build-*.log` 以及 `host-batch.log`、`probe.log`。脚本给包内子进程使用受控工具路径和平台必要环境变量。
+standard-ecu 另有 `verify.log` 和 `verify/` 下的协议记录。component-pipeline 核对五次批次确认及五帧精确输出。
 可把同样的 standard-ecu 命令作为 CI 冒烟，输入取对应目标的 `c-analysis-inputs-*` 工件。
 
-## B2–B4 工作台、真实 IPC 与安装包
+## B2–B3 工作台与真实 IPC
 
 先运行 [桌面场景](../desktop.md) 中的隔离前置检查。Linux 使用测试框架的私有 Xvfb 与 D-Bus，Windows 使用专用交互会话，
 驱动版本与 WebView2 匹配。B2 的组件测试用浏览器模拟环境，另记结果。B3 的 Tauri 与 WebDriver 启动真实应用。
@@ -236,34 +260,4 @@ Save-Check B3-ipc node @('--test','--test-concurrency=1','tests/desktop/*.test.m
 若正式交付约定了浏览器复核，另在隔离会话运行 `npm run dev --prefix ui`，从 UI 验证相应视图和控制可操作，
 记录浏览器版本与截图。浏览器检视只对应前端能力。
 
-B4 由 [#63](https://github.com/g1331/autsaro/issues/63) 承接安装验收。按[发布说明](../../../maintainers/releasing.md)取得同 SHA 构建的
-实际 Linux／Windows 包，记录介质摘要及安装品种。在各自干净、无源码的隔离 VM 中使用操作系统正常安装入口。
-实际启动、从可移交的 ARXML 创建工程与保存重开、生成一次、在重启应用后重开，核对安装／卸载和权限／命名空间记录。
-`Build application bundles` 的上传记录作为介质来源。安装测试的证据包括安装器实际退出状态、启动后的工作台结果和卸载记录。
-
-Linux 在预装依赖的测试 VM 中，选择同一 SHA 的 `.deb`。其余约定交付形式按发行说明另验。
-
-```bash
-DEB=/absolute/path/to/bundle.deb
-sha256sum "$DEB"
-sudo apt-get --no-download install "$DEB"
-PACKAGE=$(dpkg-deb -f "$DEB" Package)
-dpkg-query --show "$PACKAGE"
-dpkg-query -L "$PACKAGE" | grep '/bin/'
-# 从上一步列出的路径启动安装版并完成上面的工作台操作。
-sudo apt-get --no-download remove "$PACKAGE"
-```
-
-Windows 在断网 VM 中将所选 `.msi` 放进结果目录，再执行：
-
-```powershell
-$Msi = (Resolve-Path './bundle.msi').Path
-Get-FileHash $Msi
-$Install = Start-Process msiexec.exe -Wait -PassThru -ArgumentList "/i `"$Msi`" /qn /L*v install.log"
-$Install.ExitCode
-# 从开始菜单启动安装版并完成上面的工作台操作。
-$Remove = Start-Process msiexec.exe -Wait -PassThru -ArgumentList "/x `"$Msi`" /qn /L*v uninstall.log"
-$Remove.ExitCode
-```
-
-核对退出状态和 MSI 日志。安装器要求重启时先完成重启，再核对实际启动和卸载。
+安装与卸载另见 [B4 安装包实测](installation.md)。

@@ -24,6 +24,59 @@ export const explicit = (kind, lexeme) => ({
 export const existing = (objectId) => ({ kind: 'existing', objectId });
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 export const json = JSON.stringify;
+
+// Bind the desktop round trip to the sealed package the native receiver will build.
+export async function recordEditedDelivery(delivery, project, original, reopened, values) {
+  const directory = delivery.directory;
+  const meta = JSON.parse(await readFile(path.join(directory, 'meta/handoff.json'), 'utf8'));
+  const snapshots = await Promise.all(
+    meta.inputSnapshots
+      .filter((input) => input.kind === 'arxml')
+      .map(async (input) => ({
+        logicalPath: input.logicalPath,
+        sha256: sha256(await readFile(path.join(directory, input.packagePath))),
+      })),
+  );
+  const logicalPath = (source) => path.relative(project, source).split(path.sep).join('/');
+  const sourceHashes = (sources) =>
+    sources.map(({ path: source, bytes }) => ({
+      logicalPath: logicalPath(source),
+      sha256: sha256(bytes),
+    }));
+  const byPath = (left, right) => left.logicalPath.localeCompare(right.logicalPath);
+  const originalSources = sourceHashes(original).sort(byPath);
+  const reopenedSources = sourceHashes(reopened).sort(byPath);
+  assert.notDeepEqual(reopenedSources, originalSources, 'Configuration was edited');
+  assert.deepEqual(
+    snapshots.sort(byPath),
+    reopenedSources,
+    'Delivered inputs must match the reopened source bytes',
+  );
+  const originalInputDirectory = path.join(path.dirname(directory), `${delivery.name}.edit-inputs`);
+  await mkdir(originalInputDirectory);
+  for (const source of original) {
+    const name = logicalPath(source.path);
+    assert(reopenedSources.some((item) => item.logicalPath === name));
+    const copy = path.join(originalInputDirectory, name);
+    await mkdir(path.dirname(copy), { recursive: true });
+    await writeFile(copy, source.bytes, { flag: 'wx' });
+  }
+  const receipt = {
+    project,
+    originalInputDirectory,
+    package: directory,
+    sealSha256: sha256(await readFile(path.join(directory, 'meta/files.sha256'))),
+    values,
+    originalSources,
+    reopenedSources,
+    snapshots,
+  };
+  await writeFile(
+    path.join(path.dirname(directory), `${delivery.name}.edit.json`),
+    JSON.stringify(receipt, null, 2) + '\n',
+    { flag: 'wx' },
+  );
+}
 /**
  * Page expression for the open dialog with this accessible name. Radix portals
  * dialogs to the body and names them through aria-labelledby (ADR 0019).

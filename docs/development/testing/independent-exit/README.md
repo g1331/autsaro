@@ -3,7 +3,9 @@
 [独立交接 Issue](https://github.com/g1331/autsaro/issues/56) 的执行入口。由未参与被验收实现的接收者在 Linux 与 Windows 各执行一次，从冻结的 `master`
 和可识别的交付物开始。练习可以提前运行。正式验收在[出口总览](https://github.com/g1331/autsaro/issues/30)的其他有效出口项完成后开始。
 
-- [双平台执行命令](execution.md)覆盖生成、独立构建、配置与用户源码保护、离线接收、原生行为、官方对照及工作台。
+- [双平台执行命令](execution.md)覆盖固定样本、原生行为、断网接收和工作台。
+- [编辑后交付复验](edited-handoff.md)把单／多 SWC 保存重开的封存树交给两个生产程序。
+- [安装包实测](installation.md)分别执行安装、手工检查和卸载。
 - [出口证据与判定](decision.md)覆盖门禁、进入条件、失败归属和硬件交接。
 
 | Issue 验收 | 逐项执行 | 通过条件 |

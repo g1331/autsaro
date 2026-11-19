@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createPipelineInputs } from './support/inputs.mjs';
-import { dialogNamed, openWorkbench, existing, json } from './support/workbench.mjs';
+import {
+  dialogNamed,
+  openWorkbench,
+  existing,
+  json,
+  recordEditedDelivery,
+} from './support/workbench.mjs';
 
 const {
   check,
@@ -198,8 +204,19 @@ check('composition-shared-editing-and-source-protection', async () => {
     await writeFile(path.join(pipeline.directory, file.path), bytes);
     users.push({ ...file, bytes });
   }
-  await refreshSurface(pipeline.manifest);
+  const reopened = await refreshSurface(pipeline.manifest);
+  const reopenedEvent = reopened.objects.find((object) => object.shortName === longPeriodicName);
+  assert(reopenedEvent);
+  const reopenedPeriod = reopened.fields.find(
+    (field) =>
+      field.objectId === reopenedEvent.objectId && field.definitionId === 'TIMING-EVENT#PERIOD',
+  ).current.value.lexeme;
+  assert.equal(reopenedPeriod, '0.0100');
   const delivered = await exportSource('Pipeline-source');
+  await recordEditedDelivery(delivered, pipeline.directory, original, await sourceBytes(reopened), {
+    event: reopenedEvent.path,
+    period: reopenedPeriod,
+  });
   for (const file of users) {
     assert.deepEqual(await readFile(path.join(pipeline.directory, file.path)), file.bytes);
     assert.deepEqual(

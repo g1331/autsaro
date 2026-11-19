@@ -7,6 +7,7 @@ import {
   existing,
   json,
   openWorkbench,
+  recordEditedDelivery,
   sha256,
 } from './support/workbench.mjs';
 
@@ -184,7 +185,9 @@ check('seven-source-standard-variant', async () => {
     ['types.arxml', 'services.arxml', 'composition.arxml'].includes(path.basename(source.path)),
   ))
     assert.deepEqual(await readFile(source.path), source.bytes);
-  await sourceSurface(await projection());
+  const reopened = await projection();
+  const reopenedBytes = await sourceBytes(reopened);
+  await sourceSurface(reopened);
   // Mainline deliveries compile the project's own user application.
   await menu('初始化用户应用…');
   await until(
@@ -217,6 +220,16 @@ check('seven-source-standard-variant', async () => {
   );
   await access(path.join(pageOutput, 'meta/files.list'));
   gatewayDelivery = await exportSource('GatewayReference-source');
+  await recordEditedDelivery(
+    gatewayDelivery,
+    path.dirname(reopened.projectPath),
+    savedBytes,
+    reopenedBytes,
+    {
+      periodMs: applicationPeriod(actual.description),
+      canIds: actual.description.signals.map((signal) => signal.canId),
+    },
+  );
 });
 check('v2-relocation-snapshot-import-and-refusals', async () => {
   const delivery = gatewayDelivery;

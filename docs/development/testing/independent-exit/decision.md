@@ -34,22 +34,65 @@ git show planning-archive-2026-10:_bmad-output/specs/spec-multi-component-schedu
 Linux：
 
 ```bash
-uv run --locked python -m autosar_tooling fetch-official 2>&1 | tee "$ROOT/results/C1-fetch.log"
-cargo test --locked -p autosar-config-core --features official-oracles --test official \
-  --no-fail-fast 2>&1 | tee "$ROOT/results/C1-official.log"
-uv run --locked python -m autosar_tooling requirements 2>&1 | tee "$ROOT/results/C1-requirements.log"
+set -o pipefail
+(
+  status=0
+  code=0
+  uv run --locked python -m autosar_tooling fetch-official 2>&1 | tee "$ROOT/results/C1-fetch.log" \
+    || code=$?
+  printf 'C1-fetch %s\n' "$code" >> "$ROOT/results/exit-codes.txt"
+  test "$code" -eq 0 || exit "$code"
+  cargo test --locked -p autosar-config-core --features official-oracles --test official \
+    --no-fail-fast 2>&1 | tee "$ROOT/results/C1-official.log" || code=$?
+  printf 'C1-official %s\n' "$code" >> "$ROOT/results/exit-codes.txt"
+  if [ "$code" -ne 0 ]; then status=1; fi
+  check_requirement() {
+    local label="$1" code=0
+    shift
+    uv run --locked python -m autosar_tooling requirements "$@" \
+      2>&1 | tee "$ROOT/results/C1-$label.log" || code=$?
+    printf 'C1-%s %s\n' "$label" "$code" >> "$ROOT/results/exit-codes.txt"
+    if [ "$code" -ne 0 ]; then status=1; fi
+  }
+  for catalog in core/resources/requirements/*.json; do
+    document=$(basename "$catalog" .json)
+    check_requirement "$document" "$document"
+  done
+  for document in TR_Methodology TPS_SystemTemplate TPS_SoftwareComponentTemplate \
+    TPS_BSWModuleDescriptionTemplate TPS_ECUConfiguration SWS_StandardTypes SWS_PlatformTypes \
+    SWS_CommunicationStackTypes SWS_MemoryMapping SWS_CANStateManager; do
+    check_requirement "stale-$document" --stale-only "$document"
+  done
+  exit "$status"
+)
 ```
 
 Windows：
 
 ```powershell
 Save-Check C1-fetch uv @('run','--locked','python','-m','autosar_tooling','fetch-official')
+if ($LASTEXITCODE -ne 0) { throw "Official archive verification failed" }
 Save-Check C1-official cargo @('test','--locked','-p','autosar-config-core','--features',
     'official-oracles','--test','official','--no-fail-fast')
-Save-Check C1-requirements uv @('run','--locked','python','-m','autosar_tooling','requirements')
+$Failed = $LASTEXITCODE -ne 0
+$Requirements = @('run','--locked','python','-m','autosar_tooling','requirements')
+foreach ($Catalog in Get-ChildItem core/resources/requirements -Filter '*.json' -File) {
+    Save-Check "C1-$($Catalog.BaseName)" uv ($Requirements + @($Catalog.BaseName))
+    if ($LASTEXITCODE -ne 0) { $Failed = $true }
+}
+$StaleOnly = @(
+    'TR_Methodology','TPS_SystemTemplate','TPS_SoftwareComponentTemplate',
+    'TPS_BSWModuleDescriptionTemplate','TPS_ECUConfiguration','SWS_StandardTypes','SWS_PlatformTypes',
+    'SWS_CommunicationStackTypes','SWS_MemoryMapping','SWS_CANStateManager'
+)
+foreach ($Document in $StaleOnly) {
+    Save-Check "C1-stale-$Document" uv ($Requirements + @('--stale-only', $Document))
+    if ($LASTEXITCODE -ne 0) { $Failed = $true }
+}
+if ($Failed) { throw "Official requirement disposition checks failed" }
 ```
 
-确认测试实际执行并通过。保留官方归档版次和校验输出。按[标准基线](../../../standards/README.md)逐个核对受影响模块的独立预期、
+任一条款核算失败即判该环节失败。确认每个文档的退出码为 0，并保留官方档案版次和校验输出。按[标准基线](../../../standards/README.md)逐个核对受影响模块的独立预期、
 义务及范围，实际读取引用的 SWS、ECUC 和通用 BSW 原文及涉及的 PDF 图，记录编号、页码、配置、实际消费者与结论。机械 oracle
 验证 XSD、模块定义及官方样例等具体性质。人工条款核对单独记录。现有模块规范结论缺依据时退回对应整改 Issue；资料取得归 #57 相关 owner。
 
@@ -85,18 +128,31 @@ MISRA 合规范围和剩余人工按 ADR 0027／0030 记入对应 Issue。
 ## C2 实际 PR 和 CI 保护
 
 先看 [#55 的交付 PR](https://github.com/g1331/autsaro/pull/496) 及其真实 PR 故障／恢复记录；再核对冻结版本的正常代码 PR 记录。
-用 GitHub CLI 在 PowerShell 或 Bash 读取，替换工作流运行号及可访问的保护规则：
+先从选定的代码 PR 取 head SHA。把以下大写占位符换成实际值，两平台均可使用 GitHub CLI。
 
 ```text
-gh run list --repo g1331/autsaro --workflow checks.yml --branch master --limit 20
-gh run view RUN_ID --repo g1331/autsaro --json headSha,event,attempt,jobs,url
-gh run view RUN_ID --repo g1331/autsaro --log
-gh run download RUN_ID --repo g1331/autsaro --pattern "c-analysis-*" --dir ./ci-evidence
+gh pr view PR_NUMBER --repo g1331/autsaro --json headRefOid,headRefName,baseRefName,url
+gh run list --repo g1331/autsaro --workflow checks.yml --event pull_request --commit PR_HEAD_SHA --limit 20
+gh run view PR_RUN_ID --repo g1331/autsaro --json headSha,event,attempt,jobs,url
+gh run view PR_RUN_ID --repo g1331/autsaro --log
+gh run download PR_RUN_ID --repo g1331/autsaro --pattern "c-analysis-*" --dir ./pr-ci-evidence
+gh run list --repo g1331/autsaro --workflow checks.yml --branch master --event push --commit FROZEN_MASTER_SHA
+gh run view MASTER_RUN_ID --repo g1331/autsaro --json headSha,event,attempt,jobs,url
 gh api repos/g1331/autsaro/branches/master/protection/required_status_checks
 gh api repos/g1331/autsaro/rules/branches/master
 ```
 
-1. 记录实际 PR 的 head、测试合并提交和第一父提交，核对其对应的代码、生成、分析工具及当前保护规则。
+1. 核对 PR run 的 `event=pull_request`、`headSha=PR_HEAD_SHA` 和所选 attempt。当前侧 `c-analysis-inputs-*`
+   的 `c-analysis-generation.json` 中 `tree` 与 checkout 作业日志给出实际测试合并提交。读取该提交的两个父节点：
+
+   ```text
+   git fetch origin TESTED_MERGE_SHA
+   git rev-list --parents -n 1 TESTED_MERGE_SHA
+   ```
+
+   第一父提交须等于门禁回执中的基准树，第二父提交须等于当前 PR head。当前侧分析取测试合并树。
+   历史测试合并提交无法取回时，须从该 attempt 的 checkout 日志和工件确认这三个身份。当前 `refs/pull/*/merge`
+   可能已更新，记录缺证时保留该缺口。冻结 master 的 push 运行独立记录和判定。
 2. 双目标各四样本，逐一核对 PR 与基准侧每个程序的分析收据，以及八份 `gate.json`。保留真实的结论、比较范围、样本身份、工具与基准来源；
    已有缓存命中须满足[当前身份与完整性条件](../generated-c.md)。
 3. 查看新增未处置诊断、坏工具／漏扫、必需任务取消或未执行的实际失败或相应独立反例。结合真实分支保护验收确认唯一必需
