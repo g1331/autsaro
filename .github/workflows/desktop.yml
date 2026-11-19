@@ -84,9 +84,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Runs 39008074660 / 39013110980: Windows needs a third serial shard
-        # to absorb observed scenario variance without duplicating the build.
-        # A file and all its stateful checks always stay on the same runner.
+        # Keep each scenario file and its stateful checks on one runner.
         include:
           - os: ubuntu-24.04
             shard:
@@ -99,15 +97,11 @@ jobs:
           - os: windows-2025-vs2026
             shard:
               id: 1
-              files: responsiveness startup process-tree
+              files: responsiveness startup process-tree standard-delivery value-editing workbench-ui owned-execution projects
           - os: windows-2025-vs2026
             shard:
               id: 2
               files: composition-editing editing application incomplete-configuration rejected-change
-          - os: windows-2025-vs2026
-            shard:
-              id: 3
-              files: standard-delivery value-editing workbench-ui owned-execution projects
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:

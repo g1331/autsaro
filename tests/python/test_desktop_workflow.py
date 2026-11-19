@@ -22,9 +22,9 @@ class DesktopWorkflowTests(unittest.TestCase):
         entries = matrix['include']
         self.assertEqual({entry['os'] for entry in entries}, {'ubuntu-24.04', 'windows-2025-vs2026'})
         expected = [file.name.removesuffix('.test.mjs') for file in (ROOT / 'tests/desktop').glob('*.test.mjs')]
-        for platform, count in (('ubuntu-24.04', 2), ('windows-2025-vs2026', 3)):
+        for platform in ('ubuntu-24.04', 'windows-2025-vs2026'):
             shards = [entry['shard'] for entry in entries if entry['os'] == platform]
-            self.assertEqual([shard['id'] for shard in shards], list(range(1, count + 1)))
+            self.assertEqual([shard['id'] for shard in shards], [1, 2])
             self.assertCountEqual([name for shard in shards for name in shard['files'].split()], expected)
         self.assertFalse(self.job['strategy']['fail-fast'])
         self.assertEqual(self.job['needs'], 'build')
