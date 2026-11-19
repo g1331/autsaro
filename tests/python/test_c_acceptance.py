@@ -1103,7 +1103,7 @@ class AcceptanceTests(unittest.TestCase):
         objects = [row for row in result["objects"] if row["kind"] == "checker-obligation"]
         expected_gaps = {
             "R1.2", "R1.3", "R2.1", "R2.2", "R2.3", "R2.4", "R2.5", "R5.3", "R5.6",
-            "R8.2", "R8.3", "R8.7",
+            "R5.9", "R8.2", "R8.3", "R8.7",
             "R8.9", "R8.13", "R9.1", "R9.2", "R9.3", "R10.4", "R10.7",
             "R11.1", "R11.2", "R11.3", "R11.4", "R11.5", "R11.8", "R11.9",
             "R12.1", "R12.2", "R12.4", "R13.2", "R14.2", "R14.3",
@@ -1112,13 +1112,13 @@ class AcceptanceTests(unittest.TestCase):
             "R20.10", "R21.1",
             "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 45)
+        self.assertEqual(len(expected_gaps), 46)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 45)
+        self.assertEqual(len(objects), 46)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 45)
+        self.assertEqual(len(located), 46)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1134,7 +1134,7 @@ class AcceptanceTests(unittest.TestCase):
             self.assertEqual(row["source"]["file"],
                              "docs/standards/types/language-constructs/" + filename)
         satisfied = {row["id"]: row for row in records if row["status"] == "satisfied"}
-        lexical = {"R2.6", "R3.1", "R4.1", "R4.2", "R5.2", "R5.4", "R5.9", "R6.1", "R6.2"}
+        lexical = {"R2.6", "R3.1", "R4.1", "R4.2", "R5.2", "R5.4", "R6.1", "R6.2"}
         declarations = {"R8.4", "R8.5", "R8.6", "R8.10", "R8.11", "R8.12", "R8.14", "R9.4", "R9.5"}
         expressions = {"R10.2", "R10.5", "R10.8", "R11.6", "R11.7", "R13.1",
                        "R13.3", "R13.4", "R13.6"}
@@ -1167,8 +1167,8 @@ class AcceptanceTests(unittest.TestCase):
                            "R2.7", "R5.3", "R5.6", "R5.8", "R5.9", "R7.1", "R7.2",
                            "R7.3", "R7.4"}
         self.assertEqual(len(batch), 24)
-        self.assertEqual(sum(by_id[key]["status"] == "satisfied" for key in batch), 15)
-        self.assertEqual(sum(by_id[key]["status"] == "not_assessed" for key in batch), 9)
+        self.assertEqual(sum(by_id[key]["status"] == "satisfied" for key in batch), 14)
+        self.assertEqual(sum(by_id[key]["status"] == "not_assessed" for key in batch), 10)
         blocked = {"R8.2", "R8.3", "R8.7", "R8.9", "R8.13",
                    "R9.1", "R9.2", "R9.3"}
         for guideline in declarations | blocked:
@@ -1217,7 +1217,7 @@ class AcceptanceTests(unittest.TestCase):
             "R5.3": ("not_assessed", "#547", "嵌套 scope"),
             "R5.6": ("not_assessed", "#547", "Rte_Instance"),
             "R5.8": ("satisfied", "HostBatch／probe", "物理 owner"),
-            "R5.9": ("satisfied", "#547", "#551", "36 个", "8 个", "53 个", "namespace"),
+            "R5.9": ("not_assessed", "#547", "36 个", "7 个", "53 个", "Os_Backend.c:53"),
             "R7.2": ("satisfied", "#424", "235／239", "#444", "24次"),
             "R7.4": ("satisfied", "TC2.7–8", "Arti_Record", "task_name"),
             "R8.2": ("not_assessed", "#547", "Det_ErrorHookType"),
@@ -1249,6 +1249,8 @@ class AcceptanceTests(unittest.TestCase):
                 for phrase in evidence:
                     self.assertIn(phrase, row["conclusion"])
         lexical_text = (self.root / by_id["R5.9"]["source"]["file"]).read_text(encoding="utf-8")
+        self.assertIn("Os_Backend.c:956", lexical_text)
+        self.assertIn("OS_ACTIVATION_TESTS", lexical_text)
         for filename, line, old, new in (
             ("CanTp.c", 164, "running", "cantp_running"),
             ("Det.c", 10, "initialized", "det_ready"),
@@ -1257,12 +1259,10 @@ class AcceptanceTests(unittest.TestCase):
             ("Dcm.c", 101, "pending_session", "dcm_pending_session"),
             ("Dcm.c", 87, "state", "dcm_s"),
             ("Dcm.c", 100, "session", "dcm_ses"),
-            ("Os_Backend.c", 53, "activations", "os_act_fifo"),
         ):
             with self.subTest(identifier=old):
                 self.assertIn(f"| {filename}:{line} | {old} | {new} |", lexical_text)
-                module = "os" if filename == "Os_Backend.c" else "bsw"
-                source = (ROOT / "runtime" / module / "src" / filename).read_text(encoding="utf-8")
+                source = (ROOT / "runtime/bsw/src" / filename).read_text(encoding="utf-8")
                 declaration = source.splitlines()[line - 1].split("/*", 1)[0]
                 self.assertRegex(declaration, rf"\b{new}\b")
                 self.assertNotRegex(declaration, rf"\b{old}\b")
