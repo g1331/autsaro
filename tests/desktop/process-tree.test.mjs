@@ -84,7 +84,7 @@ test('a real child process is attributed to its live parent', async (t) => {
       'a residual child below the root must remain visible to the close() check',
     );
   } finally {
-    child.stdin.end();
+    child.stdin?.end();
     await closed;
   }
 });
