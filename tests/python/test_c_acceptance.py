@@ -307,6 +307,12 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
         before = identities()
         ordinary_before = c_acceptance.input_identity(self.summary, self.project, root=self.root)
+        old_version = self.sdk_header["version"]
+        self.sdk_header["version"] = old_version + "-new"
+        for group, value in identities().items():
+            with self.subTest(package_revision=group):
+                self.assertEqual(value, before[group])
+        self.sdk_header["version"] = old_version
         # Producer carrier bytes and output outside every selected TU are independent.
         producer = self.root / "core/src/rte_template.rs"
         producer.parent.mkdir(parents=True)
@@ -1487,8 +1493,8 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(context["formalStatus"], "approved")
         cases = {(row["target"], row["caseId"]): row["inputIdentity"]
                  for row in context["cases"]}
-        # These two hosted Linux samples share libc6-dev 2.39-0ubuntu8.9 and the kernel closure.
-        reviewed = "aeeefc52b5f961cc2973cfc654437fa169848258a03f78c04f1af34892d2b0ec"
+        # Both hosted Linux samples have the same reviewed FreeRTOS input closure.
+        reviewed = "4d0041535341c102dc1ac236b4760566a6207037926d2ed1afe976beabb80683"
         self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
         self.assertEqual(cases[TARGET, "user-application"], reviewed)
 
@@ -2608,7 +2614,8 @@ class AcceptanceTests(unittest.TestCase):
                 patch.object(c_sdk, "debian_headers", return_value=packages), \
                 patch.object(c_sdk, "provider_root", return_value=self.directory.resolve()):
             # The fixture's provider tree is a temporary directory of the running host.
-            self.summary["semanticIdentity"] = c_check.semantic_identity(executable, copy.deepcopy(scope), directories)
+            original_scope = copy.deepcopy(scope)
+            self.summary["semanticIdentity"] = c_check.semantic_identity(executable, original_scope, directories)
             self.bind_sdk()
             accepted = copy.deepcopy(self.summary)
             accepted["projectAcceptance"] = self.evaluate()
@@ -2620,7 +2627,15 @@ class AcceptanceTests(unittest.TestCase):
                 with self.subTest(path=path.name), self.assertRaises(ValueError):
                     self.require(accepted)
                 path.write_bytes(before)
-            package["version"] = "changed provider identity"
+            package["version"] = "new package revision"
+            rescanned_scope = copy.deepcopy(scope)
+            rescanned_scope["sdkHeaders"][0]["version"] = package["version"]
+            self.require(accepted)
+            self.assertEqual(c_check.semantic_identity(executable, rescanned_scope, directories),
+                             accepted["semanticIdentity"])
+            self.assertNotEqual(rescanned_scope["sdkEnvironment"], original_scope["sdkEnvironment"])
+            self.assertEqual(accepted["scope"]["sdkHeaders"][0]["version"], record["version"])
+            package["header"] += ".changed"
             with self.assertRaisesRegex(ValueError, "SDK source/provider identity changed"):
                 self.require(accepted)
 
