@@ -203,8 +203,9 @@ def probe_include_search(compiler: str, flags: list[str], directory: Path,
 def probe_predefines(compiler: str, flags: list[str], project: Path, includes: list[str],
                      directory: Path, *, cwd: Path | None = None) -> str:
     empty = directory / "headers.c"
+    # GCC infers C from .c, as it does for each translation unit.
     _, macros, _ = run([compiler, *flags, *("-I" + tool_argument(project / name) for name in includes),
-                        "-dM", "-E", "-x", "c", str(empty)], directory, "compiler-macros", 30,
+                        "-dM", "-E", str(empty)], directory, "compiler-macros", 30,
                        context="Cannot discover compiler predefined macros", cwd=cwd)
     if "#define __GNUC__ " not in macros:
         raise ValueError("Cannot discover compiler predefined macros")

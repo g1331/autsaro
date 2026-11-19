@@ -9,12 +9,24 @@ from pathlib import Path, PureWindowsPath
 from unittest.mock import patch
 
 from autosar_tooling import c_check
-from ecu_tools.build import target_configuration
+from ecu_tools.build import target_configuration, tool_argument
 
 ENTRIES = {"host-batch": "integration/src/ecu_host_batch.c", "probe": "integration/src/ecu_probe.c"}
 
 
 class CAnalysisTests(unittest.TestCase):
+    def test_predefine_probe_uses_the_translation_unit_preprocessor_options(self):
+        directory = Path.cwd() / "analysis"
+        project = directory / "project"
+        predefined = "#define __GNUC__ 13\n"
+        with patch.object(c_check, "run", return_value=(0, predefined, "")) as run:
+            self.assertEqual(c_check.probe_predefines("gcc", ["-std=c99"], project, ["include"], directory),
+                             predefined)
+        self.assertEqual(run.call_args.args[0], [
+            "gcc", "-std=c99", "-I" + tool_argument(project / "include"),
+            "-dM", "-E", str(directory / "headers.c"),
+        ])
+
     def test_analyzer_inputs_normalizes_root_and_file_aliases(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary).resolve()
