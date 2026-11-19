@@ -391,11 +391,14 @@ def equivalent(previous: dict, current: dict, baseline: Path, output: Path, comp
                     _binding_pairs(a, b, changes, old_positions, new_positions)
                     for a, b in zip(left, right)):
                 return Counter()
-        result.update(_pairs(previous, current, name, old, new, active, comparison, previous_headers, headers))
+        paired = _pairs(previous, current, name, old, new, active, comparison, previous_headers, headers)
+        if paired is None:
+            return Counter()
+        result.update(paired)
     return result
 
 
-def _pairs(previous, current, name, old, new, active, comparison, previous_headers, headers):
+def _pairs(previous, current, name, old, new, active, comparison, previous_headers, headers) -> Counter | None:
     old_lines, new_lines = old.split("\n"), new.split("\n")
     # Match the same raw token after rename and horizontal padding shift, not
     # another operand/operator on the same line. Unlocated reports get no credit.
@@ -422,7 +425,7 @@ def _pairs(previous, current, name, old, new, active, comparison, previous_heade
 
     before, after = positions(previous, previous_headers, 0), positions(current, headers, 1)
     if before is None or before != after:
-        return Counter()
+        return None
     removed, added = Counter(), Counter()
     for (rule, line, _anchor), programs in before.items():
         for program, count in programs.items():
@@ -433,4 +436,4 @@ def _pairs(previous, current, name, old, new, active, comparison, previous_heade
         return Counter({(row["rule"], row["file"], row["source"], row["program"]): row["count"]
                         for row in comparison[side] if row["file"] == name and row["rule"] in TYPE_RULES})
 
-    return added if removed == strict("removed") and added == strict("new") else Counter()
+    return added if removed == strict("removed") and added == strict("new") else None
