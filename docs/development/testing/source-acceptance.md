@@ -138,8 +138,8 @@ C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_
 匹配 MR12／shape，未知 producer／摘要拒绝。应用与内核沿原任务。程序限
 host-batch／probe，样本限现有四 profile。
 
-Required 风险记录须同时通过自有源码当前绑定和规则级正式保留批准。否则保留各自阻塞原因，
-其中缺正式处置为 `formal_deviation_pending`。通过时 `formalContextId` 回接规则级上下文。
+Required 风险记录须通过自有源码绑定及规则级正式批准。正式输入身份另含保留规则的原始诊断摘要。
+源码形状错误的实体不参与保留统计。缺正式处置为 `formal_deviation_pending`，通过时由 `formalContextId` 回接批准。
 Mandatory 保留项返回 `mandatory_deviation_forbidden`。现有
 [自有源码输入绑定](../../standards/bsw-general/public-api-os.md#自有源码记录的当前输入消费)
 仍按各实体、样本与程序范围消费。
