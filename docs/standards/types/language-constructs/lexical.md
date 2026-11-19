@@ -55,12 +55,32 @@ AMD2.47–49 和 TC2.7–8 的可变实参例外。其余修订未改变本表�
 | R5.4 | Required | 活动宏名及各自参数名 | satisfied | 主文 51–52、AMD2.37–38 按定义时的活动集合和 C99 63 字符判断。原文件所有宏／参数的保守前缀比较无冲突；实际 -dD 顺序重放 define／undef，逐次核对项目宏与已定义宏／参数及本宏参数，亦无冲突。包含反复撤销的 Os_MemMap、RTE_CORE 下的应用宏及 port 宏；同号入口未清 undef 的限制由该独立核查补齐。 |
 | R5.6 | Required | 跨 namespace／TU 的 typedef 名称 | not_assessed | 主文54 的跨 namespace／TU 唯一性、关联 tag 和同头重复包含例外已核；多应用头分别定义 Rte_Instance，当前保留真实 Required 名称重用。#443 的 #547 按固定 RTE 原文和实际应用包含闭包核定处置，完成其余 typedef 的唯一性及正式义务；相同底层类型或应用头互不同时包含均未作为规则例外。 |
 | R5.8 | Required | 外部链接名称与全部其他实体 | satisfied | 主文56／PDF64；按四 profile 的 HostBatch／probe 分别比较 external-linkage 定义名与全部函数、对象、typedef、tag、enum 及成员／形参声明，完整 GCC 行标记区分物理 owner；当前外部名无其他实体重用。Os_ArtiTasks、Ecu_OsConfig、Rte_Instance_<组件> 和回调绑定均连接唯一定义与实际消费者；普通重复声明归同一实体，SDK 原头和采用原行沿 ADR 0025。 |
-| R5.9 | Advisory | 内部链接名称与全部其他实体 | not_assessed | 主文57／PDF65、TC1 修正主体；违反＋处置：第八批已修36个重用名，35个私有定义加模块前缀，栈成员改为 committed_bytes，生成 producer、存储描述与消费者同步。剩余8个名字为 CanTp.running、Det.initialized、Com.reloaded_before_main／remaining、Dcm.pending_session／state／session、Backend.activations；物理行及恢复条件归 #443 的 #547，待 #551 的 gate 标识符改名等价匹配经审查后再改名。53个头中 static 实体均为 inline；当前真实 Advisory 违反保留，未加入改名通行记录。 |
+| R5.9 | Advisory | 双目标四 profile 的 HostBatch／probe 内部链接名称与全部其他实体 | not_assessed | 主文57／PDF65、TC1 修正主体、AMD2.27 追加 C11。沿用第八批的完整实体清单、36 个已修重用名及 53 个头内 static inline 的同一头例外核对。#443 的 #547 本轮消除 7 个 BSW 重用名。Os_Backend.c:53 的 activations 与 Os_ArtiTaskType.activations 重名，仍是实际 Advisory 违反。 |
 | R6.1 | Required | 项目位域及实际声明类型／消费者 | satisfied | 主文 58–59、AMD2.41–43 允许 C99 实现支持的显式有符号／无符号类型及 bool，可经 typedef。当前物理与实际展开的项目位域仅 Dcm_MsgAddInfoType 的 reqType／suppressPosResponse；两目标 uint8→uint8_t→unsigned char，实际 GCC C99 编译接受。Dcm 接收初始化／子功能提取写入，响应抑制读取后者；无项目 union 位域或其他 typedef 位域候选。 |
 | R6.2 | Required | 有名的一位位域 | satisfied | 主文 59、AMD2.44–45 区分有名与无名位域。Dcm_MsgAddInfoType 的 reqType／suppressPosResponse 均有名、宽度 1，实际 typedef 展开为 unsigned char；Dcm 的 0／1 写入和抑制判断沿 R6.1 的直接消费者。全部物理及实际展开已核对，项目补丁无新增位域，未发现有符号一位对象。 |
 | R7.1 | Required | 原 token、条件和实际展开整数 | satisfied | 主文 59–60／PDF 67–68、AMD2.27；固定 raw token 入口遗漏宏后八进制。当前实际展开仅 Linux Os_LinuxMappedStack 的 open 实参 O_RDONLY→00，按 #476 批准接入 sdk-integration 精确类别、glibc 原头及 HostBatch／probe；保持只读、descriptor／read／close 检查。物理项目／patch 的 #if／#elif 与全部实际 -dD 定义作保守传递闭包，无八进制 token 或 ## 生产者；普通展开／未选分支另核，无类别外自有八进制。头身份、使用点、程序或输入改变即重评。 |
 | R7.4 | Required | 字符串到对象、返回及函数实参 | satisfied | 主文62–63、AMD2.47–48 的字符类型及 TC2.7–8 的可变实参例外。实际字符串全部回接 Arti_Record 的四个 const char*、Os_BackendAssert／Os_HostTextAppend 的 const char*、Ecu_StatusName 的 const char* 或 task_name 数组初始化；宏生成的文件名、断言文本、条件／相邻字面量同样核查。无宽字符串、取字面量地址后交可写指针或直接修改；未用 variadic 例外覆盖固定形参。 |
 <!-- misra-checker-obligations-end -->
+
+### R5.9 私有对象改名
+
+文件与行号对应原声明，改名后物理行保持。以实际 GCC 展开和 Cppcheck 声明绑定核对
+直接引用，成员／局部名称保持原样。双目标四 profile 的配对扫描与逐诊断证据见 #547
+的实施 PR。历史 R10.3／R10.4 仍按原规则报告。
+
+| 内部链接声明 | 原名 | 当前名称 | 直接消费者 |
+| --- | --- | --- | --- |
+| CanTp.c:164 | running | cantp_running | 进入 runner 时认领，工作队列耗尽时释放 |
+| Det.c:10 | initialized | det_ready | Init 发布配置和就绪状态，ReportError／ReportRuntimeError 检查就绪 |
+| Com.c:31 | reloaded_before_main | com_rx_reloaded | RxIndication 记录本周期重载，MainFunctionRx 读取并清除 |
+| Com.c:30 | remaining | com_ticks | RxIndication 重载超时计数，MainFunctionRx 递减并在到期后重载 |
+| Dcm.c:101 | pending_session | dcm_pending_session | 请求结果写入对象，抑制响应或成功发送确认时提交会话 |
+| Dcm.c:87 | state | dcm_s | TP 接收、主调度和发送确认读写请求状态 |
+| Dcm.c:100 | session | dcm_ses | 会话设置、公开查询、DID 消费及 S3 到期逻辑读取或更新当前会话 |
+
+Os_Backend.c:956 的 `Os_TargetTestPending` 只在 `OS_ACTIVATION_TESTS` 开启时编译。
+当前两目标的 HostBatch 和 probe 都未开启该开关，改名证明缺少此处的 GCC 展开与
+Cppcheck 绑定。保留 `activations`，待两侧证据覆盖该测试分支并通过现有证明后继续改名。
 
 ## R7.1 当前条件控制证据
 

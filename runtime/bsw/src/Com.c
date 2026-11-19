@@ -27,8 +27,8 @@ static const Com_ConfigType *com_configuration
     COM_VAR_CLEARED; /**< Published configuration; DeInit clears. */
 static uint32
     signal_values[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Native UINT32 signal values; Init reloads. */
-static uint32 remaining[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Rx-main periods left; Init resets. */
-static boolean reloaded_before_main[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Reloaded in this Rx tick;
+static uint32 com_ticks[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Rx-main periods left; Init resets. */
+static boolean com_rx_reloaded[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Reloaded in this Rx tick;
                                                                       Init resets. */
 /* Notifications owed per Rx PDU: every reception is acknowledged (SWS_Com_00883), repeated
  * timeouts coalesce, and the event recorded last is also delivered last, so a stale timeout
@@ -97,8 +97,8 @@ static COM_CODE void Com_RestartRx(boolean initialize)
                 signal_values[index] = com_configuration->pdus[index].initial_value;
             }
             /* First timeout zero: nothing is monitored until a reception (SWS_Com_00716). */
-            remaining[index] = 0u;
-            reloaded_before_main[index] = FALSE;
+            com_ticks[index] = 0u;
+            com_rx_reloaded[index] = FALSE;
         }
     }
 }
@@ -111,8 +111,8 @@ static COM_CODE void Com_Reset(void)
     reception_before_main = FALSE;
     for (index = 0u; index < COM_MAX_PDUS; ++index) {
         signal_values[index] = 0u;
-        remaining[index] = 0u;
-        reloaded_before_main[index] = FALSE;
+        com_ticks[index] = 0u;
+        com_rx_reloaded[index] = FALSE;
         receptions_owed[index] = 0u;
         timeout_owed[index] = FALSE;
         timeout_last[index] = FALSE;
@@ -325,8 +325,8 @@ COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
             (com_configuration->pdus[index].receive == TRUE)) {
             /* I-PDU based DM is reset first, also for a short PDU (SWS_Com_00396). */
             if (monitoring == TRUE) {
-                remaining[index] = com_configuration->pdus[index].timeout_ticks;
-                reloaded_before_main[index] = reception_before_main;
+                com_ticks[index] = com_configuration->pdus[index].timeout_ticks;
+                com_rx_reloaded[index] = reception_before_main;
             }
             /* Only a completely received signal is unpacked and notified (SWS_Com_00574). */
             if (PduInfoPtr->SduLength >= COM_PDU_BYTES) {
@@ -417,17 +417,17 @@ COM_CODE void Ecu_ComMainFunctionRx(void)
     if ((com_configuration != NULL_PTR) && (receive_started == TRUE) && (monitoring == TRUE)) {
         uint16 index;
         for (index = 0u; index < com_configuration->pdu_count; ++index) {
-            if ((com_configuration->pdus[index].receive == TRUE) && (remaining[index] != 0u)) {
-                if (reloaded_before_main[index] == FALSE) {
-                    --remaining[index];
-                    if (remaining[index] == 0u) {
+            if ((com_configuration->pdus[index].receive == TRUE) && (com_ticks[index] != 0u)) {
+                if (com_rx_reloaded[index] == FALSE) {
+                    --com_ticks[index];
+                    if (com_ticks[index] == 0u) {
                         /* Restarted on expiry (SWS_Com_00889). */
-                        remaining[index] = com_configuration->pdus[index].timeout_ticks;
+                        com_ticks[index] = com_configuration->pdus[index].timeout_ticks;
                         timeout_owed[index] = TRUE;
                         timeout_last[index] = TRUE;
                     }
                 }
-                reloaded_before_main[index] = FALSE;
+                com_rx_reloaded[index] = FALSE;
             }
         }
     }

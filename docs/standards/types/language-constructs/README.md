@@ -153,3 +153,4 @@ Os_HostTypes.h集中原有atomic／handle／thread callback别名，Os_PortTypes
 [第七批](expressions.md#第七批当前输入与类型推导)、[第八批](declarations.md#第八批的当前结算)及
 [第九批](control-flow.md#第九批的当前结算)。
 144 项为 95 satisfied、3 not_applicable、46 not_assessed。
+[#547 的 R5.9](lexical.md#r59-私有对象改名)仍有 1 个重用名。

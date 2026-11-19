@@ -72,8 +72,9 @@ owner 合并重复包含，R8.6 按两个独立程序核算。SDK／采用声明
 原对象类型、容量、存储期、状态所有权、锁和控制流保持。Os_Closing／ARTI 指针
 声明统一类型名字；tick hook 复用 FreeRTOS 头；Windows 栈回调只由所选 provider
 头发布。此处不变更公开 C 类型、布局或链接符号。
-R5.9 的其余8个私有名保持真实违反，物理位置归 #547；#551 单独设计 gate 的
-改名等价匹配，本批保持比较器和 gate 的严格语义。
+第八批留下的 8 个 R5.9 私有名由 #547 改了 7 个。OS 激活队列的名字和恢复条件见
+[逐实例记录](lexical.md#r59-私有对象改名)。
+#551 提供的等价证明用于判定新增，严格比较继续记录旧诊断位置。
 
 本批25条结算7条 satisfied：R2.7、R5.8、R7.2、R7.4、R8.4、R8.5、R8.6；
 18条转 [#547](https://github.com/g1331/autsaro/issues/547)，逐条原因及恢复条件见表。
@@ -96,51 +97,51 @@ GCC／Cppcheck 输入。Windows 以实际检出的换行重算，原始 summary 
 
 <!-- source-assessment-context-begin -->
 {
-  "id": "checker-obligations-536-r20",
+  "id": "checker-obligations-547-r59",
   "evidence": {
-    "head": "d80cc611553921c61c5a5a77187450a60f17da2e",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44474096166/attempts/1"
+    "head": "42f2235bc0fe70da3a259b554b87c30d5b2035b4",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44492755681/attempts/1"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "d878ebce628a41a1c15e53c46725678af721d139bba1ec36f4d0d68f978bc34c"
+      "inputIdentity": "babd4c5f077ee6af0f324a0fc2cf6cf64ad56420a0e71d45a913b37ba9e83ff1"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "24fb5c16ecac23ab0b8de33ddec5cb01cb6216ad8cd783b94259b6bb8264cf11"
+      "inputIdentity": "66dce987a5ec64b83696398a94f37bef3eeacae0b3bd285435f4b5e67e4a6544"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "441ffb86087ebe8541a8e540a1ed745e38671bc279f97e8cba1661d34dfb5bf9"
+      "inputIdentity": "3859e0f3520a97779537139e9d6234d30033a2194cb38c770d2956a0c0f22f70"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "c267a4c8925d13ee3a9bd38cef86247d5418fd9ddcb4459b3d3233b89f07aec0"
+      "inputIdentity": "e783742ea7cd9f31baf0c04008680415a0edcb3e69ad020128eba59053cfc852"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "85cd03f1696c2ea3aadce3c6d4264f5b328878e3c7bb71df2f8a0fff75f92a5d"
+      "inputIdentity": "57587b9355717d0dabd0800f4666ded8bf4a62f21974839361d14a4f54796a89"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "85c22f1f2a6c7411957bf76df8ba796640c0b07f88135e81bc22554979eaa4d3"
+      "inputIdentity": "f9702c877d94b132a7a3b96fb878843cfbbd4b4933d3d89539c61f35cb36d86c"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "34b77331c0248655672c942d5f6747849ba0df868dfe389920280f2162d21be3"
+      "inputIdentity": "1a2ded343a778ed50ae5f77e6c314106fdd84a36640951e197767d7489e05353"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "c8fd97a0d1b104ae0e9faf6c0fd9313174e80870437a3c1bf1416d9c0b472f5f"
+      "inputIdentity": "4b6a795a735eace1ecdc1d56e174fe2db4218d19a460105bc2f4ade0a3bdae3e"
     }
   ],
   "records": {

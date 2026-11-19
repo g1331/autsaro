@@ -1217,7 +1217,7 @@ class AcceptanceTests(unittest.TestCase):
             "R5.3": ("not_assessed", "#547", "嵌套 scope"),
             "R5.6": ("not_assessed", "#547", "Rte_Instance"),
             "R5.8": ("satisfied", "HostBatch／probe", "物理 owner"),
-            "R5.9": ("not_assessed", "#547", "#551", "36个", "8个", "53个", "producer"),
+            "R5.9": ("not_assessed", "#547", "36 个", "7 个", "53 个", "Os_Backend.c:53"),
             "R7.2": ("satisfied", "#424", "235／239", "#444", "24次"),
             "R7.4": ("satisfied", "TC2.7–8", "Arti_Record", "task_name"),
             "R8.2": ("not_assessed", "#547", "Det_ErrorHookType"),
@@ -1248,6 +1248,24 @@ class AcceptanceTests(unittest.TestCase):
                 self.assertTrue(physical.startswith("| " + guideline + " |"))
                 for phrase in evidence:
                     self.assertIn(phrase, row["conclusion"])
+        lexical_text = (self.root / by_id["R5.9"]["source"]["file"]).read_text(encoding="utf-8")
+        self.assertIn("Os_Backend.c:956", lexical_text)
+        self.assertIn("OS_ACTIVATION_TESTS", lexical_text)
+        for filename, line, old, new in (
+            ("CanTp.c", 164, "running", "cantp_running"),
+            ("Det.c", 10, "initialized", "det_ready"),
+            ("Com.c", 31, "reloaded_before_main", "com_rx_reloaded"),
+            ("Com.c", 30, "remaining", "com_ticks"),
+            ("Dcm.c", 101, "pending_session", "dcm_pending_session"),
+            ("Dcm.c", 87, "state", "dcm_s"),
+            ("Dcm.c", 100, "session", "dcm_ses"),
+        ):
+            with self.subTest(identifier=old):
+                self.assertIn(f"| {filename}:{line} | {old} | {new} |", lexical_text)
+                source = (ROOT / "runtime/bsw/src" / filename).read_text(encoding="utf-8")
+                declaration = source.splitlines()[line - 1].split("/*", 1)[0]
+                self.assertRegex(declaration, rf"\b{new}\b")
+                self.assertNotRegex(declaration, rf"\b{old}\b")
         control_evidence = {
             "R14.1": ("altstacks[].storage",),
             "R14.2": ("TC1", "146 种体形", "传递写集合", "#556"),
@@ -1455,10 +1473,12 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(context["formalStatus"], "approved")
         cases = {(row["target"], row["caseId"]): row["inputIdentity"]
                  for row in context["cases"]}
-        # Both Linux artifacts used the same libc6-dev version and kernel closure.
-        reviewed = "034e8b3edb5e5b96f0b9715332848095978eb5835de3957c3d58cffd4440933b"
-        self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
-        self.assertEqual(cases[TARGET, "user-application"], reviewed)
+        # The hosted Linux standard and user-application samples used
+        # libc6-dev 2.39-0ubuntu8.12 and 2.39-0ubuntu8.9, respectively.
+        self.assertEqual(cases[TARGET, "standard-ecu"],
+                         "5726048924b407930af80deb3ffaa2bdd930b9008e2f75ec3e7962b4705a8a56")
+        self.assertEqual(cases[TARGET, "user-application"],
+                         "034e8b3edb5e5b96f0b9715332848095978eb5835de3957c3d58cffd4440933b")
 
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
