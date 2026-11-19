@@ -83,3 +83,33 @@ ComM_UserRequest 新增五个固定值源码键后，原类型／预处理接口
 R2.3／R2.5 的公共类型、固定值和接口宏，以及 R8.7 的实例句柄和模式接口，分别保留真实未使用／单TU引用事实。固定 AUTOSAR 原文明确规定 typedef／define 形式的部分沿 ADR0023 逐项核查；只有既有库式交付／预处理契约理由的部分仍是项目保留候选，不能因“Available via”或已有测试就称为标准不可替代。实施 PR 冻结每个规则、文件、源码行、producer、profile与程序的候选集合，连同可行替代和具体风险供决定；未经接受不转为已分类。
 
 删除私有 `Ecu_ExecutionNow` 的真实闭包影响也分别记录：生成源的无消费者 helper 消除，但不改变 `Ecu_TargetNow` 的受控时钟合同；后者仍有 owner_probe、scheduler／ARTI、copy-timeout／zero-DLC 原生消费者。若闭包变化揭示该 owned API 的 R8.7，原始新增位置与 #381 归属单独交接，不将它归为 emitter 或静默扩展既有批准。该 owned API 的精确保留与消费者范围由 [#381 固定记录](https://github.com/g1331/autsaro/blob/70f94048/docs/standards/os/native-facilities/retained-clock.md) 承接；本轮 v3 的输入身份、物理行144及两程序 raw 保持原样，不以随后纯注释修改重写旧扫描。
+
+
+
+## R5.6 跨名称空间候选
+
+Windows 实际展开补出四组 Cppcheck 未报告的候选。项目位置与 SDK 位置分别是：
+
+| 名称 | 项目侧 | SDK 侧 |
+| --- | --- | --- |
+| `CounterType` | `generated/include/Rte_Type.h:15` typedef | `winperf.h:155` 成员 |
+| `ResourceType` | `os/include/Os_Types.h:38` typedef | `rpcdcep.h:239` 成员 |
+| `boolean` | `bsw/include/Platform_Types.h:66` typedef | `rpcndr.h:95` typedef |
+| `byte` | `bsw/src/Com.c:86` 局部对象 | `rpcndr.h:93` typedef |
+
+R5.6 跨名称空间比较。后续优先改自有私有名，并检查固定发布名的 SDK 包含隔离与实际使用点。
+`Rte_Instance` 已有精确来源和风险处置，整条规则的清单仍须覆盖上述候选。
+
+## R8.2 当前保留实体
+
+[双平台基线工件](https://github.com/g1331/autsaro/actions/runs/44513871093)按目标、样本和程序登记
+[SWS_Rte_06705 的三类公开声明](contracts.md#无名-role-参数的逐处核查)。
+同一声明的多个列号都保留。`Det_ValidHooks` 的精确误报沿 [Det](../det.md) 识别，原始报告继续记录。
+共审计 452 份 GCC 展开和 888 个 TU 实例。Linux 228 份由 Clang 完整解析，16 份辅助语法错误只落在
+SDK 或主机专用代码。Windows 224 份在保留名称与位置的 SDK 语法恢复后零解析错误。
+按原型、定义、函数指针 typedef 和嵌套回调遍历，每个单组件程序有 1 个无名参数，每个多组件程序有 4 个，
+范围内未见其他无名参数或非原型函数类型。
+
+<!-- misra-checker-retained-begin -->
+{"rule":"R8.2","approval":"checker-obligations-547-r59","cases":{"linux-x64-controlled-v1/component-pipeline":[{"file":"generated/include/Rte_Ingress.h","line":91,"name":"Ingress_ReadData","diagnostics":{"host-batch":[45,46],"probe":[45,46]}},{"file":"generated/include/Rte_Process.h","line":90,"name":"Process_Transform","diagnostics":{"host-batch":[36,37,45,55],"probe":[36,37,45,55]}}],"linux-x64-controlled-v1/no-diagnostic":[{"file":"generated/include/Rte_Ingress.h","line":91,"name":"Ingress_ReadData","diagnostics":{"host-batch":[45,46],"probe":[45,46]}},{"file":"generated/include/Rte_Process.h","line":90,"name":"Process_Transform","diagnostics":{"host-batch":[36,37,45,55],"probe":[36,37,45,55]}}],"linux-x64-controlled-v1/standard-ecu":[{"file":"generated/include/Rte_EchoApplication.h","line":87,"name":"EchoApplication_ReadData","diagnostics":{"host-batch":[61,62],"probe":[61,62]}}],"linux-x64-controlled-v1/user-application":[{"file":"generated/include/Rte_EchoApplication.h","line":87,"name":"EchoApplication_ReadData","diagnostics":{"host-batch":[61,62],"probe":[61,62]}}],"windows-x64-controlled-v1/component-pipeline":[{"file":"generated/include/Rte_Ingress.h","line":91,"name":"Ingress_ReadData","diagnostics":{"host-batch":[45,46],"probe":[45,46]}},{"file":"generated/include/Rte_Process.h","line":90,"name":"Process_Transform","diagnostics":{"host-batch":[36,37,45,55],"probe":[36,37,45,55]}}],"windows-x64-controlled-v1/no-diagnostic":[{"file":"generated/include/Rte_Ingress.h","line":91,"name":"Ingress_ReadData","diagnostics":{"host-batch":[45,46],"probe":[45,46]}},{"file":"generated/include/Rte_Process.h","line":90,"name":"Process_Transform","diagnostics":{"host-batch":[36,37,45,55],"probe":[36,37,45,55]}}],"windows-x64-controlled-v1/standard-ecu":[{"file":"generated/include/Rte_EchoApplication.h","line":87,"name":"EchoApplication_ReadData","diagnostics":{"host-batch":[61,62],"probe":[61,62]}}],"windows-x64-controlled-v1/user-application":[{"file":"generated/include/Rte_EchoApplication.h","line":87,"name":"EchoApplication_ReadData","diagnostics":{"host-batch":[61,62],"probe":[61,62]}}]}}
+<!-- misra-checker-retained-end -->

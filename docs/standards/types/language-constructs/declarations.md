@@ -26,7 +26,7 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 | 规则 | 类别 | 评估范围 | 状态 | 结论 |
 | --- | --- | --- | --- | --- |
 | R8.1 | Required | 双目标四 profile 的 C99 HostBatch／probe | not_applicable | 主文 63–64／PDF 71–72 仅适用 C90；AMD2.27 未扩展本条，AMD1／3／4 与 TC1／2 未改变语言范围。当前实际 TU 使用 -std=c99；同号 addon 的 implicit-int 诊断仍保留，C99 声明和扩展义务继续按各自规则核查。 |
-| R8.2 | Required | 公开及内部函数类型、原型与定义 | not_assessed | 主文64–66、TC2.10／AMD3.63 的交叉引用。Det_ErrorHookType 的 typedef 指针候选须与函数模型误报区分，RTE 无名 role 参数沿既有固定 SWS 处置；普通 void 原型与无参数 K&R 形式分开。#443 的 #547 补齐所有 typedef／指针／嵌套 callback 的函数类型集合与正式义务，非 ISO 原头沿 ADR 0025，host provider 按 ADR 0030。 |
+| R8.2 | Required | 双目标四 profile 的 C99 HostBatch／probe，函数原型、定义和嵌套回调 | retained | 主文64–66、TC2.10、AMD3.63。按 452 份 GCC 展开核对普通原型、指针 typedef 及嵌套回调的形参；范围内保留 SWS_Rte_06705 的无名 role。Det_ErrorHookType 与外层 Det_ValidHooks 形参具名，Det 精确误报独立处置。详见[实体和实际 CI](../../rte/generated-diagnostics.md#r82-当前保留实体)，当前输入须经正式批准绑定。 |
 | R8.3 | Required | 同一对象／函数的全部声明 | not_assessed | 主文66–67／PDF74–75、TC2.11–14；底层类型相同仍须同一类型名字，未命名参数的命名例外单列。第八批统一 Os_ArtiTaskStacks 的 struct／typedef 拼写和 Os_Closing 的 LONG／Os_Atomic32Type；0015 项目 patch 在 task.h 用 TaskHandle_t，而 tasks.c 用 TCB_t *，真实 Required 义务保持。#443 的 #547 连同 #503 核定内核声明与表示；其余同一实体的签名及限定符按两个程序逐 TU 合并复核。 |
 | R8.4 | Required | 外部链接定义处可见的兼容声明 | satisfied | 主文67–68、TC1 main 例外。逐实际 TU 检查外部函数／对象定义前的声明及包含顺序；TASK 宏自身先产生原型，FreeRTOS 两个 idle hook 由实际 task.h 提供，RTE／应用定义经各自公共头，Os_Closing 与 ARTI 对象沿私有／公开 owner。C99 编译检查兼容类型，定义前声明集合无缺项；原型名／typedef 拼写的其他 R8.3 义务仍单列。 |
 | R8.5 | Required | 外部对象／函数声明的头文件 owner | satisfied | 主文69／PDF77 只约束非定义声明。逐程序按物理文件／行合并头重入和同一实体；第八批删除 Backend.h 的 vApplicationTickHook 重复原型，复用 task.h。Os_BackendStackFault 的声明移入既有 Windows provider 头，与唯一 Windows 定义和 Stack 消费一致；其他公共数组、CDS、配置和服务均由一个物理 owner 声明，未将定义当成第二个原型。 |
@@ -136,53 +136,54 @@ GCC／Cppcheck 输入。Windows 以实际检出的换行重算，原始 summary 
 {
   "id": "checker-obligations-547-r59",
   "evidence": {
-    "head": "877563f50970b13e4aca50ea6e0789dbd7c3d855",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44567323884/attempts/1"
+    "head": "6eb62e6b06cb30c3a182385853d69fb6cac2dcab",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44591712928"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "1e8b8f8dff07f449988c00569597591c6e51950db3a522d10eefe37f5fa9404b"
+      "inputIdentity": "a06078342cedc0a7a80f9260647a54a10205745abad516e4d958b2715fdef92f"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "e1976a0212020aaca50da19291afc95aff21701643b15a3d43880308ce178399"
+      "inputIdentity": "00a798c9e4a40b6fd5b393126ea2ef532f9cfb0ffeed7375f1024f167ab09fcc"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "185e6775483a888c3cd8c31d03c1708d1c79b52813c6c69e7219557a61eaa2b9"
+      "inputIdentity": "aa601c31b27e99888cf69bcd1216da325c5316142da9b5a2438c9723acc2344a"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "5d639167b6a9636f86f92954f98bb44fa3e8f79f59f689c8e04c113336febe44"
+      "inputIdentity": "4ee9312da55e5919a22b79b04a180062dbacba2a1edbb4c0e2ca7a27ad20d856"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "5c321ad36c9779ed86373ee5ed7713950c7e2fecd553d5f62cf92616bc95750c"
+      "inputIdentity": "38f72d2cd95d6c5713502ad5abbe350eb34cc9a6f4a562e3441256a01c756247"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "e7189b6fd950bb0edbd54cfb2e42fec99d8be842ccff32b86e402bf791f06ef2"
+      "inputIdentity": "6ad6fc84cb24149804942063aa2629cd6336f8c61d281af3685d0557d47405f8"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "dfc450e6f9de605b64b80e881ee976b074dd51a2a55c2a41751c6a0da402f377"
+      "inputIdentity": "1d6303f0a166290aca5d4fda78a876721a12a7578afe659ef68228dc55be47a6"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "6c71d039ac1416a6e5c3157cbde3bf735b002f413e5c1f3add658ca7d3601a6a"
+      "inputIdentity": "de71552a215c56766c1505f739a8907401c6c39616bc163686b9c2204339bf37"
     }
   ],
   "records": {
-    "kind": "checker-obligations"
+    "kind": "checker-obligations",
+    "retainedSha256": "dc145841e206867098e08d05e5abcde4d7294e2542b05c15e40252e17f1d7944"
   },
   "formalStatus": "approved"
 }

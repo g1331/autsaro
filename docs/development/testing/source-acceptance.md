@@ -119,7 +119,7 @@ FreeRTOS 另绑定完整原件 manifest、有序补丁及最终 kernel。SDK 保
 ```
 
 基本记录组为 `generated-retention`、`manual-assessment`、`checker-limitations` 和
-`checker-obligations`。后三组的 `records` 只包含 `kind`。每组必须有自己的适用上下文；
+`checker-obligations`。后三组的 `records` 通常只含 `kind`。每组必须有适用上下文；
 一个组的批准不授权其他组。四类局部证据允许不同样本标签共享同一输入摘要；
 同组、同目标、同摘要和同样本标签的重复登记拒绝，消费时先求各组的共同样本标签。
 其余组保留同输入唯一绑定，跨组的样本标签必须一致。
@@ -138,12 +138,11 @@ C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_
 匹配 MR12／shape，未知 producer／摘要拒绝。应用与内核沿原任务。程序限
 host-batch／probe，样本限现有四 profile。
 
-Required 风险记录继续返回
-`formal_deviation_pending`，即使上下文为 `approved` 也保留该义务；Mandatory 保留项
-返回 `mandatory_deviation_forbidden`。其余模块误报、采用内核与 SDK 位置沿原有阻塞。
-实际输入交集绑定在[原自有源码标准篇](../../standards/bsw-general/public-api-os.md#自有源码记录的当前输入消费)，
-只接纳所列输入下已实现的 Advisory 记录与语言不适用位置；剩余模块消费与
-Required 正式材料继续由自有源码消费任务接续。
+Required 风险记录须通过自有源码绑定及规则级正式批准。正式输入身份另含保留规则的原始诊断摘要。
+源码形状错误的实体不参与保留统计。缺正式处置为 `formal_deviation_pending`，通过时由 `formalContextId` 回接批准。
+Mandatory 保留项返回 `mandatory_deviation_forbidden`。现有
+[自有源码输入绑定](../../standards/bsw-general/public-api-os.md#自有源码记录的当前输入消费)
+仍按各实体、样本与程序范围消费。
 
 固定 FreeRTOS 使用 `records={"kind":"freertos-integration"}`，原件集成义务和精确
 补丁表见 [采用篇](../../standards/os/adoption.md#当前集成义务与消费)。本组沿用同一
@@ -183,9 +182,8 @@ SDK 集成使用同一上下文格式的 `records={"kind":"sdk-integration"}`，
 固定 11 项以外的 144 项由 `checker-obligations` 独立消费。
 记录仍放在原标准主题篇，用 `misra-checker-obligations-begin`／
 `misra-checker-obligations-end` 注释块及相同五列（编号、类别、评估范围、状态、结论）。
-只接受固定 155 项中扣除原 11 项后的准确编号、原类别，以及
-`satisfied`／`not_applicable`／`not_assessed`；此组没有批准保留违反的入口。
-未知编号、原 66 项或固定 11 项、重复、错误类别与非法状态在解析时拒绝。
+编号、类别及状态须通过固定目录校验。`retained` 另须符合
+[ADR 0025](../../adr/0025-misra-layered-scope.md#checker-覆盖规则的保留处置) 的实体和批准要求。
 
 缺少记录按编号返回 `checker-obligation_not_assessed`，责任为 #443；
 已有记录的阻塞对象还包含实际文件、行号和结论。

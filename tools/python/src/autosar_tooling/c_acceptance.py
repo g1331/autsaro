@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 from ecu_tools.build import (
@@ -42,15 +43,6 @@ def _hash(value: object) -> str:
                                      separators=(",", ":")).encode()).hexdigest()
 
 
-def _pairs(pairs: list[tuple]) -> dict:
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"Duplicate assessment JSON member: {key}")
-        result[key] = value
-    return result
-
-
 def _blocks(text: str) -> list[str]:
     blocks = []
     active = None
@@ -71,6 +63,18 @@ def _blocks(text: str) -> list[str]:
     return blocks
 
 
+def _context_records(records: dict) -> bool:
+    if records in ({"kind": "generated-retention", "cohortSha256": c_retention.COHORT_SHA256},
+                   {"kind": "manual-assessment"}, {"kind": "checker-limitations"},
+                   {"kind": "checker-obligations"}, {"kind": "owned-source"},
+                   {"kind": "freertos-integration"}, {"kind": "sdk-integration"}):
+        return True
+    return (isinstance(records, dict) and set(records) == {"kind", "retainedSha256"}
+            and records["kind"] == "checker-obligations"
+            and isinstance(records["retainedSha256"], str)
+            and SHA256.fullmatch(records["retainedSha256"]) is not None)
+
+
 def contexts(root: Path = ROOT) -> list[dict]:
     """Only repository standards documents can supply assessment bindings."""
     result = []
@@ -79,7 +83,7 @@ def contexts(root: Path = ROOT) -> list[dict]:
     for path in sorted((root / "docs/standards").rglob("*.md")):
         refuse_links(path, root)
         for block in _blocks(path.read_text(encoding="utf-8")):
-            row = json.loads(block, object_pairs_hook=_pairs)
+            row = json.loads(block, object_pairs_hook=c_standard.unique_assessment_members)
             if (not isinstance(row, dict)
                     or set(row) != {"id", "evidence", "cases", "records", "formalStatus"}
                     or not isinstance(row["id"], str) or not row["id"] or row["id"] in identifiers
@@ -89,13 +93,7 @@ def contexts(root: Path = ROOT) -> list[dict]:
                     or not re.fullmatch(r"[0-9a-f]{40}", row["evidence"]["head"])
                     or not isinstance(row["evidence"]["receipt"], str) or not row["evidence"]["receipt"]
                     or row["formalStatus"] not in ("pending", "approved")
-                    or row["records"] not in ({"kind": "generated-retention", "cohortSha256": c_retention.COHORT_SHA256},
-                                              {"kind": "manual-assessment"},
-                                              {"kind": "checker-limitations"},
-                                              {"kind": "checker-obligations"},
-                                              {"kind": "owned-source"},
-                                              {"kind": "freertos-integration"},
-                                              {"kind": "sdk-integration"})
+                    or not _context_records(row["records"])
                     or not isinstance(row["cases"], list) or not row["cases"]):
                 raise ValueError(f"Invalid source assessment context: {path}")
             identifiers.add(row["id"])
@@ -151,6 +149,7 @@ def _assessment_inputs(summary: dict, root: Path) -> dict:
     rules = _catalog(summary, root)
     supplementary = c_standard.supplementary_assessment(rules, summary["coverage"]["knownCheckerLimitations"], root)
     obligations = c_standard.checker_obligations(rules, root)
+    retained_ids = {"misra-c2012-" + key[1:] for key in obligations["retained"]}
     retention_documents = [path.relative_to(root).as_posix()
                            for path in sorted((root / c_retention.RECORD_DIRECTORY).glob("*.md"))]
     if not retention_documents:
@@ -167,6 +166,10 @@ def _assessment_inputs(summary: dict, root: Path) -> dict:
                                    "documents": _document_identity(
                                        root, list(supplementary["inputIdentity"]["documents"]))},
             "checkerObligations": {"parserSha256": digest(Path(c_standard.__file__)),
+                                   **({"retainedDiagnostics": sorted(
+                                       _hash(row) for row in summary["diagnostics"]
+                                       if row["id"] in retained_ids)}
+                                      if retained_ids else {}),
                                    "documents": _document_identity(
                                        root, list(obligations["inputIdentity"]["documents"]))}}
 
@@ -322,6 +325,82 @@ def _positions(diagnostics: list[dict]):
             yield index, position, diagnostic, location
 
 
+def _retained_checker_entities(summary: dict, occurrences: list[dict], rule: str,
+                               entities: list[dict]) -> bool:
+    """Require the exact project diagnostic positions and their named source entities."""
+    expected = Counter()
+    programs = {row["name"]: row["translationUnits"] for row in summary["programs"]}
+    dependencies = summary["scope"].get("projectTranslationUnits", {})
+    for entity in entities:
+        name, line = entity["file"], entity["line"]
+        for program, columns in entity["diagnostics"].items():
+            if not any(unit == name or name in dependencies.get(unit, ())
+                       for unit in programs.get(program, ())):
+                return False
+            for column in columns:
+                key = name, line, column, program, entity["name"]
+                if key in expected:
+                    return False
+                expected[key] = 1
+    actual = Counter()
+    for occurrence in occurrences:
+        if occurrence["rule"] != "misra-c2012-" + rule[1:] or occurrence["status"] == "out_of_scope":
+            continue
+        if occurrence.get("recordValid") is False:
+            return False
+        if occurrence["status"] == "owned_false_positive":
+            continue
+        diagnostic = summary["diagnostics"][occurrence["diagnostic"]]
+        if occurrence["status"] == "freertos_record_matched":
+            # The kernel consumer names project hunks after replaying the patches.
+            # Adopted original lines carry no entity, even in mixed reports.
+            if occurrence["entity"] is None:
+                continue
+        elif diagnostic.get("sourceCategory") in {"sdk", "adopted-freertos"}:
+            continue
+        location = occurrence["location"]
+        if location is None or occurrence["status"] not in {
+                "record_matched", "owned_record_matched", "freertos_record_matched"}:
+            return False
+        for program in occurrence["programs"]:
+            key = (location["file"], int(location["line"]), int(location.get("column") or 0),
+                   program, occurrence["entity"])
+            actual[key] += 1
+    return actual == expected
+
+
+def _checker_obligation_result(summary: dict, occurrences: list[dict], obligations: dict,
+                               selected: dict, group_reason: str | None) -> tuple[dict, dict]:
+    context, case = selected.get("checker-obligations", (None, None))
+    retained = obligations["retained"]
+    approval = context["records"].get("retainedSha256") if context is not None else None
+    if (retained or approval is not None) and approval != _hash(retained):
+        group_reason = group_reason or "checker_retained_approval_mismatch"
+    reasons = {}
+    counts = Counter()
+    applied = {}
+    for row in obligations["records"]:
+        rule, status = row["id"], row["status"]
+        reason = group_reason if status != "not_assessed" else "checker-obligation_not_assessed"
+        if status == "retained" and reason is None:
+            record = retained[rule]
+            entities = record["cases"].get(f"{case['target']}/{case['caseId']}")
+            if record["approval"] != context["id"]:
+                reason = "checker_retained_approval_mismatch"
+            elif entities is None or not _retained_checker_entities(summary, occurrences, rule, entities):
+                reason = "checker_retained_entities_mismatch"
+            elif entities:
+                applied[rule] = {"approval": context["id"], "entities": entities}
+            else:
+                status = "satisfied"
+        if reason:
+            reasons[rule] = reason
+        counts["not_assessed" if reason else status] += 1
+    return ({"statusCounts": dict(sorted(counts.items())), "retainedRules": applied,
+             "conformanceAssessment": ("not_established" if reasons else
+                                       "compliant_with_deviations" if applied else "compliant")}, reasons)
+
+
 def _grp_positions(
     summary: dict, project: Path, metadata: dict, root: Path, kernel_lines: dict
 ) -> set[tuple[int, int]]:
@@ -381,6 +460,34 @@ def _grp_positions(
         if candidate["sourceCategory"] in {"project", "project-patch"}:
             accepted.add((index, position))
     return accepted
+
+
+def _det_r82_hook_type(summary: dict, project: Path, root: Path, metadata: dict,
+                       owners: dict, unit: str, source: str) -> bool:
+    """Match the audited Det sources, including the callback's unconditional declaration."""
+    original = "runtime/bsw/include/Det.h"
+    delivered = "bsw/include/Det.h"
+    scope = summary["scope"]
+    record = root / "docs/standards/det.md"
+    # Det.h is the first include. Reject options or predefined macros that can bypass its guard.
+    audited_options = {"-std=c99", "-O1", "-g", "-Wall", "-Wextra", "-Werror", "-fexceptions", "-pthread"}
+    if (metadata["originalBswSources"].get(original) != delivered
+            or delivered not in scope.get("projectTranslationUnits", {}).get(unit, ())
+            or "-std=c99" not in scope["compilerFlags"]
+            or not set(scope["compilerFlags"]) <= audited_options
+            or any(flag.split("=", 1)[0] == "-DDET_H"
+                   for flag in scope.get("compilerDiscoveredDefines", {}).get(unit, ()))
+            or not record.is_file() or "MISRA C:2012 Rule 8.2" not in record.read_text(encoding="utf-8")
+            or not (root / original).is_file() or not (project / delivered).is_file()):
+        return False
+    sha256 = digest(project / delivered)
+    if sha256 != owners.get(delivered, {}).get("sha256") or sha256 != digest(root / original):
+        return False
+    header = (project / delivered).read_text(encoding="utf-8")
+    return (hashlib.sha256(source.encode("utf-8")).hexdigest()
+            == "6766f42004c73ba9b0aaf3e7a4ec57a4aa87e40223d50fe5004207c5be67fb30"
+            and hashlib.sha256(header.encode("utf-8")).hexdigest()
+            == "f6f0ec3467df710e95ff382bb269eecab45e2cfad47afecfeed0ee51cc086dd8")
 
 
 def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
@@ -487,6 +594,14 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
                                        else "mandatory_deviation_forbidden"
                                        if category == "Mandatory"
                                        else "formal_deviation_pending"}
+        elif (diagnostic["id"] == "misra-c2012-8.2"
+              and original == "runtime/bsw/src/Det.c" and (line, column) == (16, 39)
+              and diagnostic["locations"] == [location]
+              and diagnostic.get("severity") == "style"
+              and diagnostic.get("message") == "misra violation (use --rule-texts=<file> to get proper output)"
+              and _det_r82_hook_type(summary, project, root, metadata, owners, name, source)):
+            result[index, position] = {"entity": "Det_ValidHooks", "reason": None, "falsePositive": True,
+                "record": {"file": "docs/standards/det.md", "text": "MISRA C:2012 Rule 8.2"}}
         elif (diagnostic["id"] == "misra-c2012-17.3"
               and [flag for flag in summary["scope"]["compilerFlags"]
                    if flag.startswith("-std=")][-1:] == ["-std=c99"]):
@@ -658,7 +773,7 @@ def _sdk_records(root: Path, revision: str | None = None) -> dict:
                         r"\s*<!-- sdk-integration-records-end -->", text, re.DOTALL)
     if len(blocks) != 1:
         raise ValueError("SDK integration records missing")
-    record = json.loads(blocks[0], object_pairs_hook=_pairs)
+    record = json.loads(blocks[0], object_pairs_hook=c_standard.unique_assessment_members)
     if set(record) != {"definitions", "sites"}:
         raise ValueError("Invalid SDK integration records")
     return record
@@ -1034,19 +1149,15 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
         if summary["coverage"]["manualAssessment"] != manual:
             add("manual", "inputIdentity", "manual_records_changed_since_analysis")
         supplementary = c_standard.supplementary_assessment(rules, summary["coverage"]["knownCheckerLimitations"], root)
-        obligations = c_standard.checker_obligations(rules, root)
         assessments = (
             ("manual-assessment", "manual", manual["checkerUncovered"]["records"]),
             ("checker-limitations", "checker-limitation", supplementary["records"]),
-            ("checker-obligations", "checker-obligation", obligations["records"]),
         )
         for group, kind, rows in assessments:
             for row in rows:
-                reason = kind + "_" + row["status"] if row["status"] not in {"satisfied", "not_applicable", "retained"} else group_reasons.get(group)
+                reason = kind + "_" + row["status"] if row["status"] == "not_assessed" else group_reasons.get(group)
                 if reason:
-                    add(kind, row["id"], reason, source=row.get("source"),
-                        **({"owner": "#443", "conclusion": row["conclusion"]}
-                           if group == "checker-obligations" else {}))
+                    add(kind, row["id"], reason, source=row.get("source"))
         if summary.get("sourceClassification", {}).get("complete") is not True:
             add("source-classification", "sdk", "sdk_source_or_macro_provenance_incomplete")
         retention = c_retention.analyze(summary["diagnostics"], project, result["target"])
@@ -1101,6 +1212,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
         if len(occurrences) != len(positions):
             raise ValueError("Retention occurrence coverage incomplete")
         profile = next((key for key, name in c_retention.PROFILES.items() if name == result["caseId"]), None)
+        owned_formal_positions = set()
         for occurrence, (index, position, diagnostic, location) in zip(occurrences, positions):
             if occurrence["diagnostic"] != index or occurrence["location"] != location:
                 raise ValueError("Retention occurrence position differs")
@@ -1126,6 +1238,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                 ruling = freertos_positions[index, position]
                 occurrence.update(status="freertos_record_matched", entity=ruling["entity"],
                                   record=ruling["record"])
+                if ruling["reason"] == "freertos_record_invalid":
+                    occurrence["recordValid"] = False
                 context = selected.get("freertos-integration")
                 reason = ("freertos_integration_context_unbound_or_stale" if context is None
                           else "assessment_case_mismatch" if len(case_ids) != 1
@@ -1135,8 +1249,11 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                           if context[0]["formalStatus"] != "approved" else ruling["reason"])
             elif (index, position) in owned_positions:
                 ruling = owned_positions[index, position]
-                occurrence.update(status="owned_record_matched", entity=ruling["entity"],
+                occurrence.update(status=("owned_false_positive" if ruling.get("falsePositive")
+                                          else "owned_record_matched"), entity=ruling["entity"],
                                   record=ruling["record"])
+                if ruling["reason"] == "owned_source_record_invalid":
+                    occurrence["recordValid"] = False
                 context = selected.get("owned-source")
                 reason = ("owned_source_context_unbound_or_stale" if context is None
                           else "assessment_case_mismatch" if len(case_ids) != 1
@@ -1144,8 +1261,11 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                           if context[1]["caseId"] not in c_retention.PROFILES.values()
                           or (ruling.get("case") and ruling["case"] != context[1]["caseId"])
                           else "formal_deviation_pending"
-                          if context[0]["formalStatus"] != "approved"
-                          else ruling.get("reason"))
+                          if context[0]["formalStatus"] != "approved" else None)
+                if reason is None:
+                    reason = ruling.get("reason")
+                    if reason == "formal_deviation_pending":
+                        owned_formal_positions.add((index, position))
             elif occurrence["status"] != "record_matched":
                 reason = occurrence["reason"]
                 if diagnostic.get("sourceCategory") == "sdk":
@@ -1173,6 +1293,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                               evidenceClosure="not_established" if reason else "frozen_context",
                               assessment="blocked" if reason else "accepted",
                               reason=reason or ("grp_disapplied" if grp
+                                                else "owned_source_false_positive"
+                                                if occurrence["status"] == "owned_false_positive"
                                                 else "sdk_integration_verified"
                                                 if (index, position) in sdk_positions
                                                 else "freertos_integration_verified"
@@ -1181,9 +1303,26 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                                                 if (index, position) in owned_positions
                                                 else "retention_approved"))
             result["occurrences"].append(occurrence)
-            if reason:
-                add("diagnostic", index, reason, rule=occurrence["rule"], location=location,
+        obligations = c_standard.checker_obligations(rules, root)
+        result["checkerObligations"], checker_reasons = _checker_obligation_result(
+            summary, result["occurrences"], obligations, selected, group_reasons.get("checker-obligations"))
+        retained = {"misra-c2012-" + rule[1:]: record["approval"]
+                    for rule, record in result["checkerObligations"]["retainedRules"].items()}
+        for occurrence in result["occurrences"]:
+            if occurrence["assessment"] != "blocked":
+                continue
+            index, position = occurrence["diagnostic"], occurrence["locationIndex"]
+            rule = occurrence["rule"]
+            if (index, position) in owned_formal_positions and rule in retained:
+                occurrence.update(assessment="accepted", reason="owned_source_approved",
+                                  evidenceClosure="frozen_context", formalContextId=retained[rule])
+            else:
+                add("diagnostic", index, occurrence["reason"], rule=rule, location=occurrence["location"],
                     entity=occurrence["entity"], programs=occurrence["programs"], record=occurrence["record"])
+        for row in obligations["records"]:
+            if reason := checker_reasons.get(row["id"]):
+                add("checker-obligation", row["id"], reason, source=row.get("source"),
+                    owner="#443", conclusion=row["conclusion"])
         result["status"] = "blocked" if result["objects"] else "accepted"
     except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError) as error:
         result["status"] = "error"
