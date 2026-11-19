@@ -376,9 +376,8 @@ jobs:
           import os, subprocess, sys
           from pathlib import Path
           groups = {
-              'protocol': ['integration::protocol::'],
-              'projects': ['integration::sealed_projects::', 'integration::single_component::',
-                  'integration::release_contracts::'],
+              'protocol': ['integration::protocol::', 'integration::release_contracts::'],
+              'projects': ['integration::sealed_projects::', 'integration::single_component::'],
               'integration': ['integration::'],
               'rest': [],
           }
@@ -1077,6 +1076,7 @@ jobs:
     steps: *native-delivery-steps
 
   c-analysis-samples:
+    name: c-analysis-samples (${{ matrix.target }}, ${{ matrix.first }} + ${{ matrix.second }})
     permissions:
       contents: read
       actions: read
@@ -1087,20 +1087,12 @@ jobs:
         include:
           - os: ubuntu-24.04
             target: linux-x64-controlled-v1
-            group: standard-ecu
-            samples: standard-ecu
+            first: standard-ecu
+            second: user-application
           - os: ubuntu-24.04
             target: linux-x64-controlled-v1
-            group: user-application
-            samples: user-application
-          - os: ubuntu-24.04
-            target: linux-x64-controlled-v1
-            group: component-pipeline
-            samples: component-pipeline
-          - os: ubuntu-24.04
-            target: linux-x64-controlled-v1
-            group: no-diagnostic
-            samples: no-diagnostic
+            first: component-pipeline
+            second: no-diagnostic
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -1167,19 +1159,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ANALYSIS_SIDE: ${{ env.ANALYSIS_SIDE }}
           ANALYSIS_TARGET: ${{ matrix.target }}
-          ANALYSIS_SAMPLES: ${{ matrix.samples }}
+          ANALYSIS_SAMPLES: ${{ matrix.first }},${{ matrix.second }}
         run: |
           import hashlib, json, os, subprocess, sys
           from pathlib import Path
-          failed = False
+          from concurrent.futures import ThreadPoolExecutor
           baseline = os.environ['ANALYSIS_SIDE'] == 'baseline'
           samples = Path('build/c-analysis-base-samples' if baseline else 'build/c-analysis-samples')
-          results = Path('build/c-analysis-baseline' if baseline else 'build/c-analysis-results')
           expected = os.environ['ANALYSIS_SAMPLES'].split(',')
           if len(expected) != len(set(expected)):
               raise RuntimeError('Duplicated analysis sample configuration')
-          for name in sorted(expected):
-              output = results / name
+          def scan(name):
+              # The artifact root contains exactly this sample, including on failure.
+              output = Path('build/analysis-output') / name / name
               result = subprocess.run(['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling.c_baseline',
                   '--side', os.environ['ANALYSIS_SIDE'], '--sample', name,
                   '--target', os.environ['ANALYSIS_TARGET'], '--project', str(samples / name),
@@ -1196,48 +1188,31 @@ jobs:
                   if not baseline:
                       print(name, 'preprocessingEvidence=' + json.dumps(evidence, ensure_ascii=False))
                   print(name, 'analysis_complete=' + str(complete), 'source_passed=' + str(summary['passed']))
-                  failed = not complete or failed
+                  return complete
               except (OSError, ValueError, KeyError) as error:
                   print(name, error)
-                  failed = True
-          sys.exit(1 if failed else 0)
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                  return False
+          with ThreadPoolExecutor(max_workers=2) as workers:
+              completed = list(workers.map(scan, expected))
+          sys.exit(0 if all(completed) else 1)
+      - uses: ./.github/actions/retain-analysis-sample
         if: always()
         with:
-          name: c-analysis-raw-${{ env.ANALYSIS_SIDE }}-${{ matrix.target }}-${{ matrix.group }}-${{ strategy.job-index }}
-          overwrite: true
-          path: |
-            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/summary.json
-            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/project
-            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/analysis-identity.json
-            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/identifier-evidence
-            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/baseline-source.json
-            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/platform-model.h
-            build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/platform-library.cfg
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
+          target: ${{ matrix.target }}
+          side: ${{ env.ANALYSIS_SIDE }}
+          sample: ${{ matrix.first }}
+          index: ${{ strategy.job-index }}
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: c-analysis-scope-${{ env.ANALYSIS_SIDE }}-${{ matrix.target }}-${{ matrix.group }}-${{ strategy.job-index }}
-          overwrite: true
-          path: build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}/*/scope-input.json
-          if-no-files-found: error
-          retention-days: 14
-
-      # Full target-host replay inputs are retained once, outside the comparison bundle.
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: ./.github/actions/retain-analysis-sample
         if: always()
         with:
-          name: c-analysis-${{ env.ANALYSIS_SIDE == 'baseline' && 'baseline-' || '' }}${{ matrix.target }}-${{ matrix.group }}
-          overwrite: true
-          path: build/${{ env.ANALYSIS_SIDE == 'baseline' && 'c-analysis-baseline' || 'c-analysis-results' }}
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 14
+          target: ${{ matrix.target }}
+          side: ${{ env.ANALYSIS_SIDE }}
+          sample: ${{ matrix.second }}
+          index: ${{ strategy.job-index }}
 
   c-analysis-samples-windows:
+    name: c-analysis-samples-windows (${{ matrix.target }}, ${{ matrix.first }} + ${{ matrix.second }})
     permissions:
       contents: read
       actions: read
@@ -1248,20 +1223,12 @@ jobs:
         include:
           - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
-            group: standard-ecu
-            samples: standard-ecu
+            first: standard-ecu
+            second: user-application
           - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
-            group: user-application
-            samples: user-application
-          - os: windows-2025-vs2026
-            target: windows-x64-controlled-v1
-            group: component-pipeline
-            samples: component-pipeline
-          - os: windows-2025-vs2026
-            target: windows-x64-controlled-v1
-            group: no-diagnostic
-            samples: no-diagnostic
+            first: component-pipeline
+            second: no-diagnostic
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -1270,6 +1237,7 @@ jobs:
     steps: *analysis-sample-steps
 
   c-analysis-baseline:
+    name: c-analysis-baseline (${{ matrix.target }}, ${{ matrix.first }} + ${{ matrix.second }})
     permissions:
       contents: read
       actions: read
@@ -1280,20 +1248,12 @@ jobs:
         include:
           - os: ubuntu-24.04
             target: linux-x64-controlled-v1
-            group: standard-ecu
-            samples: standard-ecu
+            first: standard-ecu
+            second: user-application
           - os: ubuntu-24.04
             target: linux-x64-controlled-v1
-            group: user-application
-            samples: user-application
-          - os: ubuntu-24.04
-            target: linux-x64-controlled-v1
-            group: component-pipeline
-            samples: component-pipeline
-          - os: ubuntu-24.04
-            target: linux-x64-controlled-v1
-            group: no-diagnostic
-            samples: no-diagnostic
+            first: component-pipeline
+            second: no-diagnostic
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -1302,6 +1262,7 @@ jobs:
     steps: *analysis-sample-steps
 
   c-analysis-baseline-windows:
+    name: c-analysis-baseline-windows (${{ matrix.target }}, ${{ matrix.first }} + ${{ matrix.second }})
     permissions:
       contents: read
       actions: read
@@ -1312,20 +1273,12 @@ jobs:
         include:
           - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
-            group: standard-ecu
-            samples: standard-ecu
+            first: standard-ecu
+            second: user-application
           - os: windows-2025-vs2026
             target: windows-x64-controlled-v1
-            group: user-application
-            samples: user-application
-          - os: windows-2025-vs2026
-            target: windows-x64-controlled-v1
-            group: component-pipeline
-            samples: component-pipeline
-          - os: windows-2025-vs2026
-            target: windows-x64-controlled-v1
-            group: no-diagnostic
-            samples: no-diagnostic
+            first: component-pipeline
+            second: no-diagnostic
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:

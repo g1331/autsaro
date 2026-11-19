@@ -343,13 +343,17 @@ class BaselineReuseTests(unittest.TestCase):
                     "standard-ecu, standard-ecu)", "conclusion": "success"}
         good_artifact = {"id": 2, "name": "c-analysis-raw-current-linux-standard-ecu-0",
                          "expired": False, "digest": "sha256:" + "a" * 64}
-        for changed in ("none", "event", "branch", "tree", "status", "duplicate",
+        for changed in ("none", "paired", "other_pair", "event", "branch", "tree", "status", "duplicate",
                         "expired", "digest", "producer_missing", "producer_duplicate",
                         "producer_skipped"):
             with self.subTest(changed=changed), \
                     tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as temporary:
                 run, artifact = copy.deepcopy(good_run), copy.deepcopy(good_artifact)
                 job = copy.deepcopy(good_job)
+                if changed in {"paired", "other_pair"}:
+                    samples = ("standard-ecu + user-application" if changed == "paired"
+                               else "component-pipeline + no-diagnostic")
+                    job["name"] = f"c-analysis-samples (linux, {samples})"
                 archive = Path(temporary) / "raw.zip"
                 with zipfile.ZipFile(archive, "w") as package:
                     package.writestr("standard-ecu/raw.txt", b"raw analysis")
@@ -376,7 +380,7 @@ class BaselineReuseTests(unittest.TestCase):
                                      SimpleNamespace(stdout=archive)) as download:
                     result = c_baseline.download("owner/repo", "parent", "linux", "standard-ecu",
                                                  Path(temporary))
-                    if changed == "none":
+                    if changed in {"none", "paired"}:
                         self.assertEqual(result["artifact"], 2)
                         download.assert_called_once()
                         self.assertEqual(download.call_args.args[0],
