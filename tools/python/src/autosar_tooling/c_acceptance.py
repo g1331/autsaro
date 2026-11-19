@@ -339,7 +339,8 @@ def _retained_checker_entities(summary: dict, occurrences: list[dict], rule: str
                 expected[key] = 1
     actual = Counter()
     for occurrence in occurrences:
-        if occurrence["rule"] != "misra-c2012-" + rule[1:] or occurrence["status"] == "out_of_scope":
+        if occurrence["rule"] != "misra-c2012-" + rule[1:] or occurrence["status"] in {
+                "out_of_scope", "owned_false_positive"}:
             continue
         diagnostic = summary["diagnostics"][occurrence["diagnostic"]]
         if occurrence["status"] == "freertos_record_matched":
@@ -453,6 +454,28 @@ def _grp_positions(
     return accepted
 
 
+def _det_r82_hook_type(summary: dict, project: Path, root: Path, metadata: dict,
+                       owners: dict, unit: str) -> bool:
+    """Verify the named callback type used at Det's known Cppcheck false positive."""
+    original = "runtime/bsw/include/Det.h"
+    delivered = "bsw/include/Det.h"
+    scope = summary["scope"]
+    record = root / "docs/standards/det.md"
+    if (metadata["originalBswSources"].get(original) != delivered
+            or delivered not in scope.get("projectTranslationUnits", {}).get(unit, ())
+            or not record.is_file() or "MISRA C:2012 Rule 8.2" not in record.read_text(encoding="utf-8")
+            or not (root / original).is_file() or not (project / delivered).is_file()):
+        return False
+    sha256 = digest(project / delivered)
+    if sha256 != owners.get(delivered, {}).get("sha256") or sha256 != digest(root / original):
+        return False
+    source = (project / delivered).read_text(encoding="utf-8")
+    declaration = ("typedef Std_ReturnType (*Det_ErrorHookType)(uint16 ModuleId, "
+                   "uint8 InstanceId, uint8 ApiId, uint8 ErrorId);")
+    return " " + " ".join(c_standard.code_words(declaration)) + " " in " " + " ".join(
+        c_standard.code_words(source)) + " "
+
+
 def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
                      headers: set[str] | None = None) -> dict:
     """Join current source positions to the existing bidirectional MR12 records.
@@ -557,6 +580,13 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
                                        else "mandatory_deviation_forbidden"
                                        if category == "Mandatory"
                                        else "formal_deviation_pending"}
+        elif (diagnostic["id"] == "misra-c2012-8.2"
+              and original == "runtime/bsw/src/Det.c" and column == 39
+              and c_standard.code_words(lines[line - 1]) == c_standard.code_words(
+                  "static DET_CODE boolean Det_ValidHooks(const Det_ErrorHookType *hooks, uint16 count)")
+              and _det_r82_hook_type(summary, project, root, metadata, owners, name)):
+            result[index, position] = {"entity": "Det_ValidHooks", "reason": None, "falsePositive": True,
+                "record": {"file": "docs/standards/det.md", "text": "MISRA C:2012 Rule 8.2"}}
         elif (diagnostic["id"] == "misra-c2012-17.3"
               and [flag for flag in summary["scope"]["compilerFlags"]
                    if flag.startswith("-std=")][-1:] == ["-std=c99"]):
@@ -1167,6 +1197,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
         if len(occurrences) != len(positions):
             raise ValueError("Retention occurrence coverage incomplete")
         profile = next((key for key, name in c_retention.PROFILES.items() if name == result["caseId"]), None)
+        owned_formal_positions = set()
         for occurrence, (index, position, diagnostic, location) in zip(occurrences, positions):
             if occurrence["diagnostic"] != index or occurrence["location"] != location:
                 raise ValueError("Retention occurrence position differs")
@@ -1201,7 +1232,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                           if context[0]["formalStatus"] != "approved" else ruling["reason"])
             elif (index, position) in owned_positions:
                 ruling = owned_positions[index, position]
-                occurrence.update(status="owned_record_matched", entity=ruling["entity"],
+                occurrence.update(status=("owned_false_positive" if ruling.get("falsePositive")
+                                          else "owned_record_matched"), entity=ruling["entity"],
                                   record=ruling["record"])
                 context = selected.get("owned-source")
                 reason = ("owned_source_context_unbound_or_stale" if context is None
@@ -1210,8 +1242,11 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                           if context[1]["caseId"] not in c_retention.PROFILES.values()
                           or (ruling.get("case") and ruling["case"] != context[1]["caseId"])
                           else "formal_deviation_pending"
-                          if context[0]["formalStatus"] != "approved"
-                          else ruling.get("reason"))
+                          if context[0]["formalStatus"] != "approved" else None)
+                if reason is None:
+                    reason = ruling.get("reason")
+                    if reason == "formal_deviation_pending":
+                        owned_formal_positions.add((index, position))
             elif occurrence["status"] != "record_matched":
                 reason = occurrence["reason"]
                 if diagnostic.get("sourceCategory") == "sdk":
@@ -1239,6 +1274,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                               evidenceClosure="not_established" if reason else "frozen_context",
                               assessment="blocked" if reason else "accepted",
                               reason=reason or ("grp_disapplied" if grp
+                                                else "owned_source_false_positive"
+                                                if occurrence["status"] == "owned_false_positive"
                                                 else "sdk_integration_verified"
                                                 if (index, position) in sdk_positions
                                                 else "freertos_integration_verified"
@@ -1247,12 +1284,22 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                                                 if (index, position) in owned_positions
                                                 else "retention_approved"))
             result["occurrences"].append(occurrence)
-            if reason:
-                add("diagnostic", index, reason, rule=occurrence["rule"], location=location,
-                    entity=occurrence["entity"], programs=occurrence["programs"], record=occurrence["record"])
         obligations = c_standard.checker_obligations(rules, root)
         result["checkerObligations"], checker_reasons = _checker_obligation_result(
             summary, result["occurrences"], obligations, selected, group_reasons.get("checker-obligations"))
+        retained = {"misra-c2012-" + rule[1:]: record["approval"]
+                    for rule, record in result["checkerObligations"]["retainedRules"].items()}
+        for occurrence in result["occurrences"]:
+            if occurrence["assessment"] != "blocked":
+                continue
+            index, position = occurrence["diagnostic"], occurrence["locationIndex"]
+            rule = occurrence["rule"]
+            if (index, position) in owned_formal_positions and rule in retained:
+                occurrence.update(assessment="accepted", reason="owned_source_approved",
+                                  evidenceClosure="frozen_context", formalContextId=retained[rule])
+            else:
+                add("diagnostic", index, occurrence["reason"], rule=rule, location=occurrence["location"],
+                    entity=occurrence["entity"], programs=occurrence["programs"], record=occurrence["record"])
         for row in obligations["records"]:
             if reason := checker_reasons.get(row["id"]):
                 add("checker-obligation", row["id"], reason, source=row.get("source"),

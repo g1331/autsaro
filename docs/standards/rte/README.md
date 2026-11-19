@@ -41,6 +41,16 @@ R5.6为Required／System（2013主文印刷54／PDF62，AMD2追加C11）。主�
 
 生成来源 `contracts::contract_headers` 复用实际application slot清单，仅当计划有多个应用TU且当前组件属于其中时，在其 `Rte_Instance` typedef紧邻契约中输出 `MR12 RULE 5.6 VIOLATION`，说明固定名称、不同CDS和独立头的类型隔离。对应仍为上述六处应用定义；不对单应用工程或DcmService的非应用TU添加违反注释，不改变类型、声明可见条件或ABI。SWS_BSW_00115的就近说明只标出技术依据，不是suppression；新注释与条件选择的自审、正常对照和最终累计复核按各自实际head记在PR，不冒充旧复核已检查新增实现。变更组件类型、Byps配置、头可见性、实例模型或TU组合时重新核查；R2.3的实际未使用状态另行保留。
 
+[双平台实际分析工件](https://github.com/g1331/autsaro/actions/runs/44513871093)中，
+两个多组件 profile 的三个声明分别在第 30 行、第 32 列，HostBatch／probe 均报告。下表按已核实的声明形状和既有
+授权登记，由诊断级 MR12 识别实体。当前输入的正式偏离还须匹配规则级精确清单和批准上下文。
+
+| 规则 | 实体 | 形状和适用边界 | 项目授权 |
+| --- | --- | --- | --- |
+| MISRA C:2012 Rule 5.6 | `generated/include/Rte_Ingress.h` 的 `Rte_Instance` | shape=`typedef const Rte_CDS_Ingress *Rte_Instance;`；Ingress 应用头。 | 维护者 [原用户决定](https://github.com/g1331/autsaro/issues/58#issuecomment-6232975641) |
+| MISRA C:2012 Rule 5.6 | `generated/include/Rte_Process.h` 的 `Rte_Instance` | shape=`typedef const Rte_CDS_Process *Rte_Instance;`；Process 应用头。 | 维护者 同上 |
+| MISRA C:2012 Rule 5.6 | `generated/include/Rte_Observe.h` 的 `Rte_Instance` | shape=`typedef const Rte_CDS_Observe *Rte_Instance;`；Observe 应用头。 | 维护者 同上 |
+
 ## 共享 SchM 段的逐处责任
 
 以下绑定 `8a26e3b0` 和四份 `complete-declarations-final-samples`，不含各模块周期原型／包装器，不是批准表。固定RTE页914–917的07250／07253规定Enter／Exit接口，07251按实际ExclusiveArea生成；页890的07596连接实体所关联MemorySection的SectionNamePrefix。当前BSWMD把三个真实host适配源登记为Rte实现，并选择 `RTE_Rte` 前缀；标准要求保留已配置前缀，不强制选这个字面拼写，也不把调用模块名字当作实现段owner。
