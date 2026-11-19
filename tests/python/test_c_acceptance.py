@@ -1473,10 +1473,12 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(context["formalStatus"], "approved")
         cases = {(row["target"], row["caseId"]): row["inputIdentity"]
                  for row in context["cases"]}
-        # Both Linux artifacts used the same libc6-dev version and kernel closure.
-        reviewed = "034e8b3edb5e5b96f0b9715332848095978eb5835de3957c3d58cffd4440933b"
-        self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
-        self.assertEqual(cases[TARGET, "user-application"], reviewed)
+        # The hosted Linux standard and user-application samples used
+        # libc6-dev 2.39-0ubuntu8.12 and 2.39-0ubuntu8.9, respectively.
+        self.assertEqual(cases[TARGET, "standard-ecu"],
+                         "5726048924b407930af80deb3ffaa2bdd930b9008e2f75ec3e7962b4705a8a56")
+        self.assertEqual(cases[TARGET, "user-application"],
+                         "034e8b3edb5e5b96f0b9715332848095978eb5835de3957c3d58cffd4440933b")
 
     def freertos_kernel(self, original, final, changes):
         name = "third_party/freertos/kernel.h"
