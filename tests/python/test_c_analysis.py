@@ -91,6 +91,8 @@ class CAnalysisTests(unittest.TestCase):
                     self.assertEqual(probe.call_args.args[2].parent, directory)
                     self.assertFalse(probe.call_args.args[3])
 
+    @unittest.skipUnless(platform.system() in c_check.TARGETS.values(),
+                         "the host has no controlled analysis target")
     def test_the_reuse_check_is_wired_to_the_search_recheck_without_patching_it(self):
         recorded = {"quote": [], "system": ["usr/include"],
                     "environment": {"CPATH": None, "C_INCLUDE_PATH": None}}
