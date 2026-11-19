@@ -50,19 +50,13 @@
     "runtime/os/patches/0014-relocatable-interrupt-vectors.patch": "08f1feb3bd7378086057572a2463db82ac623401271e0b42112e59c86ea09d0d",
     "runtime/os/patches/linux/0001-controlled-posix-port.patch": "855c1c6502d47d6be38c24d80874b050107af1638edb8908b8c1c04a17581300",
     "runtime/os/patches/0015-typed-port-state.patch": "c3250e9763362fd2b5b5b4336c89ffd448c2c146f3a480c24fe2d1923e600688",
-    "runtime/os/patches/0016-essential-boolean-controls.patch": "10293705290af15e472c62141cbcdd7e29006147e0a7ee11ff336d4bfba21ef2",
-    "runtime/os/patches/0017-portable-header-paths.patch": "7d408cb149a895028fc254e6091d27d644bd12632a71ba6fb7429ac9ff6b398d",
+    "runtime/os/patches/0016-essential-boolean-controls.patch": "689c18e8036f114c43901e7a4d394b9b176d76e8541701e9fd19f70df1231060",
     "runtime/os/patches/0018-windows-thread-setup-errors.patch": "57f44144b74b2fa246400a272ec7474533ee1eead627e2af2b37d254c98b6108",
     "runtime/os/patches/0019-windows-native-handoff-errors.patch": "fdddb1d4889dd848b4a44df47b8d06245c31a3285d104b7d5b9090f14efa07cf",
     "runtime/os/patches/linux/0002-sequence-persistent-side-effects.patch": "12019061ce6f7e81a8a51b126faeb8f6274eca3cbda7e0d4f47ed4b121a6a67e",
     "runtime/os/patches/0020-bounded-queue-front.patch": "0d358577ef476e4cd8b7e8a36d9c084ab9f15c47790f50f82e7e7c410d423c44",
-    "runtime/os/patches/0021-c99-comment-examples.patch": "10f65374d9d44d1d6980c09fb0d0075def7e960c18f638d8dcee252dc0f296e5",
-    "runtime/os/patches/0022-explicit-function-addresses.patch": "e0d3d5ef9347e0511a5678c7a123945f5f8461e89609e5800a5c97e61d9887fd",
-    "runtime/os/patches/0023-preserve-parameter-values.patch": "cf99e9963e017971d04a26ef6dc2c203ece2fdbc01e2d2f10722cc913b1f46a0",
-    "runtime/os/patches/0024-conditional-private-definitions.patch": "7b45effaef7fbb001f4a854225248e7c4ead37338e147b7aea370dd2bd33dbb1",
-    "runtime/os/patches/0025-configured-kernel-declarations.patch": "b3ecc7b4f3ef7e185278334bfaaa3fb4808facadaf5ea53273f669b3d8df2acb",
-    "runtime/os/patches/0026-explicit-control-flow-boundaries.patch": "24fa489d956b420b3b92bc04addd6e85515fee1f80ce19bf9dc856d2bf4e0cc3",
-    "runtime/os/patches/0027-port-diagnostic-types.patch": "c6081e2f1f48f3687d28bf18c69a0b53bac5331053f15d7b7eb929bc80e2cfa1",
+    "runtime/os/patches/0022-explicit-function-addresses.patch": "bf5130593698106a2f19c344c36260c20cc37be2940f0a61292c0e97e7d659a9",
+    "runtime/os/patches/0027-port-diagnostic-types.patch": "974749d443751df7e852c309b1d625487e8da821d18f4b33063b98a669a8f134",
     "runtime/os/patches/linux/0003-port-diagnostic-types.patch": "e090fc9ac6a36654ab34c0196c27e9dbe2a990adeac00d9fc70b5ed25a376b69"
   }
 }

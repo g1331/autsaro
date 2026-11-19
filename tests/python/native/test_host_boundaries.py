@@ -471,7 +471,7 @@ class NativeKernelObjectTests(unittest.TestCase):
             self.assertEqual(result.stdout, "static task and queue types; task stack identity; bounded FIFO/front/overwrite/reset observed\n")
             self.assertEqual(result.stderr, "")
 
-            # These configured-out definitions must not leave callable declarations.
+            # Upstream headers expose optional APIs whose definitions require other configurations.
             unavailable = (
                 "pvPortCalloc", "pvPortMalloc", "vPortDefineHeapRegions", "vPortFree",
                 "vPortGetHeapStats", "vPortHeapResetState", "vPortInitialiseBlocks",
@@ -486,31 +486,33 @@ class NativeKernelObjectTests(unittest.TestCase):
             )
             available = ("xTaskCreateStatic", "xQueueGenericCreateStatic", "uxTaskPriorityGet",
                          "vTaskSuspend", "xTaskGetHandle", "xTaskGetTickCount", "xInsideInterrupt")
-            unavailable_types = ("HeapRegion_t", "HeapStats_t")
+            optional_types = ("HeapRegion_t", "HeapStats_t")
             command = metadata["command"]
             self.assertEqual(command[-2], "-o")
             flags = [argument for argument in command[:-2]
                      if not argument.endswith(".c") and not argument.startswith("-l")]
-            for label, names in (("available", available), ("unavailable", unavailable),
-                                 ("unavailable-types", unavailable_types)):
-                probe = directory / f"{label}.c"
-                expressions = [f"sizeof({name})" if label == "unavailable-types" else f"&{name}"
-                               for name in names]
-                probe.write_text(
-                    '#include "FreeRTOS.h"\n#include "task.h"\n#include "queue.h"\n'
-                    "int main(void)\n{\n" +
-                    "".join(f"    (void){expression};\n" for expression in expressions) +
-                    "    return 0;\n}\n", encoding="utf-8",
-                )
-                compiled = os_suites.run_native([*flags, "-fsyntax-only", str(probe)], timeout=30)
-                if label == "available":
-                    self.assertEqual(compiled.returncode, 0, compiled)
-                else:
-                    self.assertNotEqual(compiled.returncode, 0, compiled)
-                    for name in names:
-                        self.assertRegex(compiled.stderr, rf"error:[^\n]*\b{name}\b[^\n]*undeclared")
-            print(f"kernel_declarations available={len(available)} unavailable={len(unavailable)} "
-                  f"unavailable_types={len(unavailable_types)} strict_c99=OK", flush=True)
+            probe = directory / "kernel-declarations.c"
+            expressions = [*(f"&{name}" for name in (*available, *unavailable)),
+                           *(f"sizeof({name})" for name in optional_types)]
+            probe.write_text(
+                '#include "FreeRTOS.h"\n#include "task.h"\n#include "queue.h"\n'
+                "int main(void)\n{\n"
+                + "".join(f"    (void){expression};\n" for expression in expressions)
+                + "    return 0;\n}\n", encoding="utf-8",
+            )
+            compiled = os_suites.run_native([*flags, "-fsyntax-only", str(probe)], timeout=30)
+            self.assertEqual(compiled.returncode, 0, compiled)
+
+            compiler = Path(shutil.which(command[0]) or command[0])
+            nm = compiler.with_name("nm.exe" if os.name == "nt" else "nm")
+            listed = os_suites.run_native(
+                [str(nm), "--defined-only", "--format=posix", str(binary)], timeout=30,
+            )
+            self.assertEqual(listed.returncode, 0, listed)
+            defined = {line.split()[0] for line in listed.stdout.splitlines() if line.strip()}
+            self.assertFalse(defined.intersection(unavailable))
+            print(f"kernel_declarations optional={len(unavailable)} optional_types={len(optional_types)} "
+                  "strict_c99=OK optional_definitions=0", flush=True)
 
     def test_queue_front_pointer_bounds_and_order_mutations(self):
         import os_suites

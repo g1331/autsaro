@@ -37,9 +37,11 @@ PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并�
 checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
 分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
 
-PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`c_gate scan` 保留逐程序严格差集，按诊断、位置及程序重算 accepted 处置。Git 改名回接原件／交付路径，整文件行映射限定批准的原位置。R10.3／R10.4 可用文件静态对象改名证明配对，条件为每个变化行均经 GCC 发射并验证，Cppcheck 绑定、映射后的列位置、程序和次数全部对应。证明缺损时执行严格判定，`gate.json.identifierEvidenceError` 记录原因。门先绑定双侧各八份 `scope-input.json` 的原始身份，再重算范围并集、occurrence、MR12／SDK 和验收身份；范围外位置及新增保留，矩阵汇总见 `compliance-scope.json`。整体 blocked 留作报告，执行 error 阻断，原始分析状态保持。
+PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`c_gate scan` 保留原始逐程序差集，以范围内差集判定阻断，按精确位置重算处置。Git 改名回接原件／交付路径，整文件行映射限定批准的原位置。R10.3／R10.4 可用文件静态对象改名证明配对，条件为每个变化行均经 GCC 发射并验证，Cppcheck 绑定、映射后的列位置、程序和次数全部对应。证明缺损时执行严格判定，`gate.json.identifierEvidenceError` 记录原因。门先绑定双侧各八份 `scope-input.json` 的原始身份，再重算范围并集、occurrence、MR12／SDK 和验收身份；范围外位置及新增保留，矩阵汇总见 `compliance-scope.json`。整体 blocked 留作报告，执行 error 阻断，原始分析状态保持。
 
 基准固定为测试提交第一父提交，保留其生成器与 runtime，使用 PR 的 harness、夹具、资源与锁文件。prepare 与双侧生成并行。基准原件与 SDK 原件记录取第一父提交并绑定身份，继续核对实际 SDK；评估仍用当前输入。拆分源按目标选择的同名 host provider 回接，允许对应平台 include 目录迁移。双树的 SDK 比较身份绑定 include 搜索序列、搜索目录可达的全部 provider 文件及实际打开的头／宏，见 [SDK 比较身份](sdk-comparison-identity.md)。头／宏使用集合可变，共有头字节与宏值仍比较；旧版（语义身份 2）工件拒绝，须重扫。双侧 raw 回执均拒绝验收 error；基准失败或不可比均拒绝。
+
+双树各自核验补丁回执及内核字节，并比较所选文件集合。本地基准仍要求相同补丁身份。
 
 基准扫描可复用该 SHA 的 master push 原始产物，要求对应生产作业成功。匹配身份覆盖树、样本、分析器二进制／addon、规则与生成器、生成 seal、PR 驱动／配置／评估输入、Python、GCC driver／backend 和 runner 镜像。目标主机重查 SDK 搜索空间及打开的头、模型、隐式库及驱动语义；任一不符、产物缺失／重复或 attempt 不符均现场扫描。每轮仍生成基准以核对 seal；复用只省去原始扫描，项目验收和输入身份重新计算。`gate.json.baselineSource` 记录 same-run（含回退原因）或 master-artifact（运行、attempt、生产作业、工件与 digest），不缓存门判定。
 

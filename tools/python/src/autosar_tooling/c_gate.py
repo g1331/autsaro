@@ -110,15 +110,18 @@ def rename_paths(previous: Path, current: Path) -> dict[str, str]:
     return mappings
 
 
-def new_dispositions(current: dict, acceptance: dict, project: Path,
-                     baseline: Path, renames: dict[str, str]) -> Counter:
-    """An existing position's approval cannot authorize an identical added position."""
-    previous = read(baseline / "summary.json")
+def new_dispositions(current: dict, previous: dict, acceptance: dict, project: Path,
+                     baseline: Path, renames: dict[str, str], *,
+                     headers: set[str] | None, previous_headers: set[str] | None) -> Counter:
+    """Match exact dispositions for additions to the in-scope diagnostic inventory."""
     old_positions = Counter()
     for diagnostic in previous["diagnostics"]:
         if diagnostic["id"] == "checkersReport":
             continue
         for location in diagnostic["locations"]:
+            if c_comparison.location_scope(previous["scope"], location,
+                                           headers=previous_headers) != "in-scope":
+                continue
             name = renames.get(location["file"], location["file"])
             for program in diagnostic["programs"]:
                 old_positions[diagnostic["id"], name, int(location["line"]), program] += 1
@@ -130,6 +133,8 @@ def new_dispositions(current: dict, acceptance: dict, project: Path,
             continue
         diagnostic = current["diagnostics"][occurrence["diagnostic"]]
         location = diagnostic["locations"][occurrence["locationIndex"]]
+        if c_comparison.location_scope(current["scope"], location, headers=headers) != "in-scope":
+            continue
         name, line = location["file"], int(location["line"])
         if name not in line_maps:
             old_path = baseline / "project" / old_names.get(name, name)
@@ -167,7 +172,6 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
         raise ValueError("Project acceptance execution failed")
     if acceptance != current["projectAcceptance"]:
         raise ValueError("Project acceptance receipt differs from current inputs")
-    accepted = new_dispositions(current, acceptance, output / "project", baseline, renames)
     previous = read(baseline / "summary.json")
     current_matrix = acceptance.get("scopeMatrix")
     headers = c_comparison.matrix_headers(current, current_matrix) if current_matrix is not None else None
@@ -180,6 +184,8 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
             previous, baseline / "project", in_scope_only=True, headers=previous_headers).items():
         before[rule, renames.get(name, name), source, program] += count
     additions = inside - before
+    accepted = new_dispositions(current, previous, acceptance, output / "project", baseline,
+                                renames, headers=headers, previous_headers=previous_headers)
     equivalent = Counter()
     if identifier_evidence_error is None:
         try:
@@ -193,11 +199,14 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
         count = min(row["count"], additions[key])
         if row["count"] > count:
             outside.append({**row, "count": row["count"] - count})
-        # Both mechanisms can describe the same occurrence. Credit the stronger
-        # count once so a disposition and a rename cannot cover an extra finding.
+    # A change in ownership can add an in-scope diagnostic with an empty raw delta.
+    for key, count in sorted(additions.items()):
+        # A disposition and a rename may describe the same occurrence.
         remaining = count - max(accepted[key], equivalent[key])
         if remaining > 0:
-            blocked.append({**row, "count": remaining})
+            rule, name, source, program = key
+            blocked.append({"rule": rule, "file": name, "source": source,
+                            "program": program, "count": remaining})
     return {"status": "blocked" if blocked else "passed", "comparison": comparison,
             "unacceptedNew": blocked, "outOfScopeNew": outside,
             "complianceScope": c_comparison.scope_statistics(current, headers=headers),
