@@ -36,6 +36,7 @@ def main() -> None:
                            "-Wl,--wrap=poll", "-Wl,--wrap=__poll_chk"]):
         raise ValueError("Unsupported test linker observer")
     kinds = os.environ.get("AUTOSAR_SANITIZE", "")
+    coverage = os.environ.get("AUTOSAR_C_COVERAGE") == "1" and mode == "host-batch"
     if kinds and (sys.platform != "linux" or kinds not in ("thread", "address,undefined")):
         raise ValueError("Sealed ECU sanitizer tests require Linux thread or address,undefined")
     # Let the seal guard establish import paths after its standard-library imports.
@@ -83,7 +84,7 @@ def main() -> None:
     if len(commands) != 1:
         raise ValueError("Expected exactly one sealed native compilation")
     original = commands[0]
-    if not kinds:
+    if not kinds and not coverage:
         # Keep the exact diagnostic command even without a sanitizer rebuild.
         (output / "compile-commands.json").write_text(
             json.dumps({"production": original}, indent=2) + "\n", encoding="utf-8",
@@ -92,9 +93,22 @@ def main() -> None:
     instrumented = list(original)
     binary = output / Path(original[original.index("-o") + 1]).name
     instrumented[instrumented.index("-o") + 1] = str(binary)
-    flags = [f"-fsanitize={kinds}", "-fno-sanitize-recover=all", "-fno-omit-frame-pointer", "-g"]
+    if kinds:
+        flags = [f"-fsanitize={kinds}", "-fno-sanitize-recover=all", "-fno-omit-frame-pointer", "-g"]
+    else:
+        # Keep __FILE__ and debug paths reproducible while leaving gcov's
+        # source names resolvable against the actual generated project.
+        for flag in original:
+            if flag.startswith("-ffile-prefix-map="):
+                index = instrumented.index(flag)
+                instrumented[index:index + 1] = [flag.replace("-ffile-", "-fmacro-", 1),
+                                                 flag.replace("-ffile-", "-fdebug-", 1)]
+        exit_observer = Path(__file__).resolve().parents[1] / "fixtures/os/gcov_exit.c"
+        flags = ["--coverage", "-fprofile-update=atomic", "-fprofile-abs-path",
+                 "-Wl,--wrap=_exit", str(exit_observer)]
     instrumented[1:1] = flags
-    build.query(instrumented, output / "production/logs", "sanitized-c99-build")
+    stage = "sanitized-c99-build" if kinds else "coverage-c99-build"
+    build.query(instrumented, output / "production/logs", stage)
     build.sealed_sources(project)
     (output / "compile-commands.json").write_text(
         json.dumps({"production": original, "instrumented": instrumented}, indent=2) + "\n",

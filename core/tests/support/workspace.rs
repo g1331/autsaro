@@ -29,7 +29,8 @@ impl Drop for Scratch {
         // A failing test keeps its scene; CI uploads the scratch root on failure.
         if std::thread::panicking() {
             eprintln!("scratch retained at {}", self.0.display());
-        } else {
+        } else if !super::tooling::c_coverage() {
+            // gcov still needs the compiler notes and generated sources after the test.
             let _ = fs::remove_dir_all(&self.0);
         }
     }

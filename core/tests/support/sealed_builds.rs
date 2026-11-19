@@ -71,6 +71,7 @@ pub(crate) fn host_batch_with_sanitizer(
             Some(kinds) => {
                 tooling::ecu_sanitizer_build_command(&snapshot, &build, "host-batch", None, kinds)
             }
+            None if tooling::c_coverage() => tooling::ecu_coverage_build_command(&snapshot, &build),
             None => tooling::ecu_production_build_command(&snapshot, &build, "host-batch", None),
         };
         let result = tooling::run_public_command(

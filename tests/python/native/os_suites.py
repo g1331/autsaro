@@ -352,6 +352,9 @@ def build(directory: Path, harness: str = "lifecycle.c", defines: tuple[str, ...
     ]
     command[1:1] = ["-D" + value for value in defines]
     command[1:1] = sanitizer_flags()
+    if linux and target == TARGET and os.environ.get("AUTOSAR_C_COVERAGE") == "1":
+        command[1:1] = ["--coverage", "-fprofile-update=atomic", "-fprofile-abs-path", "-Wl,--wrap=_exit",
+                        str(ROOT / "core/tests/fixtures/os/gcov_exit.c")]
     if host_failure_injection:
         command.insert(1, "-DOS_HOST_FAILURE_TESTS")
     command[1:1] = [str(source) for source in extra_sources]
