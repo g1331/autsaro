@@ -138,12 +138,11 @@ C99 下的 R17.3 适用性回接 OS 原篇。匹配结果逐位置返回 `owned_
 匹配 MR12／shape，未知 producer／摘要拒绝。应用与内核沿原任务。程序限
 host-batch／probe，样本限现有四 profile。
 
-Required 风险记录继续返回
-`formal_deviation_pending`，即使上下文为 `approved` 也保留该义务；Mandatory 保留项
-返回 `mandatory_deviation_forbidden`。其余模块误报、采用内核与 SDK 位置沿原有阻塞。
-实际输入交集绑定在[原自有源码标准篇](../../standards/bsw-general/public-api-os.md#自有源码记录的当前输入消费)，
-只接纳所列输入下已实现的 Advisory 记录与语言不适用位置；剩余模块消费与
-Required 正式材料继续由自有源码消费任务接续。
+Required 风险记录须同时通过自有源码当前绑定和规则级正式保留批准。否则保留各自阻塞原因，
+其中缺正式处置为 `formal_deviation_pending`。通过时 `formalContextId` 回接规则级上下文。
+Mandatory 保留项返回 `mandatory_deviation_forbidden`。现有
+[自有源码输入绑定](../../standards/bsw-general/public-api-os.md#自有源码记录的当前输入消费)
+仍按各实体、样本与程序范围消费。
 
 固定 FreeRTOS 使用 `records={"kind":"freertos-integration"}`，原件集成义务和精确
 补丁表见 [采用篇](../../standards/os/adoption.md#当前集成义务与消费)。本组沿用同一
