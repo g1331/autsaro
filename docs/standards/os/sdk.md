@@ -26,7 +26,7 @@ R7.2 将实际 addon 的 unsigned 操作数与活动对象宏字面量及别名�
 编译器预定义须与实际 compiler 收据的名字、值及函数形式一致。包外头、未知 provider、
 目标／包错误、原件变更和项目重定义均拒绝；项目 #line、依赖缺失、循环及跨行实参歧义
 保持可见，反例分别验证。目标、provider、头字节或编译选择改变即重评。
-semanticIdentity.version=2 绑定 SDK 和分析驱动；原始诊断、退出码与评估状态保持。
+semanticIdentity.version=3 绑定 SDK 和分析驱动；原始诊断、退出码与评估状态保持。
 
 ## 当前集成义务与类别处置
 

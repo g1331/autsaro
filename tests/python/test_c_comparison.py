@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from copy import deepcopy
@@ -12,6 +13,14 @@ from autosar_tooling import c_comparison, c_sdk
 from autosar_tooling.c_comparison import compare
 from autosar_tooling.c_standard import MANUAL_ASSESSMENT_SOURCES
 from ecu_tools.build import digest
+from link_fixtures import make_link
+
+
+def inventory(files):
+    """A search-space inventory of provider files, given as {path: sha256}."""
+    return {"format": "sdk-search-inventory-v1", "links": {}, "files": {
+        name: {"header": name, "provider": "libc6-dev", "algorithm": "md5",
+               "expected": "e" * 32, "sha256": sha} for name, sha in files.items()}}
 
 
 class CComparisonTests(unittest.TestCase):
@@ -123,17 +132,18 @@ class CComparisonTests(unittest.TestCase):
                       "includePaths": ["."], "translationUnits": ["main.c"],
                       "projectTranslationUnits": {"main.c": ["main.c"]},
                       "supplemental": [], "patchedKernel": [],
-                      "sdkEnvironment": {"format": "sdk-provider-environment-v1", "files": 1,
-                                         "sha256": "f" * 64}},
+                      "sdkInventory": inventory({"usr/include/limits.h": "a" * 64})},
             "programs": [{"name": "target", "entry": "main.c", "translationUnits": ["main.c"], "exitCode": 1}],
             "diagnostics": [self.diagnostic("rule", 1), self.diagnostic("rule", 2)],
         }
         summary["semanticIdentity"] = {
-            "version": 2,
+            "version": 3,
             "sdk": hashlib.sha256(json.dumps(c_sdk.semantic_inputs(
                 summary["scope"]), sort_keys=True).encode()).hexdigest(),
             "compiler": {"machine": "x86_64-linux-gnu", "release": "13.3.0",
-                         "predefines": ["#define __GNUC__ 13"], "builtins": ["-D__GNUC__=13"]},
+                         "predefines": ["#define __GNUC__ 13"], "builtins": ["-D__GNUC__=13"],
+                         "includeSearch": {"quote": [], "system": ["usr/include"],
+                                           "environment": {"CPATH": None, "C_INCLUDE_PATH": None}}},
             "defines": {"main.c": []},
             "models": {"platformModel": None, "platformLibrary": None},
             "libraries": {name: "a" * 64 for name in ("std", "posix", "implicitStd")},
@@ -393,8 +403,8 @@ class CComparisonTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "Semantic identity differs: " + field):
                     compare(current, project, output, baseline)
 
-    def test_source_tree_sdk_usage_changes_preserve_shared_environment_checks(self):
-        for changed in ("usage", "header", "provider", "version", "define", "macro", "receipt"):
+    def test_source_tree_sdk_usage_changes_preserve_shared_header_checks(self):
+        for changed in ("usage", "header", "provider", "define", "macro", "receipt"):
             with self.subTest(changed=changed), tempfile.TemporaryDirectory() as temporary:
                 current, project, output, baseline = self.fixture(Path(temporary))
                 header = {"path": "/sdk/limits.h", "header": "include/limits.h",
@@ -407,10 +417,12 @@ class CComparisonTests(unittest.TestCase):
 
                 def bind(summary):
                     for row in summary["scope"]["sdkHeaders"]:
-                        row["key"] = hashlib.sha256(json.dumps({
-                            key: value for key, value in row.items()
-                            if key not in {"path", "reason", "key"}
-                        }, sort_keys=True).encode()).hexdigest()
+                        row["key"] = c_sdk.header_key(row)
+                    # The inventory keeps provider "libc6-dev", so a changed provider is
+                    # left to the per-header comparison.
+                    summary["scope"]["sdkInventory"] = inventory({
+                        "usr/include/limits.h": "a" * 64,
+                        **{row["header"]: row["sha256"] for row in summary["scope"]["sdkHeaders"]}})
                     sdk = c_sdk.semantic_inputs(summary["scope"])
                     summary["semanticIdentity"]["sdk"] = hashlib.sha256(
                         json.dumps(sdk, sort_keys=True).encode()).hexdigest()
@@ -420,9 +432,8 @@ class CComparisonTests(unittest.TestCase):
                 self.write(baseline, previous)
                 if changed == "usage":
                     current["semanticIdentity"]["defines"]["main.c"].append("-DINT_MAX=2147483647")
-                elif changed in {"header", "provider", "version"}:
-                    header[{"header": "sha256", "provider": "provider",
-                            "version": "version"}[changed]] = "b" * 64
+                elif changed in {"header", "provider"}:
+                    header[{"header": "sha256", "provider": "provider"}[changed]] = "b" * 64
                 elif changed == "define":
                     current["semanticIdentity"]["defines"]["main.c"] = ["-DCHAR_BIT=16"]
                 elif changed == "macro":
@@ -445,76 +456,369 @@ class CComparisonTests(unittest.TestCase):
                                                "Semantic identity differs: defines"):
                         compare(current, project, output, baseline, source_tree=True)
 
-    def test_source_tree_seals_headers_unused_in_the_other_environment(self):
-        for changed in (False, True):
-            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary).resolve()
-                template, project, output, baseline = self.fixture(root)
-                template["diagnostics"] = []
-                template["passed"] = True
-                for program in template["programs"]:
-                    program["exitCode"] = 0
-                summaries = {}
-                for side in ("baseline", "current"):
-                    sdk = root / (side + "-sdk")
-                    sdk.mkdir()
-                    packages = {}
-                    for name, value in (("common.h", "1"), ("added.h", "2" if
-                                            changed and side == "current" else "1")):
-                        path = sdk / name
-                        macro = "COMMON_VALUE" if name == "common.h" else "NEW_VALUE"
-                        path.write_bytes(f"#define {macro} {value}\n".encode())
-                        packages[str(path)] = {
-                            "provider": "libc6-dev", "version": "1",
-                            "header": "usr/include/" + name, "algorithm": "md5",
-                            "expected": hashlib.md5(path.read_bytes(),
-                                                    usedforsecurity=False).hexdigest()}
-                    used = [sdk / "common.h"]
-                    if side == "current":
-                        used.append(sdk / "added.h")
-                    summary = deepcopy(template)
-                    summary["scope"].update(
-                        sdkHeaders=[c_sdk.header_identity(path, project, "linux",
-                                    "x86_64-linux-gnu", packages) for path in used],
-                        sdkTranslationUnits={"main.c": [path.as_posix() for path in used]},
-                        sdkMacroInputs={"main.c": {}})
-                    summary["sourceClassification"] = {
-                        "complete": True, "unclassifiedDiagnosticKeys": 0}
-                    with patch.object(c_sdk, "debian_headers", return_value=packages):
-                        summary["semanticIdentity"]["sdk"] = c_sdk.semantic(summary["scope"])
-                    c_sdk.validate_sources(summary)
-                    self.assertEqual(summary["scope"]["sdkEnvironment"]["files"], 2)
-                    summaries[side] = summary
-                self.write(baseline, summaries["baseline"])
-                if changed:
-                    with self.assertRaisesRegex(ValueError,
-                                                "Semantic identity differs: sdk environment"):
-                        compare(summaries["current"], project, output, baseline, source_tree=True)
-                else:
-                    self.assertEqual(compare(summaries["current"], project, output, baseline,
-                                             source_tree=True), {"new": [], "removed": []})
+    def sdk_summary(self, template, project, root, side, *, opened, version="1", installed=None,
+                    search=("inc",), cpath=None, links=None, relative_links=False,
+                    foreign=None, providers=None):
+        """A real producer record on a miniature provider tree.
 
-    def test_source_tree_requires_a_complete_sdk_environment_receipt(self):
-        for side in ("current", "baseline", "both"):
-            for changed in ("missing", "format", "files", "boolean", "digest"):
-                with self.subTest(side=side, changed=changed), tempfile.TemporaryDirectory() as tmp:
-                    current, project, output, baseline = self.fixture(Path(tmp))
-                    summary = current if side in {"current", "both"} else deepcopy(current)
-                    environment = summary["scope"]["sdkEnvironment"]
-                    if changed == "missing":
-                        del summary["scope"]["sdkEnvironment"]
+        `opened` files are consumed, `installed` ones only present. Files reachable through
+        the `search` directories are in the include search space; others (such as lib/) are
+        not. `links` maps a path below the provider root to the directory it points to.
+        """
+        provider = root / side
+        packages = {}
+        for file, text in {**opened, **(installed or {})}.items():
+            path = provider / file
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(text.encode())
+            packages[str(path)] = {
+                "provider": next((name for prefix, name in (providers or {}).items()
+                                  if file.startswith(prefix)), "libc6-dev"),
+                "version": version, "header": file, "algorithm": "md5",
+                "expected": hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()}
+        for file, text in (foreign or {}).items():
+            (provider / file).parent.mkdir(parents=True, exist_ok=True)
+            (provider / file).write_bytes(text.encode())
+        for name, target in (links or {}).items():
+            link = provider / name
+            destination = (os.path.relpath(provider / target, link.parent)
+                           if relative_links else provider / target)
+            make_link(self, link, destination, directory=(provider / target).is_dir())
+        summary = deepcopy(template)
+        paths = [provider / file for file in opened]
+        compiler = summary["semanticIdentity"]["compiler"]
+        compiler["includeSearch"] = {
+            "quote": [], "system": list(search),
+            "environment": {"CPATH": cpath, "C_INCLUDE_PATH": None}}
+        summary["scope"].update(
+            sdkHeaders=[c_sdk.header_identity(path, project, "linux", "x86_64-linux-gnu", packages)
+                        for path in paths],
+            sdkTranslationUnits={"main.c": [path.as_posix() for path in paths]},
+            sdkMacroInputs={"main.c": {}}, compilerSemanticInputs=deepcopy(compiler),
+            diagnosticCompiler={"path": "/selected/bin/gcc"})
+        with patch.object(c_sdk, "debian_headers", return_value=packages), \
+                patch.object(c_sdk, "provider_root", return_value=provider):
+            summary["semanticIdentity"]["sdk"] = c_sdk.semantic(summary["scope"])
+        return summary
+
+    def sdk_pair(self, root, baseline_side, current_side):
+        template, project, output, baseline = self.fixture(root)
+        template.update(diagnostics=[], passed=True)
+        for program in template["programs"]:
+            program["exitCode"] = 0
+        before = self.sdk_summary(template, project, root, "baseline", **baseline_side)
+        now = self.sdk_summary(template, project, root, "current", **current_side)
+        self.write(baseline, before)
+        return before, now, project, output, baseline
+
+    def test_sdk_identity_binds_the_search_space_and_ignores_package_revisions(self):
+        common = {"inc/common.h": "#define COMMON_VALUE 1\n"}
+        added = {**common, "inc/added.h": "#define ADDED_VALUE 1\n"}
+        library = {"lib/libc.a": "archive 1\n"}
+        installed_added = {"inc/added.h": "#define ADDED_VALUE 1\n"}
+        other = {"inc/added.h": "#define ADDED_VALUE 2\n"}
+        # (name, baseline side, current side, source-tree error, exact-source error)
+        cases = [
+            ("package revision", {"opened": common}, {"opened": common, "version": "2"},
+             None, None),
+            ("file outside the search space differs", {"opened": common, "installed": library},
+             {"opened": common, "installed": {"lib/libc.a": "archive 2\n"}}, None, None),
+            ("file outside the search space added", {"opened": common},
+             {"opened": common, "installed": library}, None, None),
+            ("unopened header in the search space differs",
+             {"opened": common, "installed": installed_added},
+             {"opened": common, "installed": other}, "sdk inventory: inc/added.h", "sdk"),
+            ("unopened header in the search space added", {"opened": common},
+             {"opened": common, "installed": installed_added},
+             "sdk inventory: inc/added.h", "sdk"),
+            ("header opened by one side only, other bytes on the other",
+             {"opened": added}, {"opened": common, "installed": other},
+             "sdk inventory: inc/added.h", "sdk"),
+            ("opened header differs", {"opened": common},
+             {"opened": {"inc/common.h": "#define COMMON_VALUE 2\n"}},
+             "sdk inventory: inc/common.h", "sdk"),
+            ("one more header opened", {"opened": common, "installed": installed_added},
+             {"opened": added}, None, "sdk"),
+            ("one less header opened", {"opened": added},
+             {"opened": common, "installed": installed_added}, None, "sdk"),
+        ]
+        for name, previous, now, tree_error, exact_error in cases:
+            for source_tree, error in ((True, tree_error), (False, exact_error)):
+                with self.subTest(case=name, source_tree=source_tree), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    _before, current, project, output, baseline = self.sdk_pair(
+                        Path(temporary).resolve(), previous, now)
+                    if error is None:
+                        self.assertEqual(compare(current, project, output, baseline,
+                                                 source_tree=source_tree),
+                                         {"new": [], "removed": []})
                     else:
-                        key, value = {"format": ("format", "unknown"), "files": ("files", 0),
-                                      "boolean": ("files", True),
-                                      "digest": ("sha256", "bad")}[changed]
-                        environment[key] = value
-                        summary["semanticIdentity"]["sdk"] = hashlib.sha256(json.dumps(
-                            c_sdk.semantic_inputs(summary["scope"]),
-                            sort_keys=True).encode()).hexdigest()
-                    if side in {"baseline", "both"}:
-                        self.write(baseline, summary)
-                    with self.assertRaisesRegex(ValueError, "C baseline refused:"):
-                        compare(current, project, output, baseline, source_tree=True)
+                        with self.assertRaisesRegex(ValueError,
+                                                    "Semantic identity differs: " + error):
+                            compare(current, project, output, baseline, source_tree=source_tree)
+
+    def test_links_below_a_search_directory_make_provider_files_reachable(self):
+        text = {"outside/branch/optional.h": "#define FEATURE_TOKEN 0\n"}
+        flipped = {"outside/branch/optional.h": "#define FEATURE_TOKEN 1\n"}
+        common = {"inc/common.h": "#define COMMON_VALUE 1\n"}
+        reached = {"inc/branch": "outside/branch"}
+        other_name = {"other/branch/optional.h": "#define FEATURE_TOKEN 1\n"}
+        same_bytes = {"copy/branch/optional.h": text["outside/branch/optional.h"]}
+        # (name, baseline side, current side, double-tree error, same-source error)
+        cases = [
+            ("same links on both sides", {"opened": common, "installed": text, "links": reached},
+             {"opened": common, "installed": text, "links": reached}, None, None),
+            # The reviewed escape: identical sources and search sequence, but only the
+            # baseline reaches the header (and then opens it) through the link.
+            ("link retargeted so the header is no longer reachable",
+             {"opened": {**common, **text}, "links": reached},
+             {"opened": common, "installed": flipped, "links": {"inc/branch": "inc"}},
+             "sdk inventory: inc/branch/optional.h", "sdk"),
+            ("link retargeted to the same name with other bytes",
+             {"opened": common, "installed": {**text, **other_name}, "links": reached},
+             {"opened": common, "installed": {**text, **other_name},
+              "links": {"inc/branch": "other/branch"}},
+             "sdk inventory: inc/branch/optional.h", "sdk"),
+            ("link retargeted to the same bytes under another path",
+             {"opened": common, "installed": {**text, **same_bytes}, "links": reached},
+             {"opened": common, "installed": {**text, **same_bytes},
+              "links": {"inc/branch": "copy/branch"}},
+             "sdk inventory: inc/branch/optional.h", "sdk"),
+            ("bytes behind the link differ",
+             {"opened": common, "installed": text, "links": reached},
+             {"opened": common, "installed": flipped, "links": reached},
+             "sdk inventory: inc/branch/optional.h", "sdk"),
+            ("link that leads back to its own directory",
+             {"opened": common, "links": {"inc/loop": "inc"}},
+             {"opened": common, "links": {"inc/loop": "inc"}}, None, None),
+        ]
+        for name, previous, now, tree_error, exact_error in cases:
+            for source_tree, error in ((True, tree_error), (False, exact_error)):
+                with self.subTest(case=name, source_tree=source_tree), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    _before, current, project, output, baseline = self.sdk_pair(
+                        Path(temporary).resolve(), previous, now)
+                    if error is None:
+                        self.assertEqual(compare(current, project, output, baseline,
+                                                 source_tree=source_tree),
+                                         {"new": [], "removed": []})
+                    else:
+                        with self.assertRaisesRegex(ValueError,
+                                                    "Semantic identity differs: " + error):
+                            compare(current, project, output, baseline, source_tree=source_tree)
+
+    def test_every_link_met_below_a_search_directory_decides_the_identity(self):
+        common = {"inc/common.h": "#define COMMON_VALUE 1\n"}
+        d1 = {"d1/h.h": "#define FEATURE_TOKEN 0\n"}
+        d2 = {"d2/h.h": "#define FEATURE_TOKEN 1\n"}
+        both = {**d1, **d2}
+        base = {"opened": common, "installed": both, "search": ("d1", "d2", "inc")}
+        ancestor = {"opened": {"a/x.h": "#define X 1\n"},
+                    "installed": {"a/inc/y.h": "#define Y 1\n"}, "search": ("a",)}
+        outside = {"lib/real.h": "#define REAL 1\n", "lib/real2.h": "#define REAL 1\n"}
+        link = "sdk inventory: link "
+        # (name, baseline side, current side, double-tree error, same-source error)
+        cases = [
+            # Both targets are search directories entered before the link is met: the
+            # file entries are identical and only the link target says which one the
+            # compiler reaches through branch/h.h.
+            ("link retargeted between visited directories",
+             {**base, "links": {"inc/branch": "d1"}}, {**base, "links": {"inc/branch": "d2"}},
+             link + "inc/branch", "sdk"),
+            # The reviewed escape: an ancestor link retargeted to a different ancestor.
+            ("ancestor link retargeted to another ancestor",
+             {**ancestor, "links": {"a/inc/branch": "a"}},
+             {**ancestor, "links": {"a/inc/branch": "."}}, link + "a/inc/branch", "sdk"),
+            ("same links on both sides", {**base, "links": {"inc/branch": "d1"}},
+             {**base, "links": {"inc/branch": "d1"}}, None, None),
+            ("relative and equivalent absolute link", {**base, "links": {"inc/branch": "d1"}},
+             {**base, "links": {"inc/branch": "d1"}, "relative_links": True}, None, None),
+            ("middle of a link chain retargeted",
+             {**base, "links": {"mid/b": "d1", "inc/a": "mid/b"}},
+             {**base, "links": {"mid/b": "d2", "inc/a": "mid/b"}}, link + "inc/a", "sdk"),
+            ("file link retargeted to another provider file with the same bytes",
+             {"opened": common, "installed": outside, "links": {"inc/alias.h": "lib/real.h"}},
+             {"opened": common, "installed": outside, "links": {"inc/alias.h": "lib/real2.h"}},
+             "sdk inventory: inc/alias.h", "sdk"),
+            ("file link to a provider file outside the search space, unchanged",
+             {"opened": common, "installed": outside, "links": {"inc/alias.h": "lib/real.h"}},
+             {"opened": common, "installed": outside, "links": {"inc/alias.h": "lib/real.h"}},
+             None, None),
+            ("link to a directory of another provider",
+             {**base, "links": {"inc/branch": "d1"}},
+             {**base, "installed": {**d1, **d2, "d3/h.h": d1["d1/h.h"]},
+              "providers": {"d3": "linux-libc-dev"}, "links": {"inc/branch": "d3"}},
+             "sdk inventory: inc/branch/h.h", "sdk"),
+            # Files that belong to no provider are not part of the identity (opening one is
+            # refused by the source provenance validation), and neither are the links that
+            # lead to them: a runner's clang or ncurses links come and go with the image.
+            ("link to a foreign file, bytes differ",
+             {**base, "foreign": {"out/x.h": "one\n"}, "links": {"inc/f.h": "out/x.h"}},
+             {**base, "foreign": {"out/x.h": "two\n"}, "links": {"inc/f.h": "out/x.h"}},
+             None, None),
+            ("link to a foreign file, target differs",
+             {**base, "foreign": {"out/x.h": "one\n", "out/y.h": "one\n"},
+              "links": {"inc/f.h": "out/x.h"}},
+             {**base, "foreign": {"out/x.h": "one\n", "out/y.h": "one\n"},
+              "links": {"inc/f.h": "out/y.h"}}, None, None),
+            ("package-external links added on one side",
+             {**base, "foreign": {"llvm/c.h": "one\n"}},
+             {**base, "foreign": {"llvm/c.h": "one\n"},
+              "links": {"inc/clang": "llvm", "inc/curses.h": "llvm/c.h"}}, None, None),
+            ("package-external link retargeted between foreign directories",
+             {**base, "foreign": {"llvm16/c.h": "one\n", "llvm17/c.h": "one\n"},
+              "links": {"inc/clang": "llvm16"}},
+             {**base, "foreign": {"llvm16/c.h": "one\n", "llvm17/c.h": "one\n"},
+              "links": {"inc/clang": "llvm17"}}, None, None),
+            ("dangling link, other target",
+             {**base, "links": {"inc/d.h": "out/gone.h"}},
+             {**base, "links": {"inc/d.h": "out/other.h"}}, None, None),
+            # Where the filter must not hide anything: one side reaches provider files.
+            ("provider directory link retargeted to a foreign directory",
+             {**base, "foreign": {"out/x.h": "one\n"}, "links": {"inc/branch": "d1"}},
+             {**base, "foreign": {"out/x.h": "one\n"}, "links": {"inc/branch": "out"}},
+             link + "inc/branch", "sdk"),
+            ("dangling link that now leads to a provider directory",
+             {**base, "links": {"inc/d": "out/gone"}}, {**base, "links": {"inc/d": "d1"}},
+             link + "inc/d", "sdk"),
+        ]
+        # A header reached by an escaping relative include (#include "../lib/esc.h" from a
+        # header in inc/) is opened outside every search directory: it is compared as opened.
+        escaped = {"opened": {**common, "lib/esc.h": "#define ESC 1\n"}}
+        cases += [
+            ("escaping include, same bytes", escaped, escaped, None, None),
+            ("escaping include, other bytes", escaped,
+             {"opened": {**common, "lib/esc.h": "#define ESC 2\n"}},
+             "sdk inventory: lib/esc.h", "sdk"),
+        ]
+        for name, previous, now, tree_error, exact_error in cases:
+            for source_tree, error in ((True, tree_error), (False, exact_error)):
+                with self.subTest(case=name, source_tree=source_tree), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    _before, current, project, output, baseline = self.sdk_pair(
+                        Path(temporary).resolve(), previous, now)
+                    if error is None:
+                        self.assertEqual(compare(current, project, output, baseline,
+                                                 source_tree=source_tree),
+                                         {"new": [], "removed": []})
+                    else:
+                        with self.assertRaisesRegex(ValueError,
+                                                    "Semantic identity differs: " + error):
+                            compare(current, project, output, baseline, source_tree=source_tree)
+
+    def test_a_missing_or_incomplete_inventory_is_never_comparable(self):
+        common = {"opened": {"inc/common.h": "#define COMMON_VALUE 1\n"}}
+        broken = {
+            "missing": lambda scope: scope.pop("sdkInventory"),
+            "empty": lambda scope: scope["sdkInventory"].update(files={}),
+            "format": lambda scope: scope["sdkInventory"].update(format="invalid"),
+            "opened header absent": lambda scope: scope["sdkInventory"]["files"].clear()
+            or scope["sdkInventory"]["files"].update(
+                {"inc/other.h": next(iter(scope["sdkHeaders"]))["sha256"] and {
+                    "header": "usr/inc/other.h", "provider": "libc6-dev", "algorithm": "md5",
+                    "expected": "e" * 32, "sha256": "f" * 64}}),
+            "record shape": lambda scope: next(iter(scope["sdkInventory"]["files"].values())).pop(
+                "expected"),
+        }
+        for sides in ("current", "baseline", "both"):
+            for name, damage in broken.items():
+                for source_tree in (True, False):
+                    with self.subTest(sides=sides, damage=name, source_tree=source_tree), \
+                            tempfile.TemporaryDirectory() as temporary:
+                        before, current, project, output, baseline = self.sdk_pair(
+                            Path(temporary).resolve(), common, common)
+                        for side, summary in (("baseline", before), ("current", current)):
+                            if sides in (side, "both"):
+                                damage(summary["scope"])
+                                # Recompute the receipt, so only the inventory is wrong.
+                                sdk = (c_sdk.semantic_inputs(summary["scope"])
+                                       if "sdkInventory" in summary["scope"] else None)
+                                if sdk is not None:
+                                    summary["semanticIdentity"]["sdk"] = hashlib.sha256(
+                                        json.dumps(sdk, sort_keys=True).encode()).hexdigest()
+                        self.write(baseline, before)
+                        with self.assertRaisesRegex(
+                                ValueError, "SDK search inventory missing, empty or incomplete"):
+                            compare(current, project, output, baseline, source_tree=source_tree)
+
+    def test_a_tampered_receipt_is_refused_in_both_modes(self):
+        common = {"opened": {"inc/common.h": "#define COMMON_VALUE 1\n"},
+                  "installed": {"inc/extra.h": "#define EXTRA_VALUE 1\n"}}
+        for source_tree in (True, False):
+            with self.subTest(source_tree=source_tree), \
+                    tempfile.TemporaryDirectory() as temporary:
+                _before, current, project, output, baseline = self.sdk_pair(
+                    Path(temporary).resolve(), common, common)
+                current["scope"]["sdkInventory"]["files"]["inc/extra.h"]["sha256"] = "0" * 64
+                with self.assertRaisesRegex(ValueError, "Semantic identity differs: sdk receipt"):
+                    compare(current, project, output, baseline, source_tree=source_tree)
+
+    def test_include_search_sequence_and_variables_are_compiler_identity(self):
+        shadow = {"inc/limits.h": "#define FEATURE 0\n", "alt/limits.h": "#define FEATURE 1\n"}
+        both = {"opened": {"inc/limits.h": shadow["inc/limits.h"]},
+                "installed": {"alt/limits.h": shadow["alt/limits.h"]}, "search": ("inc", "alt")}
+        swapped = {"opened": {"alt/limits.h": shadow["alt/limits.h"]},
+                   "installed": {"inc/limits.h": shadow["inc/limits.h"]}, "search": ("alt", "inc")}
+        dropped = {**both, "search": ("inc",)}
+        variable = {**both, "cpath": "/extra"}
+        # A dropped directory also shrinks the inventory; the double tree reports that first.
+        cases = [("order swapped, so another file is found first", both, swapped, "compiler"),
+                 ("search directory dropped", both, dropped, "(?:compiler|sdk inventory)"),
+                 ("CPATH set", both, variable, "compiler")]
+        for name, previous, now, error in cases:
+            for source_tree in (True, False):
+                with self.subTest(case=name, source_tree=source_tree), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    _before, current, project, output, baseline = self.sdk_pair(
+                        Path(temporary).resolve(), previous, now)
+                    with self.assertRaisesRegex(ValueError, "Semantic identity differs: " + error):
+                        compare(current, project, output, baseline, source_tree=source_tree)
+
+    def test_sdk_environment_is_recorded_but_not_compared(self):
+        common = {"inc/common.h": "#define COMMON_VALUE 1\n"}
+        with tempfile.TemporaryDirectory() as temporary:
+            before, current, project, output, baseline = self.sdk_pair(
+                Path(temporary).resolve(), {"opened": common},
+                {"opened": common, "version": "2", "installed": {"lib/libc.a": "archive\n"}})
+            self.assertEqual(before["scope"]["sdkEnvironment"]["files"], 1)
+            self.assertEqual(current["scope"]["sdkEnvironment"]["files"], 2)
+            self.assertNotEqual(before["scope"]["sdkEnvironment"]["sha256"],
+                                current["scope"]["sdkEnvironment"]["sha256"])
+            self.assertEqual(before["semanticIdentity"]["sdk"], current["semanticIdentity"]["sdk"])
+            self.assertEqual(compare(current, project, output, baseline),
+                             {"new": [], "removed": []})
+
+    def test_compiler_identity_still_refuses_with_matching_sdk_headers(self):
+        common = {"opened": {"inc/common.h": "#define COMMON_VALUE 1\n"}}
+        changes = {"release": lambda x: x.update(release="13.3.1"),
+                   "machine": lambda x: x.update(machine="x86_64-pc-linux-gnu"),
+                   "predefines": lambda x: x["predefines"].append("#define __SSE2__ 1"),
+                   "builtins": lambda x: x["builtins"].append("-D__SSE2__=1")}
+        for field, change in changes.items():
+            for source_tree in (True, False):
+                with self.subTest(field=field, source_tree=source_tree), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    _before, current, project, output, baseline = self.sdk_pair(
+                        Path(temporary).resolve(), common, common)
+                    change(current["semanticIdentity"]["compiler"])
+                    with self.assertRaisesRegex(ValueError, "Semantic identity differs: compiler"):
+                        compare(current, project, output, baseline, source_tree=source_tree)
+
+    def test_semantic_identity_version_2_refuses_on_either_side_with_a_clear_reason(self):
+        for previous in (False, True):
+            for source_tree in (True, False):
+                with self.subTest(previous=previous, source_tree=source_tree), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    current, project, output, baseline = self.fixture(Path(temporary))
+                    old = deepcopy(current)
+                    old["semanticIdentity"]["version"] = 2
+                    if previous:
+                        self.write(baseline, old)
+                    else:
+                        current = old
+                    with self.assertRaisesRegex(
+                            ValueError, "version 2 sealed the complete SDK provider environment"):
+                        compare(current, project, output, baseline, source_tree=source_tree)
 
     def test_missing_old_and_incomplete_identity_refuse_on_either_side(self):
         changes = [lambda x: x.pop("semanticIdentity"),

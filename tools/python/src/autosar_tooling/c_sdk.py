@@ -5,9 +5,10 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import os
 import re
 import shlex
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 
 from ecu_tools.build import digest
 
@@ -128,6 +129,16 @@ def msys_headers(compiler: Path) -> dict:
     return records
 
 
+def header_key(record: dict) -> str:
+    """Identify a consumed header by relative path, provider and bytes, not package revision."""
+    return hashlib.sha256(
+        json.dumps(
+            {k: v for k, v in record.items() if k not in {"path", "reason", "key", "version"}},
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+
+
 def header_identity(
     path: Path, root: Path, target: str, machine: str, packages: dict
 ) -> dict:
@@ -165,12 +176,7 @@ def header_identity(
                 category="sdk",
                 reason="installed provider original matches package manifest",
             )
-    record["key"] = hashlib.sha256(
-        json.dumps(
-            {k: v for k, v in record.items() if k not in {"path", "reason"}},
-            sort_keys=True,
-        ).encode()
-    ).hexdigest()
+    record["key"] = header_key(record)
     return record
 
 
@@ -651,13 +657,7 @@ def validate_sources(data: dict) -> None:
             and row["sha256"] != row["expected"]
         ):
             raise ValueError(label + ": original/package digest mismatch")
-        key = hashlib.sha256(
-            json.dumps(
-                {k: v for k, v in row.items() if k not in {"path", "reason", "key"}},
-                sort_keys=True,
-            ).encode()
-        ).hexdigest()
-        if row.get("key") != key:
+        if row.get("key") != header_key(row):
             raise ValueError(label + ": identity key mismatch")
         headers[row["path"]] = row
     units = scope["translationUnits"]
@@ -736,8 +736,67 @@ def validate_sources(data: dict) -> None:
         raise ValueError("SDK wait " + port + ": missing active wait call source")
 
 
-def environment_identity(packages: dict) -> dict:
-    """Seal the entire supported provider inventory, independently of source use."""
+SEARCH_ENVIRONMENT = ("CPATH", "C_INCLUDE_PATH")
+
+
+def provider_root(compiler: str, windows: bool) -> PurePath:
+    """The directory that provider-relative names hang from, in the target's path syntax."""
+    return PureWindowsPath(compiler).parent.parent.parent if windows else PurePosixPath("/")
+
+
+def relative_name(path: str | Path, root: PurePath) -> str:
+    """Name a path relative to the provider root, or keep it absolute outside the root.
+
+    The target's path syntax decides containment, not the syntax of the running host.
+    """
+    pure = type(root)(plain_path(path))
+    return pure.relative_to(root).as_posix() if pure.is_relative_to(root) else pure.as_posix()
+
+
+def plain_path(path: str | Path) -> str:
+    """A Windows extended-length prefix names the same file; names do not carry it."""
+    text = os.fspath(path)
+    if text.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + text[8:]
+    return text.removeprefix("\\\\?\\")
+
+
+def include_search(header_log: str, directory: Path, root: PurePath, environ: dict) -> dict:
+    """The compiler's effective include search order, with the variables that feed it.
+
+    Compilers print only directories that exist; a missing one is reported on an
+    "ignoring nonexistent directory" line and so is absent here, which makes a
+    directory that appears on one side only change the sequence. A rooted entry
+    without a drive, such as MinGW's "/mingw64/include", resolves against the drive
+    of the compiler's working directory.
+    """
+    sections = {'#include "..." search starts here:': [], "#include <...> search starts here:": []}
+    collecting = None
+    for line in header_log.splitlines():
+        text = line.strip()
+        if text in sections:
+            collecting = sections[text]
+        elif text == "End of search list.":
+            collecting = None
+        elif collecting is not None:
+            collecting.append(relative_name((directory / text).resolve(strict=True), root))
+    quote, system = sections.values()
+    if not system:
+        raise ValueError("Compiler reported no system include paths")
+    return {
+        "quote": quote,
+        "system": system,
+        "environment": {name: environ.get(name) for name in SEARCH_ENVIRONMENT},
+    }
+
+
+def search_directories(search: dict, root: PurePath) -> list[Path]:
+    """The recorded search directories, rebuilt in the target's path syntax."""
+    return [Path((root / name).as_posix()) for name in (*search["quote"], *search["system"])]
+
+
+def installed_records(packages: dict) -> list[tuple[str, dict]]:
+    """Check every supported provider file against its package manifest, with actual digests."""
     if not packages:
         raise ValueError("SDK environment provider inventory missing")
     records = []
@@ -751,19 +810,179 @@ def environment_identity(packages: dict) -> dict:
             elif not path.is_file() or digest(path) != digest(target):
                 # MSYS2 can materialize a file link as a copy on Windows.
                 raise ValueError(f"SDK environment link content differs: {name}")
-            records.append({**package, "sha256": digest(path) if path.is_file() else None})
+            records.append((name, {**package, "sha256": digest(path) if path.is_file() else None}))
             continue
         data = Path(name).read_bytes()
         if hashlib.new(package["algorithm"], data).hexdigest() != package["expected"]:
             raise ValueError(f"SDK environment differs from provider original: {name}")
-        records.append({**package, "sha256": hashlib.sha256(data).hexdigest()})
-    records.sort(key=lambda row: (row["provider"], row["header"]))
-    return {"format": "sdk-provider-environment-v1", "files": len(records),
-            "sha256": hashlib.sha256(json.dumps(records, sort_keys=True).encode()).hexdigest()}
+        records.append((name, {**package, "sha256": hashlib.sha256(data).hexdigest()}))
+    return records
+
+
+def environment_digest(records: list[tuple[str, dict]]) -> dict:
+    """Record the entire supported provider inventory for traceability.
+
+    The record does not decide whether two analyses are comparable: package revisions
+    and files outside the include search space (libraries, documentation) cannot
+    reach the preprocessor, and image rollouts make them differ between jobs.
+    """
+    rows = sorted((row for _, row in records), key=lambda row: (row["provider"], row["header"]))
+    return {"format": "sdk-provider-environment-v1", "files": len(rows),
+            "sha256": hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()}
+
+
+def environment_identity(packages: dict) -> dict:
+    return environment_digest(installed_records(packages))
+
+
+def link_target(path: str, root: PurePath) -> str:
+    """A link's resolved target, relative to the provider root or explicitly outside it."""
+    pure = type(root)(plain_path(path))
+    if pure.is_relative_to(root):
+        return pure.relative_to(root).as_posix()
+    return "outside:" + pure.as_posix()
+
+
+def entry_kind(entry: os.DirEntry, link: bool) -> str | None:
+    """"dir" or "file" for what an entry leads to, None when a link leads nowhere usable.
+
+    Windows reports a symlink whose target syntax is invalid (a relative target written
+    with forward slashes, say) as an error instead of a missing file; such a link is as
+    dangling as one whose target is absent.
+    """
+    try:
+        return "dir" if entry.is_dir() else "file" if entry.is_file() else None
+    except OSError:
+        if not link:
+            raise
+        return None
+
+
+def walk_search_directory(directory: Path, visited: set):
+    """What the compiler meets below a search directory, as events.
+
+    ("file", path) is a regular file, also one reached through a link. ("link", path, real,
+    kind) is every symlink or junction met on the way, whether or not it is followed;
+    kind is "dir", "file" or "dangling". ("alias", path, real) is a directory that was
+    entered before and is reached again under another path, through a link higher up.
+    Each real directory is entered once, under the first path that reaches it, which also
+    ends cycles; every other path that reaches it is reported as a link or alias, so no
+    arrival path goes unrecorded.
+    """
+    visited.add(os.path.normcase(os.path.realpath(directory)))
+
+    def walk(path):
+        with os.scandir(path) as entries:
+            children = sorted(entries, key=lambda entry: entry.name)
+        for entry in children:
+            real = os.path.realpath(entry.path)
+            link = entry.is_symlink() or entry.is_junction()
+            kind = entry_kind(entry, link)
+            if link and kind is None:
+                # Nothing to resolve to: the link's own target, as written, names it.
+                real = os.path.normpath(
+                    os.path.join(os.path.dirname(entry.path), os.readlink(entry.path)))
+            if kind == "dir":
+                seen = os.path.normcase(real) in visited
+                if link:
+                    yield "link", entry.path, real, "dir"
+                elif seen and os.path.normcase(os.path.abspath(entry.path)) != (
+                        os.path.normcase(real)):
+                    yield "alias", entry.path, real
+                if not seen:
+                    visited.add(os.path.normcase(real))
+                    yield from walk(entry.path)
+            else:
+                if link:
+                    yield "link", entry.path, real, kind or "dangling"
+                if kind == "file":
+                    yield "file", entry.path
+
+    yield from walk(directory)
+
+
+def provider_links(links: dict, files: dict, root: PurePath) -> dict:
+    """The links whose target is a provider file or has provider files somewhere below it."""
+    fold = str.casefold if isinstance(root, PureWindowsPath) else str
+    related = set()
+    for row in files.values():
+        header = PurePosixPath(row["header"])
+        related.update(fold(name.as_posix()) for name in (header, *header.parents))
+    return {name: row for name, row in links.items() if fold(row["target"]) in related}
+
+
+def search_inventory(records: list[tuple[str, dict]], directories: list[Path],
+                     root: PurePath, opened: list[dict] = ()) -> dict:
+    """Provider files and links the compiler meets through the search directories.
+
+    `files` maps each path the compiler walks to the provider file behind it, opened or
+    not; `opened` SDK headers are added under their own resolved path, so a header reached
+    by an escaping relative include is covered too. `links` records every symlink,
+    junction and re-reached directory with its resolved target. Equal link targets mean the
+    content below them is the content at the target, which `files` lists under its first
+    arrival path (or which lies outside the search space, where only provider files count).
+    A header present on one side only, a link that leads elsewhere, or other bytes can
+    decide which definition an include resolves to even with identical sources.
+    Files that belong to no supported provider are not part of the identity: opening one
+    is refused by the source provenance validation instead. For the same reason a link
+    counts only when its target is a provider file or a directory holding provider files
+    below it; links to a runner's other packages (clang, ncurses) come and go with image
+    revisions and must not make two analyses incomparable.
+    """
+    provider = {}
+    for name, row in sorted(records, key=lambda item: item[1]["algorithm"] != "symlink"):
+        provider[os.path.normcase(os.path.realpath(name))] = row
+    fields = ("header", "provider", "algorithm", "expected", "sha256")
+    files, links, visited = {}, {}, set()
+    for directory in directories:
+        if os.path.normcase(os.path.realpath(directory)) in visited:
+            continue
+        for kind, path, *rest in walk_search_directory(directory, visited):
+            if kind == "file":
+                row = provider.get(os.path.normcase(os.path.realpath(path)))
+                if row is not None:
+                    files[relative_name(path, root)] = {key: row[key] for key in fields}
+            else:
+                links[relative_name(path, root)] = {
+                    "kind": rest[1] if kind == "link" else "alias",
+                    "target": link_target(rest[0], root)}
+    for row in opened:
+        files[relative_name(row["path"], root)] = {key: row[key] for key in fields}
+    return {"format": "sdk-search-inventory-v1", "files": dict(sorted(files.items())),
+            "links": dict(sorted(provider_links(links, files, root).items()))}
+
+
+def validate_inventory(scope: dict) -> None:
+    """The recorded inventory must be present, well formed and cover the opened SDK headers."""
+    inventory = scope.get("sdkInventory")
+    reason = "SDK search inventory missing, empty or incomplete"
+    if (not isinstance(inventory, dict) or inventory.get("format") != "sdk-search-inventory-v1"
+            or set(inventory) != {"format", "files", "links"}
+            or not isinstance(inventory["files"], dict) or not inventory["files"]
+            or not isinstance(inventory["links"], dict)):
+        raise ValueError(reason)
+    keys = {"header", "provider", "algorithm", "expected", "sha256"}
+    for name, row in inventory["files"].items():
+        if (not isinstance(name, str) or not isinstance(row, dict) or set(row) != keys
+                or any(not isinstance(row[key], str) or not row[key]
+                       for key in ("header", "provider", "algorithm", "expected"))
+                or not (row["sha256"] is None and row["algorithm"] == "symlink"
+                        or isinstance(row["sha256"], str))):
+            raise ValueError(reason)
+    for name, row in inventory["links"].items():
+        if (not isinstance(name, str) or not isinstance(row, dict)
+                or set(row) != {"kind", "target"}
+                or row["kind"] not in {"dir", "file", "dangling", "alias"}
+                or not isinstance(row["target"], str) or not row["target"]):
+            raise ValueError(reason)
+    covered = {(row["header"], row["sha256"]) for row in inventory["files"].values()}
+    if any((row["header"], row["sha256"]) not in covered
+           for row in scope.get("sdkHeaders", []) if row.get("category") == "sdk"):
+        raise ValueError(reason)
 
 
 def semantic(scope: dict) -> str:
-    """Paths are provenance; provider/header bytes and active definitions are semantic."""
+    """Paths and package revisions are provenance; searchable and opened bytes are semantic."""
     headers = scope.get("sdkHeaders", [])
     packages = (
         msys_headers(Path(scope["diagnosticCompiler"]["path"]))
@@ -784,21 +1003,29 @@ def semantic(scope: dict) -> str:
             expected if "provider" in header else None
         ):
             raise ValueError("SDK source/provider identity changed during analysis")
-    scope["sdkEnvironment"] = environment_identity(packages)
+    records = installed_records(packages)
+    scope["sdkEnvironment"] = environment_digest(records)
+    search = scope["compilerSemanticInputs"]["includeSearch"]
+    windows = scope["target"].startswith("windows")
+    root = provider_root(scope["diagnosticCompiler"]["path"] if windows else "", windows)
+    directories = search_directories(search, root)
+    opened = [row for row in headers if row.get("category") == "sdk"]
+    scope["sdkInventory"] = search_inventory(records, directories, root, opened)
     identity = semantic_inputs(scope)
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
 
 def semantic_inputs(scope: dict) -> dict:
-    """The recorded SDK inputs, without requiring the target host's filesystem."""
+    """The SDK inputs the compiler can find and opened, without the target host's filesystem."""
     headers = scope.get("sdkHeaders", [])
     keys = {row["path"]: row["key"] for row in headers}
     return {
-        "environment": scope["sdkEnvironment"],
+        "inventory": scope["sdkInventory"]["files"],
+        "links": scope["sdkInventory"]["links"],
         "lineDirectives": scope.get("sdkLineDirectives", False),
         "headers": sorted(
             (
-                {k: v for k, v in row.items() if k not in {"path", "reason"}}
+                {k: v for k, v in row.items() if k not in {"path", "reason", "version"}}
                 for row in headers
             ),
             key=lambda row: row["key"],

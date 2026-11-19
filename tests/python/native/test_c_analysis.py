@@ -21,6 +21,7 @@ from autosar_tooling import (
     c_gate,
     c_preprocessor,
     c_rename,
+    c_sdk,
 )
 from ecu_tools.owner import OwnershipError
 
@@ -592,6 +593,82 @@ int main(int argc, char **argv)
                              {"new": [], "removed": []})
             with self.assertRaisesRegex(ValueError, "Semantic identity differs: defines"):
                 compare(*current, previous[2])
+
+    def test_real_producer_records_the_search_space_and_refuses_a_changed_search_order(self):
+        from autosar_tooling.c_comparison import compare
+
+        with tempfile.TemporaryDirectory() as temporary:
+            tmp = Path(temporary).resolve()
+            extra = tmp / "extra-include"
+            extra.mkdir()
+            analyses = []
+            for name, variables in (("baseline", {}), ("current", {"CPATH": str(extra)})):
+                directory = tmp / name
+                directory.mkdir()
+                source = "#include <limits.h>\nint main(void) { return CHAR_BIT; }\n"
+                project = self.project(directory, source,
+                                       extra_files={"meta/integration.json": '{"plan":{}}'})
+                target = json.loads((project / "target.json").read_text())["target"]
+                output = directory / "analysis"
+                with patch.dict(os.environ, variables):
+                    self.assertEqual(c_check.check(project, target, output), 0)
+                summary = json.loads((output / "summary.json").read_text())
+                self.assertIsNone(summary["error"])
+                analyses.append((summary, project, output))
+            previous, current = analyses
+            scope = previous[0]["scope"]
+            search = scope["compilerSemanticInputs"]["includeSearch"]
+            root = c_sdk.provider_root(scope["diagnosticCompiler"]["path"],
+                                       scope["target"].startswith("windows"))
+            # The compiler's own order, named relative to the provider root where possible.
+            self.assertEqual(search["system"], [
+                c_sdk.relative_name(name, root) for name in scope["systemIncludePaths"]])
+            self.assertEqual(search["environment"], {"CPATH": None, "C_INCLUDE_PATH": None})
+            inventory = scope["sdkInventory"]["files"]
+            self.assertIn(scope["sdkHeaders"][0]["header"], {
+                row["header"] for row in inventory.values()})
+            self.assertTrue(all("version" not in row for row in inventory.values()))
+            self.assertEqual(current[0]["scope"]["sdkInventory"],
+                             previous[0]["scope"]["sdkInventory"])
+            changed = current[0]["scope"]["compilerSemanticInputs"]["includeSearch"]
+            self.assertEqual(changed["system"][0], c_sdk.relative_name(extra, root))
+            self.assertEqual(changed["environment"]["CPATH"], str(extra))
+            for source_tree in (True, False):
+                with self.subTest(source_tree=source_tree), \
+                        self.assertRaisesRegex(ValueError, "Semantic identity differs: compiler"):
+                    compare(*current, previous[2], source_tree=source_tree)
+            # Reusing the first analysis while CPATH now points elsewhere must not pass.
+            c_check.recheck_include_search(scope, output)
+            with patch.dict(os.environ, {"CPATH": str(extra)}), \
+                    self.assertRaisesRegex(ValueError, "include search order or variables"):
+                c_check.recheck_include_search(scope, output)
+
+    @unittest.skipUnless(platform.system() == "Linux", "uses the Debian provider layout")
+    def test_real_provider_header_reached_only_through_a_link_is_in_the_inventory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            tmp = Path(temporary).resolve()
+            include = tmp / "include"
+            include.mkdir()
+            (include / "branch").symlink_to("/usr/include/x86_64-linux-gnu/sys",
+                                            target_is_directory=True)
+            project = self.project(
+                tmp, "#include <branch/types.h>\nint main(void) { return 0; }\n",
+                extra_files={"meta/integration.json": '{"plan":{}}'})
+            target = json.loads((project / "target.json").read_text())["target"]
+            output = tmp / "analysis"
+            with patch.dict(os.environ, {"CPATH": str(include)}):
+                c_check.check(project, target, output)
+            scope = json.loads((output / "summary.json").read_text())["scope"]
+            files = scope["sdkInventory"]["files"]
+            walked = (include / "branch/types.h").as_posix().lstrip("/")
+            self.assertEqual(files[walked]["header"], "usr/include/x86_64-linux-gnu/sys/types.h")
+            self.assertEqual(files[walked]["provider"], "libc6-dev")
+            # The same provider file under its own path is in the inventory as well.
+            self.assertIn("usr/include/x86_64-linux-gnu/sys/types.h", files)
+            # The link itself is recorded with its resolved target.
+            link = (include / "branch").as_posix().lstrip("/")
+            self.assertEqual(scope["sdkInventory"]["links"][link],
+                             {"kind": "dir", "target": "usr/include/x86_64-linux-gnu/sys"})
 
     def test_semantic_inputs_from_real_producer_refuse_changed_macro_and_allow_relocation(self):
         from autosar_tooling.c_comparison import compare

@@ -9,10 +9,11 @@ import runpy
 import tempfile
 import unittest
 from copy import deepcopy
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from unittest.mock import patch
 
 from autosar_tooling import c_sdk
+from link_fixtures import make_link
 
 TARGET = "windows-x64-controlled-v1"
 
@@ -72,6 +73,22 @@ class SdkSourceTests(unittest.TestCase):
             header, root, TARGET, "x86_64-w64-mingw32", packages
         )
         return root, header, packages, record
+
+    def search_inputs(self, header):
+        """The compiler record that makes the header's directory the include search space."""
+        # An absolute name is valid on every host; the provider-relative form is covered
+        # by the include_search tests.
+        directory = header.parent.as_posix()
+        return {
+            "diagnosticCompiler": {"path": "/selected/bin/gcc.exe"},
+            "compilerSemanticInputs": {
+                "includeSearch": {
+                    "quote": [],
+                    "system": [directory],
+                    "environment": {"CPATH": None, "C_INCLUDE_PATH": None},
+                }
+            },
+        }
 
     def diagnostic(self):
         return {
@@ -252,16 +269,7 @@ class SdkSourceTests(unittest.TestCase):
                             algorithm="md5",
                             expected="0" * 32,
                         )
-                        row["key"] = hashlib.sha256(
-                            json.dumps(
-                                {
-                                    k: v
-                                    for k, v in row.items()
-                                    if k not in {"path", "reason", "key"}
-                                },
-                                sort_keys=True,
-                            ).encode()
-                        ).hexdigest()
+                        row["key"] = c_sdk.header_key(row)
                     receipt["scope"]["target"] = target
                     path = directory / target / sample / "summary.json"
                     path.parent.mkdir(parents=True)
@@ -857,7 +865,7 @@ class SdkSourceTests(unittest.TestCase):
             status.write_text(status.read_text().replace("amd64", "arm64"))
             self.assertEqual(c_sdk.debian_headers(status, info), {})
 
-    def test_environment_includes_unused_provider_files_and_checks_original_bytes(self):
+    def test_environment_records_every_file_and_the_search_space_decides_identity(self):
         with tempfile.TemporaryDirectory() as temporary:
             _root, header, packages, record = self.fixture(Path(temporary).resolve())
             unused = header.with_name("unused.h")
@@ -865,13 +873,30 @@ class SdkSourceTests(unittest.TestCase):
             package = {**packages[str(header)], "header": "mingw64/include/unused.h",
                        "expected": hashlib.sha256(unused.read_bytes()).hexdigest()}
             packages[str(unused)] = package
+            library = header.parents[1] / "lib/libwinpthread.a"
+            library.parent.mkdir()
+            library.write_bytes(b"archive 1\n")
+            packages[str(library)] = {**package, "header": "mingw64/lib/libwinpthread.a",
+                                      "expected": hashlib.sha256(library.read_bytes()).hexdigest()}
             before = c_sdk.environment_identity(packages)
-            self.assertEqual(before["files"], 2)
-            scope = {"target": TARGET, "diagnosticCompiler": {"path": "/selected/bin/gcc.exe"},
+            self.assertEqual(before["files"], 3)
+            scope = {"target": TARGET, **self.search_inputs(header),
                      "sdkHeaders": [record], "sdkTranslationUnits": {"main.c": [header.as_posix()]},
                      "sdkMacroInputs": {}}
             with patch.object(c_sdk, "msys_headers", return_value=packages):
                 semantic_before = c_sdk.semantic(scope)
+            files = scope["sdkInventory"]["files"]
+            self.assertEqual([name.rsplit("/", 1)[1] for name in files],
+                             ["unused.h", "winbase.h"])
+            self.assertEqual([row["header"] for row in files.values()],
+                             ["mingw64/include/unused.h", "mingw64/include/winbase.h"])
+            library.write_bytes(b"archive 2\n")
+            packages[str(library)]["expected"] = hashlib.sha256(library.read_bytes()).hexdigest()
+            # A library outside the include search space is recorded, not part of the identity.
+            with patch.object(c_sdk, "msys_headers", return_value=packages):
+                self.assertEqual(semantic_before, c_sdk.semantic(scope))
+            self.assertNotEqual(c_sdk.environment_identity(packages)["sha256"], before["sha256"])
+            # An unopened header the compiler can find decides the identity.
             unused.write_bytes(b"#define UNUSED_VALUE 2\n")
             with self.assertRaisesRegex(ValueError,
                                         "SDK environment differs from provider original"):
@@ -894,6 +919,317 @@ class SdkSourceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "SDK environment provider inventory missing"):
                 c_sdk.environment_identity({})
 
+    def test_identity_ignores_package_revision_but_not_header_bytes_path_or_provider(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, header, packages, record = self.fixture(Path(temporary).resolve())
+
+            def identity(**changes):
+                package = {**packages[str(header)], **changes}
+                row = c_sdk.header_identity(
+                    header, root, TARGET, "x86_64-w64-mingw32", {str(header): package}
+                )
+                scope = {"sdkHeaders": [row], "sdkTranslationUnits": {"main.c": [row["path"]]},
+                         "sdkMacroInputs": {}, "sdkInventory": {"files": {}, "links": {}}}
+                return row, c_sdk.semantic_inputs(scope)
+
+            _, base = identity()
+            self.assertNotIn("environment", base)
+            self.assertNotIn("version", base["headers"][0])
+            revised, revised_inputs = identity(version="15.0.1-1")
+            self.assertEqual(revised["version"], "15.0.1-1")
+            self.assertEqual(revised["key"], record["key"])
+            self.assertEqual(revised_inputs, base)
+            self.assertEqual(c_sdk.header_key(record), record["key"])
+            for changes in ({"provider": "mingw-w64-x86_64-crt"},
+                            {"header": "mingw64/include/other.h"}):
+                with self.subTest(changes=changes):
+                    row, inputs = identity(**changes)
+                    self.assertNotEqual(row["key"], record["key"])
+                    self.assertNotEqual(inputs, base)
+            # Same provider path and package digest, different installed bytes.
+            header.write_bytes(b"#define INFINITE 0x7fffffff\n")
+            changed = c_sdk.header_identity(
+                header, root, TARGET, "x86_64-w64-mingw32", packages
+            )
+            self.assertNotEqual(changed["sha256"], record["sha256"])
+            self.assertNotEqual(changed["key"], record["key"])
+
+    def test_include_search_keeps_the_effective_order_relative_to_the_provider_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            for name in ("user", "extra", "lib/include", "include"):
+                (root / name).mkdir(parents=True)
+            log = (
+                "ignoring nonexistent directory \"absent\"\n"
+                '#include "..." search starts here:\n user\n'
+                "#include <...> search starts here:\n"
+                f" {(root / 'extra').as_posix()}\n lib/include\n include\n"
+                "End of search list.\n"
+            )
+            search = c_sdk.include_search(log, root, root, {"CPATH": "/extra", "OTHER": "x"})
+            self.assertEqual(search, {
+                "quote": ["user"],
+                "system": ["extra", "lib/include", "include"],
+                "environment": {"CPATH": "/extra", "C_INCLUDE_PATH": None},
+            })
+            # Directories outside the provider root keep their absolute name.
+            inner = root / "include"
+            outside = c_sdk.include_search(log, root, inner, {})
+            self.assertEqual(outside["system"][2], ".")
+            self.assertEqual(outside["system"][0], (root / "extra").as_posix())
+            with self.assertRaisesRegex(ValueError, "no system include paths"):
+                c_sdk.include_search("#include <...> search starts here:\nEnd of search list.\n",
+                                     root, root, {})
+
+    def test_include_search_reads_the_real_mingw_output_shape(self):
+        # compiler-headers.stderr.log of the Windows c-analysis job (run 44343351546):
+        # CRLF line ends, empty quote section, and unnormalized "bin/../lib" segments.
+        # Only the install prefix is replaced by a directory that exists on this host.
+        real = (
+            '#include "..." search starts here:\r\n'
+            "#include <...> search starts here:\r\n"
+            " PREFIX/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/16.1.0/include\r\n"
+            " PREFIX/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/16.1.0/../../../../include\r\n"
+            " PREFIX/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/16.1.0/include-fixed\r\n"
+            "End of search list.\r\n"
+            "COMPILER_PATH=PREFIX/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/16.1.0/;PREFIX/x\r\n"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            prefix = Path(temporary).resolve() / "msys64"
+            for name in ("bin", "lib/gcc/x86_64-w64-mingw32/16.1.0/include",
+                         "lib/gcc/x86_64-w64-mingw32/16.1.0/include-fixed", "include"):
+                (prefix / "mingw64" / name).mkdir(parents=True)
+            compiler = prefix / "mingw64/bin/gcc.exe"
+            root = c_sdk.provider_root(compiler, True)
+            self.assertEqual(root.as_posix(), prefix.as_posix())
+            search = c_sdk.include_search(
+                real.replace("PREFIX", prefix.as_posix()), prefix.parent, root, {})
+            self.assertEqual(search, {
+                "quote": [],
+                "system": ["mingw64/lib/gcc/x86_64-w64-mingw32/16.1.0/include",
+                           "mingw64/include",
+                           "mingw64/lib/gcc/x86_64-w64-mingw32/16.1.0/include-fixed"],
+                "environment": {"CPATH": None, "C_INCLUDE_PATH": None}})
+            self.assertEqual(c_sdk.provider_root("/usr/bin/gcc", False), PurePosixPath("/"))
+
+    def test_names_follow_the_target_path_syntax_not_the_running_host(self):
+        windows = c_sdk.provider_root("C:\\msys64\\mingw64\\bin\\gcc.exe", True)
+        self.assertEqual(windows, PureWindowsPath("C:/msys64"))
+        for path, expected in (
+                ("C:\\msys64\\mingw64\\include", "mingw64/include"),
+                ("c:/MSYS64/mingw64/lib/gcc/x86_64-w64-mingw32/16.1.0/include",
+                 "mingw64/lib/gcc/x86_64-w64-mingw32/16.1.0/include"),
+                # Outside the root, a drive-qualified directory keeps its own name.
+                ("C:/mingw64/include", "C:/mingw64/include"),
+                ("D:\\a\\work\\include", "D:/a/work/include")):
+            with self.subTest(path=path):
+                self.assertEqual(c_sdk.relative_name(path, windows), expected)
+        # A link that leaves the provider root says so explicitly.
+        self.assertEqual(c_sdk.link_target("C:\\msys64\\mingw64\\include", windows),
+                         "mingw64/include")
+        self.assertEqual(c_sdk.link_target("D:\\work\\include", windows),
+                         "outside:D:/work/include")
+        posix = c_sdk.provider_root("/usr/bin/gcc", False)
+        self.assertEqual(c_sdk.relative_name("/usr/include/stdio.h", posix), "usr/include/stdio.h")
+        self.assertEqual(c_sdk.relative_name("C:/usr/include", posix), "C:/usr/include")
+
+    def test_recorded_search_directories_are_rebuilt_in_the_target_syntax(self):
+        windows = PureWindowsPath("C:/msys64")
+        search = {"quote": [], "system": [
+            "mingw64/lib/gcc/x86_64-w64-mingw32/16.1.0/include", "mingw64/include",
+            "C:/mingw64/include"]}
+        self.assertEqual(
+            [path.as_posix() for path in c_sdk.search_directories(search, windows)],
+            ["C:/msys64/mingw64/lib/gcc/x86_64-w64-mingw32/16.1.0/include",
+             "C:/msys64/mingw64/include", "C:/mingw64/include"])
+        posix = PurePosixPath("/")
+        self.assertEqual(
+            [path.as_posix() for path in c_sdk.search_directories(
+                {"quote": ["u"], "system": ["usr/include", "/opt/x"]}, posix)],
+            ["/u", "/usr/include", "/opt/x"])
+
+    def test_inventory_validation_names_every_missing_or_unusable_record(self):
+        good = {"header": "usr/include/a.h", "provider": "libc6-dev", "algorithm": "md5",
+                "expected": "e" * 32, "sha256": "f" * 64}
+        link = {**good, "algorithm": "symlink", "expected": "b.h", "sha256": None}
+        opened = {"category": "sdk", "header": "usr/include/a.h", "sha256": "f" * 64}
+
+        def scope(files, **changes):
+            inventory = {"format": "sdk-search-inventory-v1", "files": files, "links": {},
+                         **changes}
+            return {"sdkInventory": inventory, "sdkHeaders": [opened]}
+
+        c_sdk.validate_inventory(scope({"usr/include/a.h": good, "usr/include/l.h": link}))
+        # No opened SDK header to anchor on: emptiness alone must refuse.
+        for broken in ({}, {"usr/include/a.h": {**good, "sha256": None}},
+                       {"usr/include/a.h": {**good, "extra": 1}},
+                       {"usr/include/a.h": {**good, "provider": ""}}):
+            with self.subTest(files=broken), \
+                    self.assertRaisesRegex(ValueError, "inventory missing, empty or incomplete"):
+                c_sdk.validate_inventory({"sdkInventory": scope(broken)["sdkInventory"],
+                                          "sdkHeaders": []})
+        for links in ({"inc/l": {"kind": "dir"}}, {"inc/l": {"kind": "loop", "target": "inc"}},
+                      {"inc/l": {"kind": "dir", "target": ""}}, {"inc/l": "inc"}):
+            with self.subTest(links=links), \
+                    self.assertRaisesRegex(ValueError, "inventory missing, empty or incomplete"):
+                c_sdk.validate_inventory(scope({"usr/include/a.h": good}, links=links))
+        c_sdk.validate_inventory(scope({"usr/include/a.h": good}, links={
+            "inc/l": {"kind": "dangling", "target": "outside:D:/x"}}))
+        with self.assertRaisesRegex(ValueError, "inventory missing, empty or incomplete"):
+            c_sdk.validate_inventory({"sdkHeaders": []})
+
+    def test_a_directory_link_is_followed_and_recorded_as_symlink_and_as_junction(self):
+        for style in ("symlink", "junction"):
+            with self.subTest(style=style), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                path = root / "elsewhere/d.h"
+                path.parent.mkdir()
+                path.write_bytes(b"d\n")
+                records = [(str(path), {
+                    "provider": "libc6-dev", "version": "9", "header": "elsewhere/d.h",
+                    "algorithm": "md5", "expected": "e" * 32,
+                    "sha256": hashlib.sha256(b"d\n").hexdigest()})]
+                (root / "include").mkdir()
+                make_link(self, root / "include/linked", "../elsewhere", directory=True,
+                          junction=style == "junction")
+                inventory = c_sdk.search_inventory(records, [root / "include"], root)
+                self.assertEqual(list(inventory["files"]), ["include/linked/d.h"])
+                self.assertEqual(inventory["links"], {
+                    "include/linked": {"kind": "dir", "target": "elsewhere"}})
+
+    def test_an_unusable_link_is_dangling_and_a_real_failure_is_not_hidden(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            (root / "include").mkdir()
+            make_link(self, root / "include/gone.h", "missing/target.h", directory=False)
+            # A link that loops back on itself cannot be resolved at all.
+            make_link(self, root / "include/loop1", "loop2", directory=False)
+            make_link(self, root / "include/loop2", "loop1", directory=False)
+            make_link(self, root / "include/self", "self", directory=False)
+            events = list(c_sdk.walk_search_directory(root / "include", set()))
+            self.assertEqual(
+                [(kind, Path(path).name, rest[1]) for kind, path, *rest in events],
+                [("link", "gone.h", "dangling"), ("link", "loop1", "dangling"),
+                 ("link", "loop2", "dangling"), ("link", "self", "dangling")])
+            # The target is the link's own, as written, so that an unresolvable link is named.
+            self.assertEqual(
+                [Path(rest[0]).name for _kind, _path, *rest in events],
+                ["target.h", "loop2", "loop1", "self"])
+            inventory = c_sdk.search_inventory([], [root / "include"], root)
+            # Collection completes; links to nothing are no provider's concern.
+            self.assertEqual(inventory["links"], {})
+            self.assertEqual(inventory["files"], {})
+        # An error on a plain entry is not a dangling link.
+        class Broken:
+            path = "x"
+
+            def is_dir(self):
+                raise OSError("unreadable")
+
+        with self.assertRaises(OSError):
+            c_sdk.entry_kind(Broken(), False)
+        self.assertIsNone(c_sdk.entry_kind(Broken(), True))
+
+    def test_only_links_that_lead_to_provider_files_count(self):
+        files = {"usr/include/stdio.h": {"header": "usr/include/stdio.h"},
+                 "usr/include/x86_64-linux-gnu/bits/a.h": {
+                     "header": "usr/include/x86_64-linux-gnu/bits/a.h"}}
+        links = {
+            "to the file": {"kind": "file", "target": "usr/include/stdio.h"},
+            "to a directory above provider files": {"kind": "dir", "target": "usr/include"},
+            "to a directory far above them": {"kind": "dir", "target": "usr"},
+            "to the root": {"kind": "dir", "target": "."},
+            "to an alias of such a directory": {"kind": "alias",
+                                                "target": "usr/include/x86_64-linux-gnu"},
+            "clang": {"kind": "dir", "target": "usr/lib/llvm-16/lib/clang/16/include"},
+            "ncurses": {"kind": "file", "target": "usr/include/curses.h"},
+            "sibling by prefix": {"kind": "dir", "target": "usr/include-extra"},
+            "outside": {"kind": "dir", "target": "outside:/opt/x"},
+        }
+        kept = set(c_sdk.provider_links(links, files, PurePosixPath("/")))
+        self.assertEqual(kept, {"to the file", "to a directory above provider files",
+                                "to a directory far above them", "to the root",
+                                "to an alias of such a directory"})
+        # Windows compares names without regard to case.
+        windows = c_sdk.provider_links(
+            {"x": {"kind": "dir", "target": "mingw64/Include"}},
+            {"k": {"header": "mingw64/include/stdio.h"}}, PureWindowsPath("C:/msys64"))
+        self.assertEqual(list(windows), ["x"])
+        self.assertEqual(c_sdk.provider_links(
+            {"x": {"kind": "dir", "target": "mingw64/Include"}},
+            {"k": {"header": "mingw64/include/stdio.h"}}, PurePosixPath("/")), {})
+
+    def test_extended_length_prefixes_do_not_reach_the_names(self):
+        windows = PureWindowsPath("C:/msys64")
+        self.assertEqual(c_sdk.plain_path("\\\\?\\C:\\msys64\\mingw64"), "C:\\msys64\\mingw64")
+        self.assertEqual(c_sdk.plain_path("\\\\?\\UNC\\host\\share\\x"), "\\\\host\\share\\x")
+        self.assertEqual(c_sdk.plain_path("/usr/include"), "/usr/include")
+        self.assertEqual(c_sdk.relative_name("\\\\?\\C:\\msys64\\mingw64\\include", windows),
+                         "mingw64/include")
+        self.assertEqual(c_sdk.link_target("\\\\?\\D:\\x\\include", windows),
+                         "outside:D:/x/include")
+
+    def test_search_inventory_records_every_link_and_enters_each_real_directory_once(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            files = {"include/a.h": "include/a.h", "include/sub/b.h": "include/sub/b.h",
+                     "elsewhere/d.h": "elsewhere/d.h", "lib/libc.a": "lib/libc.a",
+                     "include-extra/c.h": "include-extra/c.h"}
+            records = []
+            for name, header in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(name.encode())
+                records.append((str(path), {
+                    "provider": "libc6-dev", "version": "9", "header": header,
+                    "algorithm": "md5", "expected": "e" * 32,
+                    "sha256": hashlib.sha256(name.encode()).hexdigest()}))
+            (root / "include/foreign.h").write_bytes(b"not from a provider\n")
+            (root / "foreign-out.h").write_bytes(b"outside, not from a provider\n")
+            links = {"include/linked": ("../elsewhere", True),    # first path into elsewhere
+                     "include/two": ("../elsewhere", True),       # second path into elsewhere
+                     "include/up": ("../include", True),          # back to the directory itself
+                     "elsewhere/back": ("../include", True),
+                     "include/parent": ("..", True),              # an ancestor of everything
+                     "include/alias.h": ("../lib/libc.a", False),  # provider file, other place
+                     "include/foreignlink.h": ("../foreign-out.h", False),
+                     "include/dangling.h": ("missing", False)}
+            for name, (target, directory) in links.items():
+                make_link(self, root / name, target, directory=directory)
+            inventory = c_sdk.search_inventory(records, [root / "include"], root)
+            self.assertEqual(inventory["format"], "sdk-search-inventory-v1")
+            # Foreign files, libraries not reached by a path and other directories stay out;
+            # a directory below a link is listed under the path the compiler walks.
+            self.assertEqual({name: row["header"] for name, row in inventory["files"].items()}, {
+                "include/a.h": "include/a.h",
+                "include/alias.h": "lib/libc.a",
+                "include/linked/d.h": "elsewhere/d.h",
+                "include/parent/include-extra/c.h": "include-extra/c.h",
+                "include/parent/lib/libc.a": "lib/libc.a",
+                "include/sub/b.h": "include/sub/b.h",
+            })
+            # Links to a file that is no provider's, or to nothing, are left out.
+            self.assertEqual(inventory["links"], {
+                "include/alias.h": {"kind": "file", "target": "lib/libc.a"},
+                "include/linked": {"kind": "dir", "target": "elsewhere"},
+                "include/linked/back": {"kind": "dir", "target": "include"},
+                # Not entered a second time, still recorded: where the link leads decides.
+                "include/two": {"kind": "dir", "target": "elsewhere"},
+                "include/up": {"kind": "dir", "target": "include"},
+                "include/parent": {"kind": "dir", "target": "."},
+                "include/parent/elsewhere": {"kind": "alias", "target": "elsewhere"},
+                "include/parent/include": {"kind": "alias", "target": "include"},
+            })
+            self.assertEqual(set(next(iter(inventory["files"].values()))),
+                             {"header", "provider", "algorithm", "expected", "sha256"})
+            self.assertEqual(c_sdk.search_inventory(records, [], root)["files"], {})
+            # Opened headers outside every search directory are covered under their own path.
+            opened = {"path": str(root / "include-extra/c.h"), "header": "include-extra/c.h",
+                      "provider": "libc6-dev", "algorithm": "md5", "expected": "e" * 32,
+                      "sha256": hashlib.sha256(b"include-extra/c.h").hexdigest()}
+            covered = c_sdk.search_inventory(records, [root / "include"], root, [opened])
+            self.assertEqual(covered["files"]["include-extra/c.h"]["header"], "include-extra/c.h")
+
     def test_environment_verifies_windows_materialized_file_links(self):
         with tempfile.TemporaryDirectory() as temporary:
             _root, header, packages, _record = self.fixture(Path(temporary).resolve())
@@ -914,7 +1250,7 @@ class SdkSourceTests(unittest.TestCase):
             _root, header, packages, record = self.fixture(Path(temporary).resolve())
             scope = {
                 "target": TARGET,
-                "diagnosticCompiler": {"path": "/selected/bin/gcc.exe"},
+                **self.search_inputs(header),
                 "sdkHeaders": [record],
                 "sdkTranslationUnits": {"port.c": [header.as_posix()]},
                 "sdkMacroInputs": {},
