@@ -78,6 +78,35 @@ Linux `os/src/host/linux/Os_HostLinux.c:1175` 的形参 `access` 遮蔽 glibc �
 这批 R5.3 结论覆盖 ADR 0030 范围内的实际声明，包含生成 C、应用和项目内核补丁；
 范围内没有发现遮蔽。配置、实际头文件、宏展开或声明作用域改变时重核。
 
+#### Linux 解析恢复与包含闭包
+
+228 份 Linux 展开中，四个 profile 各有四份 TU 触发辅助语法解析恢复。下表列出
+`compiler-origins-<编号>.stdout.log` 的编号，先列 standard-ecu／user-application，
+再列 component-pipeline／no-diagnostic。头数取实际 `projectTranslationUnits`，不计 TU 入口。
+
+| TU | 工件编号 | 原解析错误节点／位置 | 交付头数 |
+| --- | --- | --- | --- |
+| `os/src/Os_Backend.c` | 37／39 | 1 个，glibc `bits/stdlib.h:45` | 51 |
+| `os/src/host/linux/Os_HostLinux.c` | 46／48 | 3 个，`asm-generic/int-ll64.h:20/26` 和 `linux/types.h:12` | 20 |
+| `os/src/host/linux/Os_LinuxNative.c` | 47／49 | SDK 同上 3 个，另有本文件第 63–109 行的 18 个 | 9 |
+| `os/src/host/linux/Os_StackLinux.c` | 49／51 | 上述三个 SDK 位置和 `bits/stdlib.h:45`，共 4 个 | 50 |
+
+Clang 18.1.3 对这 16 份 GCC 展开逐 TU 以 C99 成功检查语法，保留 GCC 行标记及全部
+头文件展开，仅去掉 `-dD` 输出的宏定义和撤销行。辅助作用域解析使用等宽替换处理 SDK 的
+`__signed__`、`__int128` 和常量 `__typeof` 转换，以及 Native TU 内 14 个
+`__builtin_offsetof` 表达式。后者保留类型名和换行，成员路径只含标识符和点号。
+这一步用于恢复名字和作用域，采用原始展开的 Clang 检查核对实际语法和类型。
+16 份完整 TU 重放均无解析错误或缺失节点。跳过声明数为 0，交付头中的声明随各自 TU
+一并重新比较，SDK 的外层声明也参与名字查找。重放只复现上述主机专用 `access` 遮蔽。
+
+#### Windows SDK 解析恢复
+
+224 份 Windows 展开中，每个 profile 的同一组 30 个 TU 在 SDK 内部触发解析恢复。
+辅助解析等宽合并 `intrin-impl.h` 的 20 处相邻 asm 约束字符串，并将两个
+`avx512fp16*intrin.h` 中的 6 处 `_Float16 _Complex` 换为可解析的类型写法，保留参数与
+变量名。120 份受影响 Windows TU 完整重放后，解析错误和跳过声明数均为 0，仍只复现
+两个主机专用 `byte` 遮蔽。原始 SDK 和 CI 工件继续保留。
+
 ### R5.9 私有对象改名
 
 文件与行号对应原声明，改名后物理行保持。以实际 GCC 展开和 Cppcheck 声明绑定核对

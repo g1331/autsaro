@@ -1239,7 +1239,12 @@ class AcceptanceTests(unittest.TestCase):
         for evidence in ("44513871093", "888 个 TU", "228／224", "63 字符",
                          "各自 struct／union", "RTE 应用", "Det 回调形参",
                          "Os_HostLinux.c:1175", "unistd.h:287",
-                         "ecu_host_batch.c:13/95", "rpcndr.h:93", "主机专用实现"):
+                         "ecu_host_batch.c:13/95", "rpcndr.h:93", "主机专用实现",
+                         "范围内没有发现遮蔽。", "Os_Backend.c` | 37／39 |",
+                         "Os_HostLinux.c` | 46／48 |", "Os_LinuxNative.c` | 47／49 |",
+                         "Os_StackLinux.c` | 49／51 |", "16 份完整 TU 重放均无解析错误或缺失节点。",
+                         "跳过声明数为 0，交付头中的声明随各自 TU",
+                         "120 份受影响 Windows TU 完整重放后，解析错误和跳过声明数均为 0"):
             self.assertIn(evidence, shadow_evidence)
         self.assertEqual(len(declaration_evidence), 25)
         for guideline, (status, *evidence) in declaration_evidence.items():
