@@ -52,6 +52,46 @@ class SourceGateTests(unittest.TestCase):
                 self.assertEqual(counts["total"], counts["inScope"] + counts["outOfScope"])
                 self.assertEqual(len(current["diagnostics"]), 2)
 
+    def test_kernel_diagnostic_entering_scope_blocks_even_when_raw_counts_match(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, output, baseline = self.fixture(Path(temporary))
+            previous = copy.deepcopy(current)
+            name = "kernel/tasks.c"
+            patch_chain = [{"path": "runtime/os/patches/reclassify.patch", "includes": ["tasks.c"]}]
+            for root, summary, patches, owned in (
+                (baseline / "project", previous, [], {}),
+                (output / "project", current, patch_chain, {name: [1]}),
+            ):
+                source = root / name
+                source.parent.mkdir()
+                source.write_bytes(b"step();\nstep();\n")
+                target = root / "target.json"
+                config = json.loads(target.read_text())
+                config.update(kernelPatches=patches, kernelSha256={"tasks.c": c_gate.sha(source)})
+                target.write_text(json.dumps(config))
+                summary["scope"].update(patchedKernel=patches, patchedLines=owned)
+                summary["diagnostics"] = [
+                    {"id": "rule", "locations": [{"file": name, "line": str(line)}], "programs": ["target"]}
+                    for line in (1, 2)
+                ]
+            (baseline / "summary.json").write_text(json.dumps(previous))
+            for approved, expected in ((None, "blocked"), (1, "blocked"), (0, "passed")):
+                with self.subTest(approved=approved):
+                    acceptance = current["projectAcceptance"]
+                    acceptance["occurrences"] = [
+                        {"diagnostic": index, "locationIndex": 0,
+                         "assessment": "accepted" if index == approved else "blocked"}
+                        for index in range(2)
+                    ]
+                    with patch.object(c_gate.c_acceptance, "evaluate", return_value=acceptance):
+                        gate = c_gate.verdict(current, output, baseline, {})
+                    self.assertEqual(gate["comparison"], {"new": [], "removed": []})
+                    self.assertFalse(gate["outOfScopeNew"])
+                    self.assertEqual(gate["status"], expected)
+                    self.assertEqual(gate["unacceptedNew"], [] if expected == "passed" else [
+                        {"rule": "rule", "file": name, "source": "step();", "program": "target", "count": 1},
+                    ])
+
     def test_new_changed_text_and_cross_program_are_blocked_but_moves_pass(self):
         for mutation in ("new", "text", "program", "move"):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
