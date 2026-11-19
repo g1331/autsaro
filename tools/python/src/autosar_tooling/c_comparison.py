@@ -8,7 +8,13 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from ecu_tools.build import FILE_HASHES, digest, refuse_links, require_kernel_identity, safe_relative
+from ecu_tools.build import (
+    FILE_HASHES,
+    digest,
+    refuse_links,
+    require_kernel_identity,
+    safe_relative,
+)
 
 from autosar_tooling import c_sdk
 from autosar_tooling.c_standard import MANUAL_ASSESSMENT_SOURCES
