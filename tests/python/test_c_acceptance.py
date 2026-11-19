@@ -1493,8 +1493,8 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(context["formalStatus"], "approved")
         cases = {(row["target"], row["caseId"]): row["inputIdentity"]
                  for row in context["cases"]}
-        # These two hosted Linux samples share libc6-dev 2.39-0ubuntu8.9 and the kernel closure.
-        reviewed = "aeeefc52b5f961cc2973cfc654437fa169848258a03f78c04f1af34892d2b0ec"
+        # Both hosted Linux samples have the same reviewed FreeRTOS input closure.
+        reviewed = "4d0041535341c102dc1ac236b4760566a6207037926d2ed1afe976beabb80683"
         self.assertEqual(cases[TARGET, "standard-ecu"], reviewed)
         self.assertEqual(cases[TARGET, "user-application"], reviewed)
 
