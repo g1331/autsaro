@@ -8,7 +8,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from ecu_tools.build import FILE_HASHES, digest, refuse_links, safe_relative
+from ecu_tools.build import FILE_HASHES, digest, refuse_links, require_kernel_identity, safe_relative
 
 from autosar_tooling import c_sdk
 from autosar_tooling.c_standard import MANUAL_ASSESSMENT_SOURCES
@@ -381,19 +381,28 @@ def compare(
                for root in (project, output / "project")):
             raise ValueError("Current source seal identity differs")
         # Source bytes may change; the selected target/configuration/link closure may not.
-        def target_configuration(path):
+        def target_configuration(path, scope):
             value = _read(path / "target.json")
             if source_tree:
                 # These digests include the producer's source bytes. The complete
                 # selected plan and all remaining target configuration are compared below.
                 value = {key: item for key, item in value.items()
                          if key not in {"definitionFingerprint", "inputSha256"}}
+                if scope["patchedKernel"] != value.pop("kernelPatches", []):
+                    raise ValueError("Kernel patch receipt differs from the analyzed target")
+                if "kernelSha256" in value:
+                    # Compare the selected files, after checking each tree's own bytes.
+                    require_kernel_identity(path / "kernel", value["kernelSha256"])
+                    value["kernelSha256"] = sorted(value["kernelSha256"])
             return value
-        if normalized(target_configuration(project)) != normalized(
-                mapped(target_configuration(old_root))):
+        if normalized(target_configuration(project, current["scope"])) != normalized(
+                mapped(target_configuration(old_root, previous["scope"]))):
             raise ValueError("Target/sample configuration differs")
-        for field in ("target", "profile", "entries", "compilerFlags", "includePaths",
-                      "translationUnits", "supplemental", "patchedKernel"):
+        scope_fields = ("target", "profile", "entries", "compilerFlags", "includePaths",
+                        "translationUnits", "supplemental")
+        if not source_tree:
+            scope_fields += ("patchedKernel",)
+        for field in scope_fields:
             if normalized(current["scope"][field], field) != normalized(
                     mapped(previous["scope"][field]), field):
                 raise ValueError(f"Target/sample scope differs: {field}")

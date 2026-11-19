@@ -89,7 +89,7 @@ class AcceptanceTests(unittest.TestCase):
                                              "defines": {"main.c": []}, "libraries": {"std": "2" * 64},
                                              "analysisCode": {"c_check.py": "3" * 64}, "addonRuntime": {"runaddon.py": "4" * 64}},
                         "scope": {"target": TARGET, "entries": entries, "compilerFlags": ["-std=c99"],
-                                  "includePaths": ["."], "translationUnits": ["main.c", "host.c", "probe.c"], "supplemental": [], "patchedKernel": True}}
+                                  "includePaths": ["."], "translationUnits": ["main.c", "host.c", "probe.c"], "supplemental": [], "patchedKernel": []}}
         # The contract fixture replaces environment probes, not re-evaluation or
         # source identity. It is not an actual SDK/toolchain acceptance result.
         self.actual_tool = copy.deepcopy(self.summary["tool"])
@@ -1671,6 +1671,7 @@ class AcceptanceTests(unittest.TestCase):
             patch_path.write_bytes(change.encode())
             self.files[patch_name.removeprefix("runtime/")] = change.encode()
             self.target["kernelPatches"].append({"path": patch_name, "includes": ["kernel.h"]})
+        self.summary["scope"]["patchedKernel"] = copy.deepcopy(self.target["kernelPatches"])
         self.files["kernel/kernel.h"] = final.encode()
         self.origins[name] = "kernel/kernel.h"
         self.target["kernelSha256"]["kernel.h"] = hashlib.sha256(final.encode()).hexdigest()

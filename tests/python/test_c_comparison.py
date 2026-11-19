@@ -80,6 +80,45 @@ class CComparisonTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "configuration differs"):
                 compare(summary, project, output, baseline, source_tree=True)
 
+    def test_source_tree_checks_each_patched_kernel_before_comparing_its_file_set(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.fixture(Path(temporary))
+            previous = deepcopy(current)
+            patch_chain = [{"path": "runtime/os/patches/change.patch", "includes": ["tasks.c"]}]
+
+            def kernel(root, name, data, patches):
+                path = root / "kernel" / name
+                path.parent.mkdir(exist_ok=True)
+                path.write_bytes(data)
+                target = root / "target.json"
+                value = json.loads(target.read_text())
+                value.update(kernelPatches=patches, kernelSha256={name: digest(path)})
+                target.write_text(json.dumps(value))
+                return path
+
+            old_root = baseline / "project"
+            old = kernel(old_root, "tasks.c", b"old kernel", patch_chain)
+            previous["scope"]["patchedKernel"] = patch_chain
+            self.write(baseline, previous)
+            new = kernel(project, "tasks.c", b"new kernel", [])
+            self.assertFalse(compare(current, project, output, baseline, source_tree=True)["new"])
+            with self.assertRaisesRegex(ValueError, "Target/sample configuration differs"):
+                compare(current, project, output, baseline)
+            for path, original in ((old, b"old kernel"), (new, b"new kernel")):
+                with self.subTest(path=path):
+                    path.write_bytes(b"modified after analysis")
+                    with self.assertRaisesRegex(ValueError, "Kernel identity mismatch: kernel/tasks.c"):
+                        compare(current, project, output, baseline, source_tree=True)
+                    path.write_bytes(original)
+            current["scope"]["patchedKernel"] = patch_chain
+            with self.assertRaisesRegex(ValueError, "Kernel patch receipt differs"):
+                compare(current, project, output, baseline, source_tree=True)
+            current["scope"]["patchedKernel"] = []
+            new.unlink()
+            kernel(project, "other.c", b"new kernel", [])
+            with self.assertRaisesRegex(ValueError, "Target/sample configuration differs"):
+                compare(current, project, output, baseline, source_tree=True)
+
     def test_matrix_receipts_bind_all_raw_inputs_and_ignore_derived_annotations(self):
         with tempfile.TemporaryDirectory() as temporary:
             summary, *_ = self.fixture(Path(temporary))
