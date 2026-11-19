@@ -51,6 +51,7 @@ SDK、采用内核与人工组保持各自未完成状态。新增实体或 body
 剩余完整消费与 Required 正式材料由
 [#439](https://github.com/g1331/autsaro/issues/439) 接续。
 <!-- source-assessment-context-begin -->
+
 {
   "id": "owned-source-536-r20",
   "evidence": {
