@@ -161,7 +161,8 @@ mkdir receipts
 sha256sum */meta/files.sha256 > receipts/seal-before.txt
 /usr/bin/python3 -I -S rehearse_ecu_handoff.py --help
 /usr/bin/python3 -I -S rehearse_ecu_handoff.py standard-ecu receipts/standard-ecu --verify
-for sample in user-application component-pipeline no-diagnostic; do
+/usr/bin/python3 -I -S rehearse_ecu_handoff.py component-pipeline receipts/component-pipeline --pipeline
+for sample in user-application no-diagnostic; do
   /usr/bin/python3 -I -S rehearse_ecu_handoff.py "$sample" "receipts/$sample"
 done
 sha256sum --check receipts/seal-before.txt
@@ -181,7 +182,9 @@ $Seals | Out-File receipts/seal-before.txt
 & $Python -I -S rehearse_ecu_handoff.py --help
 & $Python -I -S rehearse_ecu_handoff.py standard-ecu receipts/standard-ecu --verify
 if ($LASTEXITCODE -ne 0) { throw "standard-ecu handoff failed" }
-foreach ($Sample in 'user-application', 'component-pipeline', 'no-diagnostic') {
+& $Python -I -S rehearse_ecu_handoff.py component-pipeline receipts/component-pipeline --pipeline
+if ($LASTEXITCODE -ne 0) { throw "component-pipeline handoff failed" }
+foreach ($Sample in 'user-application', 'no-diagnostic') {
     & $Python -I -S rehearse_ecu_handoff.py $Sample "receipts/$Sample"
     if ($LASTEXITCODE -ne 0) { throw "$Sample handoff failed" }
 }
@@ -191,7 +194,8 @@ if (Compare-Object $Seals $After -Property Path,Hash) { throw "received seals ch
 ```
 
 接收端检查每个目录均有 `build-host-batch.log`、`build-probe.log`、`host-batch.log` 和 `probe.log`。
-standard-ecu 另有 `verify.log` 及 `verify/` 下的原始协议记录。每个样本都要有 PASS；两平台分别保留前后清单摘要和四份 receipts。
+standard-ecu 另有 `verify.log` 及 `verify/` 下的原始协议记录。component-pipeline 在断网接收端直接核对五次批次确认及五帧输出，
+包括 10／20 tick 调度后的 CAN 回显及 DID 值。每个样本都要有 PASS；两平台分别保留前后清单摘要和四份 receipts。
 可把同样的 standard-ecu 命令作为 CI 冒烟，输入取对应目标的 `c-analysis-inputs-*` 工件。
 
 ## B2–B4 工作台、真实 IPC 与安装包
