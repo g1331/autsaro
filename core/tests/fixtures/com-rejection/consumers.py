@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import runpy
 import shutil
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -12,7 +14,14 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 source, output = map(Path, sys.argv[1:])
 sys.path.insert(0, str(source / "tools"))
+from ecu_tools import build as builder
 from ecu_tools.build import build, query
+
+if os.environ.get("AUTOSAR_TEST_OBJECTS"):
+    helper = Path(__file__).resolve().parents[2] / "support/cached_compile.py"
+    # Compile these case-specific edits with the entry on every run, including repeated mutations.
+    fresh = ("Ingress.c", "Com.c", "Os_Time.c", "Ecu_ComRejection.c", "Ecu_HostBridge.c")
+    builder.query = runpy.run_path(str(helper))["cached_query"](query, fresh)
 
 
 def seal(project):

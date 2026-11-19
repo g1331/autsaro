@@ -27,8 +27,25 @@ fn checked(
 /// Builds `project` with the delivered `ecu-tool.py` and returns the binary.
 #[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 fn build_ecu(project: &Path, output: &Path, mode: &str, control: Option<&Path>) -> PathBuf {
+    finish_build(
+        super::tooling::ecu_fixture_build_command(project, output, mode, control),
+        output,
+    )
+}
+
+/// Relocation checks compile every translation unit directly from the moved package.
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+fn build_moved_ecu(project: &Path, output: &Path, mode: &str, control: Option<&Path>) -> PathBuf {
+    finish_build(
+        super::tooling::ecu_build_command(project, output, mode, control),
+        output,
+    )
+}
+
+#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
+fn finish_build(mut command: std::process::Command, output: &Path) -> PathBuf {
     checked(
-        &mut super::tooling::ecu_build_command(project, output, mode, control),
+        &mut command,
         output.parent().unwrap(),
         &format!(
             "build-{}",
@@ -230,7 +247,7 @@ fn standard_status_build() {
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
-    let binary = build_ecu(
+    let binary = build_moved_ecu(
         &moved,
         &scratch.0.join("standard-build"),
         "probe",
@@ -527,7 +544,7 @@ fn delivery_and_independent_control() {
         "public_compatibility declarations=16 evaluations=0 error_codes=23 unique=pass\n"
     );
 
-    let probe = build_ecu(&moved, &scratch.0.join("probe build"), "test", None);
+    let probe = build_moved_ecu(&moved, &scratch.0.join("probe build"), "test", None);
     // The 256-byte vector table starts its own section; OS entries and hooks
     // are mapped through Os_MemMap.h into the OS code section.
     assert_eq!(

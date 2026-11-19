@@ -69,6 +69,15 @@ uv run --locked python -m autosar_tooling.windows_process_timing baseline native
 - `run_queue_length` 长期高于 vCPU 数（4）而 `cpu_busy_pct` 接近 100，说明作业自己的并行度超过 CPU。
 - `disk_queue_length` 持续大于 2 且 `disk_latency_ms` 升高，说明磁盘排队，慢在文件读写（补丁、对象文件、杀毒扫描）。
 
+## 编译对象复用
+
+native 的 protocol、projects、integration 及 Linux 全量作业为本次运行分配临时对象目录。
+本地可将 `AUTOSAR_TEST_OBJECTS` 设为本次测试专用空目录的绝对路径，使用同一固定 SDK。
+行为夹具保留原 guard、工具检查、内核补丁与摘要校验。GCC 在实际工程目录编译并通过 `-MMD` 记录每个对象读取的源码与非系统头文件。
+复用时核对编译器路径和摘要、编译参数、工程和内核文件名清单，以及该对象所有依赖的实际字节。文件名清单可发现新增的同名头文件。
+对象和依赖记录在编译成功后一起发布；每个用例仍在自己的目录编译入口或外部 control，链接并运行程序。
+COM 用例还逐次编译涉及变异的应用、COM、ISR、诊断输出和排空路径源码。交付接收、封存拒绝及检测器有独立的构建入口。
+
 ## protocol 分片的期限余量（#591）
 
 分片在 4 vCPU 上运行 14 个用例（Cargo 默认 4 个并行线程）。下表数据来自 ETW 的进程树，通过运行是 44558822646，
@@ -80,6 +89,14 @@ uv run --locked python -m autosar_tooling.windows_process_timing baseline native
 | 内层 300 s | `normal_verify.py` `public-verify` | 80 s（2 个构建） | 3.7 倍 | 301.6 s，完成 96／108 个编译 |
 | 外层 360 s | `protocol.rs` `normal_verify_…` | 同上 | 4.5 倍 | 内层先到期 |
 | 构建 180 s | `protocol.rs` 各用例的 `build` | 39–53 s（1 个构建，运行中争用） | 3.4–4.6 倍 | 未到期 |
+
+调整 14 个构建的排队顺序后，通过运行 [44585924169](https://github.com/g1331/autsaro/actions/runs/44585924169)
+仍有 1512 个 `cc1.exe`。用该作业的 ETW 工件重算 `process-timing.md`，`cc1.exe` 合计 1162.5 CPU 秒。
+比较时读同一分片表中 `count` 和 `cpu total s` 两列，CPU 总量按每个退出事件的周期数求和。
+
+| 通过运行 | `com-refusal-consumers`（900 s） | 余量 | `normal_verify` 内层（300 s） | 余量 |
+| --- | ---: | ---: | ---: | ---: |
+| 44585924169，共享对象前 | 462 s | 1.95 倍 | 约 166 s | 约 1.81 倍 |
 
 整个分片通过时 CPU 总量约 911 core·s，占 4 vCPU 307 s 的 74%；失败时约 3006 core·s，占 901 s 的 83%。
 

@@ -104,16 +104,45 @@ pub(crate) fn ecu_build_command(
     ecu_production_build_command(project, output, mode, control)
 }
 
+/// Native behavior cases share compiler objects. Delivery and rejection tests use the plain CLI.
+pub(crate) fn ecu_fixture_build_command(
+    project: &Path,
+    output: &Path,
+    mode: &str,
+    control: Option<&Path>,
+) -> Command {
+    if std::env::var_os("AUTOSAR_TEST_OBJECTS").is_some_and(|value| !value.is_empty())
+        && std::env::var_os("AUTOSAR_SANITIZE").is_none()
+    {
+        ecu_cli_build_command(project, output, mode, control, true)
+    } else {
+        ecu_build_command(project, output, mode, control)
+    }
+}
+
 pub(crate) fn ecu_production_build_command(
     project: &Path,
     output: &Path,
     mode: &str,
     control: Option<&Path>,
 ) -> Command {
+    ecu_cli_build_command(project, output, mode, control, false)
+}
+
+fn ecu_cli_build_command(
+    project: &Path,
+    output: &Path,
+    mode: &str,
+    control: Option<&Path>,
+    fixture_objects: bool,
+) -> Command {
     let settings = execution_settings();
     let mut command = Command::new(&settings.python);
+    command.args(["-I", "-S"]);
+    if fixture_objects {
+        command.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/support/cached_compile.py"));
+    }
     command
-        .args(["-I", "-S"])
         .arg(project.join("tools/ecu-tool.py"))
         .arg("build")
         .arg("--project")
