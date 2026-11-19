@@ -9,11 +9,13 @@ from collections import Counter, defaultdict
 from contextlib import contextmanager
 from pathlib import Path
 
-from ecu_tools.build import FILE_LIST, digest, safe_relative, tool_argument
+from ecu_tools.build import FILE_HASHES, FILE_LIST, digest, safe_relative, tool_argument
 
 from autosar_tooling import c_comparison, c_standard
 
 EVIDENCE = "identifier-evidence"
+SEAL_POLICY = "meta/seal-policy.json"
+OWNERSHIP = "meta/workbench-ownership.json"
 # These rules compare essential types. A spelling-dependent rule needs its own proof.
 TYPE_RULES = {"misra-c2012-10.3", "misra-c2012-10.4"}
 MARKER = re.compile(r'# (\d+) "((?:[^"\\]|\\.)*)"(?: .*)?')
@@ -286,6 +288,41 @@ def _expansions(before: str, after: str, unit: str, changes: dict) -> set[int] |
     return set(emitted)
 
 
+def _derived_metadata_matches(old_root: Path, new_root: Path, names: set[str]) -> bool:
+    """Rebuild the two hash carriers with the verified baseline ownership policy."""
+    try:
+        reference = json.loads((old_root / OWNERSHIP).read_bytes())
+        policy = {row["path"]: {key: row[key] for key in ("owner", "producerId", "snapshotOf")
+                                if key in row} for row in reference["files"]}
+        if policy.keys() != names - {OWNERSHIP}:
+            return False
+        for root in (old_root, new_root):
+            metadata = json.loads((root / "target.json").read_bytes())["nativeDelivery"]
+            # Analysis copies contain a patched kernel. The original kernel
+            # digests are bound by the already verified producer seal.
+            sealed = {name: sha for sha, name in (line.split("  ", 1) for line in
+                      (root / FILE_HASHES).read_text(encoding="utf-8").splitlines())}
+            hashes = {name: sealed[name] if name.startswith("kernel/") else digest(root / name)
+                      for name in policy}
+            ledger = {"formatVersion": 3, "producerVersion": metadata["producerVersion"],
+                      "profileId": metadata["profileId"], "files": []}
+            for name, fields in sorted(policy.items()):
+                row = {"path": name, "owner": fields["owner"], "producerId": fields["producerId"],
+                       "sha256": hashes[name]}
+                if "snapshotOf" in fields:
+                    row["snapshotOf"] = fields["snapshotOf"]
+                ledger["files"].append(row)
+            payload = {name: hashes[name] for name in policy.keys() - {SEAL_POLICY, "tools/ecu-tool.py"}}
+            expectations = {"metadata": metadata, "payload": payload, "policy": policy}
+            for name, value, sort_keys in ((OWNERSHIP, ledger, False), (SEAL_POLICY, expectations, True)):
+                expected = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=sort_keys) + "\n"
+                if (root / name).read_bytes() != expected.encode("utf-8"):
+                    return False
+    except (OSError, ValueError, TypeError, KeyError):
+        return False
+    return True
+
+
 def _source_changes(previous: dict, current: dict, old_root: Path, new_root: Path) -> dict:
     before, after = previous["scope"], current["scope"]
     dependencies = before["projectTranslationUnits"]
@@ -301,6 +338,11 @@ def _source_changes(previous: dict, current: dict, old_root: Path, new_root: Pat
     # being compared. The selected configurations are checked by compare().
     sources = files - {"meta/assets.json", "meta/integration.json", "target.json"}
     changed = {name for name in sources if digest(old_root / name) != digest(new_root / name)}
+    carriers = {SEAL_POLICY, OWNERSHIP}
+    if files & carriers:
+        if not _derived_metadata_matches(old_root, new_root, files):
+            return {}
+        changed -= carriers
     if not changed <= _units(previous) & _units(current):
         return {}
     result = {}
