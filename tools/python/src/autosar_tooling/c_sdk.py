@@ -996,10 +996,11 @@ def semantic(scope: dict) -> str:
             package = None
         expected = {
             key: header[key]
-            for key in ("provider", "version", "header", "algorithm", "expected")
+            for key in ("provider", "header", "algorithm", "expected")
             if key in header
         }
-        if digest(path) != header["sha256"] or package != (
+        provenance = {key: value for key, value in package.items() if key != "version"} if package else None
+        if digest(path) != header["sha256"] or provenance != (
             expected if "provider" in header else None
         ):
             raise ValueError("SDK source/provider identity changed during analysis")

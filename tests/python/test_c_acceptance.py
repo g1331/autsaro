@@ -307,6 +307,12 @@ class AcceptanceTests(unittest.TestCase):
         self.summary["sourceSealSha256"] = c_acceptance.digest(self.project / "meta/files.sha256")
         before = identities()
         ordinary_before = c_acceptance.input_identity(self.summary, self.project, root=self.root)
+        old_version = self.sdk_header["version"]
+        self.sdk_header["version"] = old_version + "-new"
+        for group, value in identities().items():
+            with self.subTest(package_revision=group):
+                self.assertEqual(value, before[group])
+        self.sdk_header["version"] = old_version
         # Producer carrier bytes and output outside every selected TU are independent.
         producer = self.root / "core/src/rte_template.rs"
         producer.parent.mkdir(parents=True)
@@ -2608,7 +2614,8 @@ class AcceptanceTests(unittest.TestCase):
                 patch.object(c_sdk, "debian_headers", return_value=packages), \
                 patch.object(c_sdk, "provider_root", return_value=self.directory.resolve()):
             # The fixture's provider tree is a temporary directory of the running host.
-            self.summary["semanticIdentity"] = c_check.semantic_identity(executable, copy.deepcopy(scope), directories)
+            original_scope = copy.deepcopy(scope)
+            self.summary["semanticIdentity"] = c_check.semantic_identity(executable, original_scope, directories)
             self.bind_sdk()
             accepted = copy.deepcopy(self.summary)
             accepted["projectAcceptance"] = self.evaluate()
@@ -2620,7 +2627,15 @@ class AcceptanceTests(unittest.TestCase):
                 with self.subTest(path=path.name), self.assertRaises(ValueError):
                     self.require(accepted)
                 path.write_bytes(before)
-            package["version"] = "changed provider identity"
+            package["version"] = "new package revision"
+            rescanned_scope = copy.deepcopy(scope)
+            rescanned_scope["sdkHeaders"][0]["version"] = package["version"]
+            self.require(accepted)
+            self.assertEqual(c_check.semantic_identity(executable, rescanned_scope, directories),
+                             accepted["semanticIdentity"])
+            self.assertNotEqual(rescanned_scope["sdkEnvironment"], original_scope["sdkEnvironment"])
+            self.assertEqual(accepted["scope"]["sdkHeaders"][0]["version"], record["version"])
+            package["header"] += ".changed"
             with self.assertRaisesRegex(ValueError, "SDK source/provider identity changed"):
                 self.require(accepted)
 

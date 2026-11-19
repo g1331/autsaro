@@ -611,7 +611,8 @@ def evidence_identity(summary: dict, project: Path, group: str, root: Path = ROO
              "lineDirectives": scope.get("sdkLineDirectives"),
              "semantic": {key: value for key, value in semantic.items() if key not in {"sdk", "defines"}},
              "defines": {unit: semantic["defines"].get(unit) for unit in sorted(selected)},
-             "sdkHeaders": [row for row in scope.get("sdkHeaders", []) if row["path"] in sdk_paths],
+             "sdkHeaders": [{key: item for key, item in row.items() if key != "version"}
+                            for row in scope.get("sdkHeaders", []) if row["path"] in sdk_paths],
              "sdkDependencies": {unit: sorted(set(scope.get("sdkTranslationUnits", {}).get(unit, []))
                                               | set(analyzed[unit]["sdk"])) for unit in sorted(selected)},
              "sdkMacros": {unit: scope.get("sdkMacroInputs", {}).get(unit) for unit in sorted(selected)},
@@ -628,8 +629,6 @@ def evidence_identity(summary: dict, project: Path, group: str, root: Path = ROO
                               for name in ("source-manifest.json", "posix-source-manifest.json")}
     if group == "sdk-integration":
         # The SDK assessment inventories every use, including zero-warning sites.
-        value["sdkHeaders"] = [{key: item for key, item in row.items() if key != "version"}
-                               for row in value["sdkHeaders"]]
         value["sdkMacros"] = scope.get("sdkMacroInputs")
         value["diagnostics"] = sorted(_hash(row) for row in summary["diagnostics"])
     if matrix_scope is not None:
