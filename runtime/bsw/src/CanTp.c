@@ -161,7 +161,7 @@ static uint8 queue_head CANTP_VAR_CLEARED;  /**< Slot of the oldest frame; Init 
 static uint8 queue_count CANTP_VAR_CLEARED; /**< Frames waiting; Init clears it. */
 /* A context is making CanTp's calls to other modules; never reset, so a reinitialization
  * cannot start a second runner beside it. */
-static boolean running CANTP_VAR_CLEARED;                      /**< A runner is active. */
+static boolean cantp_running CANTP_VAR_CLEARED;                /**< A runner is active. */
 static CanTp_ReceiveOrderType receive_order CANTP_VAR_CLEARED; /**< Owner's receive ordering. */
 #define CANTP_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "CanTp_MemMap.h"
@@ -493,7 +493,7 @@ static CANTP_CODE void CanTp_Next(CanTp_WorkType *work, boolean send)
         /* Nothing to call now. */
     }
     if (work->kind == CANTP_WORK_NONE) {
-        running = FALSE;
+        cantp_running = FALSE;
     }
 }
 static CANTP_CODE void CanTp_Copied(const CanTp_WorkType *work, BufReq_ReturnType result)
@@ -745,8 +745,8 @@ static CANTP_CODE void CanTp_Run(boolean send)
 {
     boolean more = FALSE;
     SchM_Enter_CanTp_CANTP_STATE();
-    if (running == FALSE) {
-        running = TRUE;
+    if (cantp_running == FALSE) {
+        cantp_running = TRUE;
         more = TRUE;
     }
     SchM_Exit_CanTp_CANTP_STATE();
