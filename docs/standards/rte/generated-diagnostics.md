@@ -88,17 +88,9 @@ R2.3／R2.5 的公共类型、固定值和接口宏，以及 R8.7 的实例句�
 
 ## R5.6 跨名称空间候选
 
-Windows 实际展开补出四组 Cppcheck 未报告的候选。项目位置与 SDK 位置分别是：
-
-| 名称 | 项目侧 | SDK 侧 |
-| --- | --- | --- |
-| `CounterType` | `generated/include/Rte_Type.h:15` typedef | `winperf.h:155` 成员 |
-| `ResourceType` | `os/include/Os_Types.h:38` typedef | `rpcdcep.h:239` 成员 |
-| `boolean` | `bsw/include/Platform_Types.h:66` typedef | `rpcndr.h:95` typedef |
-| `byte` | `bsw/src/Com.c:86` 局部对象 | `rpcndr.h:93` typedef |
-
-R5.6 跨名称空间比较。后续优先改自有私有名，并检查固定发布名的 SDK 包含隔离与实际使用点。
-`Rte_Instance` 已有精确来源和风险处置，整条规则的清单仍须覆盖上述候选。
+三个应用定义的技术依据见[实例类型](README.md#组件实例类型的同名冲突)。
+全程序核查、Windows SDK 交叉重名和规则级处置状态见
+[R5.6 typedef 名称唯一性](../types/language-constructs/typedef-uniqueness.md)。
 
 ## R8.2 当前保留实体
 
