@@ -595,7 +595,7 @@ OS_MEMMAP static int interruptible_mutex_wait(HANDLE mutex,
     }
     if (result == 0) {
         const int32_t expected =
-            generation + ((generation % OS_MUTEX_EPOCH_STEP == 0) ? OS_MUTEX_WAITING : 0);
+            generation + (((generation % OS_MUTEX_EPOCH_STEP) == 0) ? OS_MUTEX_WAITING : 0);
         if (generation != expected) {
             int32_t observed = generation;
             /* A failed CAS either finds the hint set or leaves a stale futex expectation. */
@@ -959,7 +959,7 @@ OS_MEMMAP static bool advance_mutex_epoch(volatile int32_t *address, bool unlock
     do {
         waiting = observed % OS_MUTEX_EPOCH_STEP;
         const int32_t epoch = observed - waiting;
-        next = (epoch >= (INT32_MAX - OS_MUTEX_WAITING)) ? 0 : epoch + OS_MUTEX_EPOCH_STEP;
+        next = (epoch >= (INT32_MAX - OS_MUTEX_WAITING)) ? 0 : (epoch + OS_MUTEX_EPOCH_STEP);
         if (!unlock) {
             next += waiting;
         }
