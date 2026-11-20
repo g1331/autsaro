@@ -78,7 +78,7 @@ CI 分层：
 草稿只跑变更检测和 `quality`；`CI required` 失败并报“草稿，完整检查待转就绪”。完整检查请转就绪：`ready_for_review` 无须推送即检查 head，自动合并需显式开启。转回草稿取消旧运行。
 
 - **PR 层**：分支规则要求 `checks.yml` 的 `CI required`。按改动保留 quality、Python、core、桌面应用构建、Linux native、双平台原生交付和 C 分析。只有明确未选的作业可跳过。Python 矩阵保留 Linux 3.12／3.14、Windows 3.14。选中分析时仍生成双平台八份回执及重绑输入。
-- **PR 选择**：变更检测记录本轮目标分支快照到实际合并树的差异和选择结果。纯读者文档、代理配置或 PR 模板仅跑质量检查。选择器列出的分析单测、交接演练脚本及单测走 Python 矩阵；同时修改分析驱动或原生分析行为测试时加跑双平台完整 C 分析。`ui/` 或桌面场景 JavaScript 走 Python、双平台 UI／desktop 和按路径选择的 GUI／IPC。重命名、差异缺失或达到 3,000 条时全跑。选择与汇总由 `test_ci_selection.py` 验证。分支无需同步 master，合并后 master 照常检查。
+- **PR 选择**：变更检测记录本轮目标分支快照到实际合并树的差异和选择结果。纯读者文档、代理配置或 PR 模板仅跑质量检查。选择器列出的分析单测、交接演练脚本及单测走 Python 矩阵；同时修改分析驱动或原生分析行为测试时加跑双平台完整 C 分析。`ui/` 或桌面场景 JavaScript 走 Python 和双平台 UI／应用构建，原生 GUI／IPC 场景由 master push 或手动 Extended 执行。重命名、差异缺失或达到 3,000 条时选中全部 PR 检查。选择与汇总由 `test_ci_selection.py` 验证。分支无需同步 master，合并后 master 照常检查。
 - **合并后层**：master 每次 push 跑完整 Development 矩阵，含 Windows native 各分片、双平台 native-os、Linux sanitizers 和双平台 GUI／IPC（每平台共享构建、两分片）。同一 SHA 的 `Extended checks` 再按输入运行其他 Python／macOS、完整离线接收端矩阵、[官方对照](official.md)与[模糊测试](fuzzing.md)，手动入口可运行完整矩阵及桌面场景。`Post-merge checks result` 汇总整个运行。`full-ci` 标签可重触发 PR 必需检查，无关标签不替换必需结果。
 
 自动合并检查后仍为 `BLOCKED` 时，及时处理保护或讨论阻塞；存量诊断先回复依据再解决，保留告警。
