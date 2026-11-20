@@ -232,6 +232,7 @@ def validate_analysis_identity(manifest: dict, summary: dict, tree: str, target:
             )}
             or set(identity["compiler"]) != {"driver", "backend"}
             or set(identity["runner"]) != {"ImageOS", "ImageVersion"}
+            or any(not value for value in identity["runner"].values())
             or set(identity["configuration"]) != {"target", "sources"}
             or not identity["configuration"]["sources"] or not identity["generator"] or not identity["rules"]
             or not identity["python"]["implementation"] or not identity["python"]["version"]
@@ -242,6 +243,27 @@ def validate_analysis_identity(manifest: dict, summary: dict, tree: str, target:
                 manifest["summarySha256"],
             ))):
         raise ValueError(f"Raw analysis identity incomplete or differs: {target}/{sample}/{tree}")
+
+
+def validate_consumed_inputs(manifest: dict, project: Path, producer_digest: str) -> None:
+    from autosar_tooling.c_baseline import (
+        analysis_inputs_identity,
+        sealed_project_identity,
+    )
+
+    expected = {**sealed_project_identity(project), "inputs": analysis_inputs_identity()}
+    for field, actual in expected.items():
+        if manifest["identity"][field] != actual:
+            raise ValueError(f"Transferred analysis manifest differs from actual inputs: {field}")
+    if c_fingerprint.sha(manifest) != producer_digest:
+        raise ValueError("Transferred analysis manifest differs from producer receipt")
+
+
+def producer_receipt(directory: Path, side: str, target: str, sample: str) -> str:
+    receipts = list(directory.glob(f"c-analysis-scope-{side}-{target}-{sample}-*/{sample}/analysis-producer.sha256"))
+    if len(receipts) != 1:
+        raise ValueError(f"Missing or duplicated analysis producer receipt: {side}/{target}/{sample}")
+    return receipts[0].read_text(encoding="ascii").strip()
 
 
 def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict, *,
@@ -286,12 +308,13 @@ def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict, *
 
 def scan(target: str, sample: str, scope_directory: Path | None = None, *,
          fingerprints: bool = False, mode: str | None = None) -> None:
+    fingerprints = fingerprints or mode is not None
     if fingerprints and scope_directory is None:
         raise ValueError("Fingerprint comparison requires the complete scope matrix")
     outputs = {}
     evidence = {}
     evidence_errors = []
-    inventories, manifests = {}, {}
+    inventories, manifests, producer_digests = {}, {}, {}
     parent = git("rev-parse", "HEAD^1")
     # Same-run c-check producers already validate actual target semantics before
     # and after scanning. Rebind transferred source bytes to those fresh inputs.
@@ -316,6 +339,8 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
                     raise ValueError(f"Raw analysis manifest differs from {side} scan: {sample}")
                 validate_analysis_identity(manifest, summary, parent if side == "baseline"
                                            else git("rev-parse", "HEAD"), target, sample)
+                producer_digests[side] = producer_receipt(scope_directory, side, target, sample)
+                validate_consumed_inputs(manifest, output / "project", producer_digests[side])
                 manifests[side] = manifest
         outputs[side] = output
         if mode is None:
@@ -357,6 +382,7 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
                   "projectAcceptance": summary["projectAcceptance"]["status"]}
         if mode == "strict":
             result["analysisInputs"] = manifests
+            result["analysisProducerSha256"] = producer_digests
     if matrices:
         result["baselineScopeMatrix"] = matrices["baseline"]
     if fingerprints:
@@ -416,7 +442,10 @@ def aggregate(directory: Path, mode: str | None = None) -> None:
                     or summary["scope"]["target"] != gate["target"]):
                 raise ValueError(f"Source gate analysis identity invalid: {summary_path}")
             if mode == "strict":
-                validate_analysis_identity(gate["analysisInputs"][side], summary,
+                manifest = gate["analysisInputs"][side]
+                if c_fingerprint.sha(manifest) != gate["analysisProducerSha256"][side]:
+                    raise ValueError(f"Strict analysis producer receipt differs: {path}")
+                validate_analysis_identity(manifest, summary,
                                            gate["commit" if side == "current" else "baseline"],
                                            gate["target"], gate["sample"])
             identities.add((side, gate["target"], identity))
@@ -469,6 +498,16 @@ def aggregate(directory: Path, mode: str | None = None) -> None:
 
 
 
+def release_ready() -> None:
+    from autosar_tooling import c_disposition
+
+    for target in TARGETS:
+        binaries = c_disposition.WINDOWS_ANALYZERS.values() if target == c_disposition.WINDOWS else [None]
+        for binary in binaries:
+            for sample in SAMPLES:
+                c_disposition.load(ROOT, target, sample, binary)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -486,16 +525,18 @@ def main() -> None:
     aggregation = commands.add_parser("aggregate")
     aggregation.add_argument("directory", type=Path)
     aggregation.add_argument("--mode", choices=("pr", "strict"))
+    commands.add_parser("release-ready")
     args = parser.parse_args()
     if args.command == "prepare":
         prepare(args.baseline, args.output_directory)
     elif args.command == "stage":
         stage(args.baseline)
     elif args.command == "scan":
-        scan(args.target, args.sample, args.scope_directory,
-             fingerprints=args.fingerprints or args.mode is not None, mode=args.mode)
-    else:
+        scan(args.target, args.sample, args.scope_directory, fingerprints=args.fingerprints, mode=args.mode)
+    elif args.command == "aggregate":
         aggregate(args.directory, args.mode)
+    else:
+        release_ready()
 
 
 if __name__ == "__main__":

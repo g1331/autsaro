@@ -30,6 +30,23 @@ CHANGED_CHECKER_SOURCE = CHECKER_SOURCE.replace("ARG(x) (x)", "ARG (x) (x)")
 
 
 class FingerprintTests(unittest.TestCase):
+    def test_windows_analyzer_contract_refuses_tampering_and_cross_image_substitution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "cppcheck.exe"
+            binaries = {"older": b"older PE", "newer": b"newer PE"}
+            expected = {image: hashlib.sha256(data).hexdigest() for image, data in binaries.items()}
+            with patch.object(c_disposition, "WINDOWS_ANALYZERS", expected):
+                for image, binary in binaries.items():
+                    executable.write_bytes(binary)
+                    self.assertEqual(c_disposition.verify_windows_analyzer(executable, image), expected[image])
+                    with self.assertRaisesRegex(ValueError, "needs assessment"):
+                        c_disposition.verify_windows_analyzer(executable, "unknown")
+                    with self.assertRaisesRegex(ValueError, "needs assessment"):
+                        c_disposition.verify_windows_analyzer(executable, next(iter(expected.keys() - {image})))
+                    executable.write_bytes(binary + b"\x00")
+                    with self.assertRaisesRegex(ValueError, "needs assessment"):
+                        c_disposition.verify_windows_analyzer(executable, image)
+
     @staticmethod
     def inventory(summary, output, *, driver="a" * 64, backend="b" * 64):
         return c_fingerprint.inventory(summary, output, {"driver": driver, "backend": backend})
@@ -265,7 +282,7 @@ class FingerprintTests(unittest.TestCase):
             def write(name, value):
                 (repository / name).write_text(value, encoding="utf-8", newline="\n")
 
-            def scan(label):
+            def scan(label, *, reorder=False):
                 output = root / label
                 project = output / "project"
                 project.mkdir(parents=True)
@@ -318,6 +335,13 @@ class FingerprintTests(unittest.TestCase):
                     "programs": [{"name": "host-batch", "translationUnits": units}],
                     "diagnostics": diagnostics,
                 }
+                if reorder:
+                    rows = self.inventory(summary, output)
+                    files = program / "cache/files.txt"
+                    files.write_text("\n".join(reversed(files.read_text().splitlines())) + "\n")
+                    for facts in (program / "cache").glob("*.ctu-info"):
+                        facts.write_text("\n".join(reversed(facts.read_text().splitlines())) + "\n")
+                    self.assertEqual(self.inventory(summary, output), rows)
                 return diagnostics, self.inventory(summary, output)
 
             shared = "#define UNUSED 7\nint first(void);\nint second(void);\n"
@@ -359,6 +383,36 @@ class FingerprintTests(unittest.TestCase):
             _, used_in_other_unit = scan("used-in-other-unit")
             self.assertEqual(c_fingerprint.verdict(used_in_other_unit, merged, approved)["staleDispositions"],
                              sorted(approved))
+
+            write("entry.c", entry.replace("first() + second()", "first()"))
+            write("second.c", second)
+            raw, _ = scan("r87-fact-order", reorder=True)
+            self.assertIn("misra-c2012-8.7", {row["id"] for row in raw})
+
+            write("entry.c", entry)
+            write("shared.h", shared + "#ifndef TYPE\n#define TYPE unsigned int\n#endif\ntypedef TYPE Count;\n")
+            prelude = "#ifdef __CPPCHECK__\n#define TYPE unsigned int\n#endif\n"
+            write("second.c", prelude + second)
+            raw_before, rows_before = scan("cppcheck-type-before")
+            write("second.c", prelude.replace("unsigned int", "unsigned long") + second)
+            raw_after, rows_after = scan("cppcheck-type-after")
+            self.assertEqual(raw_before, raw_after)
+            typedefs = {index for index, row in enumerate(raw_before) if row["id"] == "misra-c2012-2.3"}
+            self.assertTrue(typedefs)
+            self.assertNotEqual([row for row in rows_before if row["diagnostic"] in typedefs],
+                                [row for row in rows_after if row["diagnostic"] in typedefs])
+            emitted, checked = [], []
+            for label in ("cppcheck-type-before", "cppcheck-type-after"):
+                output = root / label
+                compiler_trace = (output / "compiler-origins-2.stdout.log").read_text()
+                emitted.append(c_fingerprint.compiler_context(compiler_trace, "second.c", {}, {})[0])
+                source = output / "project/second.c"
+                result = subprocess.check_output([str(executable), "--quiet", "--force", "-E", str(source)],
+                                                 encoding="utf-8", timeout=30)
+                checked.append("".join(result.split()))
+            self.assertEqual(*emitted)
+            self.assertIn("typedefunsignedintCount;", checked[0])
+            self.assertIn("typedefunsignedlongCount;", checked[1])
 
     def test_duplicate_occurrences_never_inherit_a_disposition(self):
         with tempfile.TemporaryDirectory() as directory:

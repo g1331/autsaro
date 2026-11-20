@@ -759,6 +759,16 @@ jobs:
           shutil.copy2(binaries[0], bundle / binaries[0].name)
           for name in ('addons', 'cfg'):
               shutil.copytree(Path('build/cppcheck-source') / name, bundle / name)
+      - name: Verify Windows analyzer against the assessed image pool
+        if: runner.os == 'Windows'
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          from autosar_tooling.c_disposition import verify_windows_analyzer
+          image = os.environ['ImageVersion']
+          binary = verify_windows_analyzer(Path('build/c-analysis-tools/cppcheck.exe'), image)
+          print(f'Windows prepare image={image}; cppcheck.exe SHA-256={binary}')
       - name: Select analyzer
         shell: python
         run: |

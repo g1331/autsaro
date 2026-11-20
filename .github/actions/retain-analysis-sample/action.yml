@@ -38,7 +38,9 @@ runs:
       with:
         name: c-analysis-scope-${{ inputs.side }}-${{ inputs.target }}-${{ inputs.sample }}-${{ inputs.index }}
         overwrite: true
-        path: build/analysis-output/${{ inputs.sample }}/*/scope-input.json
+        path: |
+          build/analysis-output/${{ inputs.sample }}/*/scope-input.json
+          build/analysis-output/${{ inputs.sample }}/*/analysis-producer.sha256
         if-no-files-found: error
         retention-days: 14
 

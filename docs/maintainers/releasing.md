@@ -24,6 +24,9 @@ bundles 工作流由 workflow_dispatch 触发并接受明确的 revision，在 `
 两平台使用同一个 SHA 构建。每个样本的原始诊断、处置和双树完整输入身份随分析工件保留，
 详见[源码验收](../development/testing/source-acceptance.md)。
 
+可打包的提交须提供 `c_gate release-ready` 和完整的指纹处置登记。迁移前的 revision
+在解析 SHA 后、启动双平台检查前拒绝。
+
 ## 许可与分发
 
 项目原创代码与文档采用 [Apache-2.0](../../LICENSE)，分发时附带 [NOTICE](../../NOTICE)。生成源码工程和桌面包携带这些文件，Python 分发包在许可目录包含它们。发布前按 [许可说明](licensing.md) 核对实际打包的第三方素材、技能、依赖、内核及其原始声明。

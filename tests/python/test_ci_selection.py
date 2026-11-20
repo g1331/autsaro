@@ -148,6 +148,20 @@ class CiSelectionTests(unittest.TestCase):
         revision = bundles["source-analysis"]["with"]["release-revision"]
         self.assertEqual(revision, bundles["bundle"]["steps"][0]["with"]["ref"])
         self.assertIn("source-analysis", bundles["bundle"]["needs"])
+        self.assertEqual(bundles["source-analysis"]["needs"], "revision")
+        preflight = next(step for step in bundles["revision"]["steps"] if step.get("id") == "revision")
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "output"
+            with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}), \
+                    mock.patch.object(subprocess, "check_output", return_value=release_sha + "\n"), \
+                    mock.patch.object(subprocess, "run", return_value=subprocess.CompletedProcess([], 2)) as run:
+                with self.assertRaisesRegex(SystemExit, "does not support"):
+                    run_script(preflight["run"])
+                self.assertFalse(output.exists())
+                self.assertEqual(run.call_args.args[0][-1], "release-ready")
+                run.return_value = subprocess.CompletedProcess([], 0)
+                run_script(preflight["run"])
+                self.assertEqual(output.read_text(), "sha=" + release_sha + "\n")
         for job in ("c-analysis-gates", "c-analysis-gates-windows", "c-analysis"):
             step = next(row for row in workflow["jobs"][job]["steps"] if "GATE_MODE" in row.get("env", {}))
             self.assertEqual(expression_value(step["env"]["GATE_MODE"], {

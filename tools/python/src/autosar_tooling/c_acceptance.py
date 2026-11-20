@@ -1149,7 +1149,7 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
                     for group, rows in candidates.items()}
         frozen_checker = selected.get("checker-obligations")
         if fingerprints is not None:
-            bindings = c_disposition.load(root, result["target"], sample)
+            bindings = c_disposition.load(root, result["target"], sample, summary["tool"]["binarySha256"])
             for context in registered:
                 group = context["records"]["kind"]
                 if group not in DIAGNOSTIC_GROUPS:

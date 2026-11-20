@@ -19,7 +19,18 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.revision }}
       - id: revision
-        run: git log -1 --format='sha=%H' >> "$GITHUB_OUTPUT"
+        name: Require the selected revision to support strict source analysis
+        env:
+          PYTHONPATH: tools/python/src
+        shell: python
+        run: |
+          import os, subprocess, sys
+          revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          result = subprocess.run([sys.executable, '-m', 'autosar_tooling.c_gate', 'release-ready'])
+          if result.returncode:
+              sys.exit(f'{revision} does not support fingerprint-bound strict release analysis')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'sha={revision}\n')
   source-analysis:
     needs: revision
     permissions:

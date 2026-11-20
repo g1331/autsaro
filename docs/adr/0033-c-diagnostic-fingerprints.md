@@ -7,7 +7,7 @@
 
 ## 指纹
 
-一个指纹对应规则的一条诊断、一个位置和一个程序。格式 `c-diagnostic-fingerprints-v3`
+一个指纹对应规则的一条诊断、一个位置和一个程序。格式 `c-diagnostic-fingerprints-v4`
 以 UTF-8 规范 JSON（键排序、无分隔空白）计算 SHA-256，输入含以下内容。
 
 - 检查器规则 ID、严重度、程序名、位置序号及整条诊断的有序位置列表。这保留关联位置与
@@ -31,13 +31,14 @@
 GCC 不为所有原始指令发出 C token。原始定位和 Cppcheck 工程输入仍覆盖这类报告。
 同一参与 TU 中的其他源码或共用头变化也可能使指纹变化。v2 为跨 TU 规则绑定整程序。
 八份迁移前回执中，每份有 308 至 311 个已处置的 R2.5 位置，另有 R2.3 和 R8.7。
-v3 逐程序读取固定 addon 的全部 `.ctu-info`，按 `files.txt` 核对 TU 覆盖。先用原始
+v4 逐程序读取固定 addon 的全部 `.ctu-info`，按 `files.txt` 核对 TU 覆盖。先用原始
 诊断位置识别实体，再按 `analyse_ctu_info` 使用的事实类型绑定所有同名贡献。
 R2.3／5.6 用 typedef，R2.4／5.7 用 tag，R2.5 用宏与使用标记，R5.8／5.9 和
 R8.5 至 8.7 用对应的标识符声明、定义或使用事实。
 事实在独立 C 文件时绑定所属 TU，在头文件时绑定现有使用者的头文件拼写、GCC 展开、
-宏定义和 SDK 身份。另一 C 文件的正文变化只有在贡献该实体的事实或改变头文件展开时才
-影响这条跨 TU 指纹。诊断位置和事实位置均使用源码锚点；缺失或歧义的诊断证据阻断门禁。
+宏定义和 SDK 身份。头文件消费者亦保留 Cppcheck 实际读取的主 TU 指令及到最后一个
+include 为止的原始输入，覆盖 GCC 未启用的 `__CPPCHECK__` 分支。事实按规范序列排序并保留
+重复次数，原诊断的关联位置保持原序。缺失或歧义的诊断证据阻断门禁。
 [固定 addon 源码](https://github.com/cppcheck-opensource/cppcheck/blob/e73bf44c3e49686b7495fab352d03a6c6075516b/addons/misra.py)
 
 ## 门禁与证据
@@ -51,7 +52,7 @@ R8.5 至 8.7 用对应的标识符声明、定义或使用事实。
 缺少指纹清单的候选工件回到基准现场扫描。
 
 [SARIF 2.1.0 §3.27.17 和 §3.27.24](https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html)
-对应 `partialFingerprints.autsaroDiagnostic/v3` 和 `baselineState`。转换器先核对
+对应 `partialFingerprints.autsaroDiagnostic/v4` 和 `baselineState`。转换器先核对
 `gate.json` 中的双侧摘要和诊断／位置／程序覆盖，再按第一父树标注 `new` 或
 `unchanged`。摘要或覆盖无效时仅导出原始诊断。
 
@@ -73,6 +74,22 @@ Mandatory 偏离禁止登记。PR 阻断范围内未处置
 完整输入身份核验，并在每个样本的 gate 回执保留两树完整原始分析清单。发行构建先解析
 目标提交，再为同一提交运行八样本严格分析。严格项目验收
 仍独立复核人工、采用代码、正式偏离及无警告位置的义务。
+
+配对作业从自身 checkout 和已核验 seal 的工程复算输入、配置、生成器和规则身份。分析器、
+编译器、Python 和 runner 等生产端字段随整份清单绑定独立上传的生产回执，严格汇总核对
+该绑定。发行入口先验证选定提交支持严格分析并具备完整登记，再启动平台矩阵。
+
+## Windows 分析器构建身份
+
+`windows-2025-vs2026` 池的 `20261103.298.1` 与 `20261116.315.1` 以 MSVC 19.51、19.52
+产生了不同机器码。当前模型为每个已实扫的 prepare 镜像登记精确的 EXE SHA-256。prepare
+对冷构建和缓存恢复做同一验证，同一运行的两树都消费该 EXE。处置文件按实际 EXE SHA-256
+选择，每个版本均来自其四份原始实扫，禁止用另一版本重新填入哈希来沿用结论。
+遇到新镜像或二进制变化，先完成真实扫描和处置比对，再更新该身份及登记。
+
+固定 MinGW 构建可减小对宿主 MSVC 的依赖。切换仍需要证明 C++ 编译工具、链接工具和
+运行库可复现，并用新 EXE 重扫四份样本。当前采用两套已核验的镜像／EXE 组合。
+[镜像差异证据](https://github.com/g1331/autsaro/issues/606#issuecomment-7031484360)
 
 [ADR 0006](0006-builtin-rules-without-official-archives.md) 的规则与输入变化使相关确认失效
 原则沿用。[ADR 0025](0025-misra-layered-scope.md) 的作用域、GRP、正式批准和 Mandatory

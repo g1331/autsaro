@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -44,6 +43,7 @@ INPUTS = ("tools/python/src", "core/tests", "core/resources", "Cargo.toml", "Car
           "core/Cargo.toml", "src-tauri/Cargo.toml", "rust-toolchain.toml", ".cargo",
           "docs/standards", "docs/adr", "docs/development/c-coding-standard.md",
           ".github/actions/native-analysis-compiler", ".github/actions/core-build-dependencies",
+          ".github/workflows/checks.yml", ".github/cmake", ".github/actions/retain-analysis-sample",
           ".agents/skills/misra-c2012/references/baseline-index.json")
 
 
@@ -89,10 +89,7 @@ def compiler_identity(compiler: Path) -> dict:
     return {"driver": digest(compiler), "backend": digest(backend_path)}
 
 
-def identity(project: Path, tree: str, target: str, sample: str, tool: dict,
-             compiler: dict, sdk: str, *, previous: str | None = None) -> dict:
-    """Bind the generated tree and every PR-controlled analysis/sample input."""
-    plan = read(project / "meta/integration.json")["plan"]
+def analysis_inputs_identity(previous: str | None = None) -> str:
     paths = git("ls-files", "-z", "--", *INPUTS).split("\0")
     # Job labels select a protected artifact. The scan and validation driver
     # itself still participates in the byte-for-byte input identity.
@@ -100,17 +97,29 @@ def identity(project: Path, tree: str, target: str, sample: str, tool: dict,
               if name and name != JOB_SELECTOR}
     if previous is not None:
         inputs[WRAPPER] = previous
-    encoded = json.dumps(inputs, sort_keys=True, separators=(",", ":")).encode()
+    return c_fingerprint.sha(inputs)
+
+
+def sealed_project_identity(project: Path) -> dict:
+    plan = read(project / "meta/integration.json")["plan"]
     return {
-        "tree": tree, "target": target, "sample": sample,
-        "analyzer": {key: tool[key] for key in
-                     ("version", "expectedSourceRevision", "binarySha256", "addons")},
         "rules": plan["ruleSetIdentity"],
         "generator": {name: value for name, value in plan["runtimeSources"].items()
                       if name.startswith("core/")},
         "configuration": {"target": digest(project / "target.json"), "sources": plan["sources"]},
-        "inputs": hashlib.sha256(encoded).hexdigest(),
-        "sourceSeal": digest(project / FILE_HASHES), "compiler": compiler, "sdk": sdk,
+        "sourceSeal": digest(project / FILE_HASHES),
+    }
+
+
+def identity(project: Path, tree: str, target: str, sample: str, tool: dict,
+             compiler: dict, sdk: str, *, previous: str | None = None) -> dict:
+    """Bind the generated tree and every PR-controlled analysis/sample input."""
+    return {
+        "tree": tree, "target": target, "sample": sample,
+        "analyzer": {key: tool[key] for key in
+                     ("version", "expectedSourceRevision", "binarySha256", "addons")},
+        **sealed_project_identity(project),
+        "inputs": analysis_inputs_identity(previous), "compiler": compiler, "sdk": sdk,
         "runner": {key: os.environ.get(key) for key in ("ImageOS", "ImageVersion")},
         "python": {"implementation": sys.implementation.name, "version": sys.version,
                    "binary": digest(Path(sys.executable))},
@@ -138,14 +147,16 @@ def record(output: Path, tree: str, target: str, sample: str, candidates: set[st
         rows = (c_fingerprint.inventory(summary, output, value["compiler"])
                 if cached_fingerprints is None else cached_fingerprints)
         fingerprint_fields["fingerprintSha256"] = c_fingerprint.write_receipt(output, rows)
-    (output / "analysis-identity.json").write_text(json.dumps({
+    manifest = {
         "format": FORMAT, "identity": value,
         "summarySha256": digest(output / "summary.json"),
         **({"identifierEvidence": identifier_evidence} if identifier_evidence else {}),
         **fingerprint_fields,
         "run": int(os.environ["GITHUB_RUN_ID"]) if os.environ.get("GITHUB_RUN_ID") else None,
         "attempt": int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")),
-    }, indent=2) + "\n", encoding="utf-8")
+    }
+    (output / "analysis-identity.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (output / "analysis-producer.sha256").write_text(c_fingerprint.sha(manifest) + "\n", encoding="ascii")
 
 
 def gh(arguments: list[str], directory: Path, stage: str, timeout: int) -> ProcessResult:

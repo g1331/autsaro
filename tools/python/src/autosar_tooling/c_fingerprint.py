@@ -12,10 +12,10 @@ from pathlib import Path
 
 from ecu_tools.build import digest
 
-from autosar_tooling import c_preprocessor
+from autosar_tooling import c_preprocessor, c_standard
 
-FORMAT = "c-diagnostic-fingerprints-v3"
-SARIF_KEY = "autsaroDiagnostic/v3"
+FORMAT = "c-diagnostic-fingerprints-v4"
+SARIF_KEY = "autsaroDiagnostic/v4"
 RECEIPT = "diagnostic-fingerprints.json"
 SHA256 = re.compile(r"[0-9a-f]{64}")
 # The pinned MISRA addon's analyse_ctu_info can report these using facts
@@ -151,6 +151,16 @@ class SourceContext:
                 self.tokens[index][0], [token[0] for token in self.tokens[index + 1:index + 9]])
 
 
+def analyzer_header_inputs(text: str, exact_lines: bool) -> dict:
+    """Retain raw input Cppcheck can use before or while opening a header."""
+    directives = [token for token in c_standard.lex(text) if token.text.lstrip().startswith("#")]
+    includes = [token for token in directives if re.match(r"\s*#\s*include\b", token.text)]
+    prefix = text[:includes[-1].end] if includes else ""
+    if not exact_lines:
+        prefix = "\n".join(line for line in prefix.split("\n") if line)
+    return {"prefix": prefix, "directives": [token.text for token in directives]}
+
+
 def ctu_facts(output: Path, program: dict, compiler_roots: dict[str, str],
               sdk: dict[str, str], project_paths: dict[str, str], windows: bool) -> tuple[dict, dict]:
     """Index the actual pinned addon's per-program facts by location and by name."""
@@ -206,7 +216,7 @@ def ctu_dependencies(rule: str, locations: list[tuple], facts: tuple[dict, dict]
                 if source is None and anchor is None:
                     return None
                 result.append((kind, name, unit, file, anchor, source, headers[unit], attributes))
-    return result
+    return sorted(result, key=sha)
 
 
 def canonical_config(summary: dict, compiler_identity: dict) -> dict:
@@ -312,6 +322,9 @@ def inventory(summary: dict, output: Path, compiler_identity: dict) -> list[dict
                 "expanded": {name: value for name, value in ctu_expanded[unit].items() if name != unit},
                 "defines": defines,
                 "primaryBeforeHeaders": sha(prefix),
+                "analyzerHeaderInputs": analyzer_header_inputs(
+                    (project / unit).read_text(encoding="utf-8"), bool(exact_lines),
+                ),
                 "analyzerHeaders": {name: raw_hashes[name][0 if exact_lines else 1]
                                     for name in analyzer["project"] if name != unit},
                 "sdk": sorted(sdk[path_key(name, windows)] for name in sdk_paths),

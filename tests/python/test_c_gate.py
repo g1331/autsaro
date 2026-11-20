@@ -20,6 +20,36 @@ from autosar_tooling import c_gate, c_rename
 
 
 class SourceGateTests(unittest.TestCase):
+    def test_consumer_recomputes_input_digests_and_refuses_producer_tampering(self):
+        from autosar_tooling import c_baseline, c_fingerprint
+
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            (project / "meta").mkdir()
+            (project / "target.json").write_text('{"target":"verified"}', encoding="utf-8")
+            (project / c_baseline.FILE_HASHES).write_text("sealed\n", encoding="utf-8")
+            (project / "meta/integration.json").write_text(json.dumps({
+                "plan": {"ruleSetIdentity": {"rules": "original"}, "sources": ["source"],
+                         "runtimeSources": {"core/src/lib.rs": "original"}},
+            }), encoding="utf-8")
+            with patch.object(c_baseline, "analysis_inputs_identity", return_value="a" * 64):
+                identity = {**c_baseline.sealed_project_identity(project), "inputs": "a" * 64,
+                            "runner": {"ImageOS": "verified", "ImageVersion": "original"}}
+                manifest = {"identity": identity}
+                digest = c_fingerprint.sha(manifest)
+                c_gate.validate_consumed_inputs(manifest, project, digest)
+                for name, replacement in (
+                        ("inputs", "b" * 64),
+                        ("configuration", {"target": "b" * 64, "sources": ["other"]}),
+                        ("generator", {"core/src/lib.rs": "b" * 64}),
+                        ("rules", {"rules": "b" * 64})):
+                    with self.subTest(name=name), self.assertRaisesRegex(ValueError, name):
+                        changed = {"identity": {**identity, name: replacement}}
+                        c_gate.validate_consumed_inputs(changed, project, c_fingerprint.sha(changed))
+                changed = {"identity": {**identity, "runner": {"ImageOS": "verified", "ImageVersion": "fake"}}}
+                with self.assertRaisesRegex(ValueError, "producer receipt"):
+                    c_gate.validate_consumed_inputs(changed, project, digest)
+
     def fixture(self, root):
         helper = comparison_tests.CComparisonTests()
         current, _project, output, baseline = helper.fixture(root)
