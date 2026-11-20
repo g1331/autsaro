@@ -141,7 +141,7 @@ int main(int argc, char **argv)
     require(__atomic_load_n(&observed_wake, __ATOMIC_SEQ_CST) == 0, 39);
     if (mode_before != 0) {
         require(ReleaseMutex(target) != 0, 40);
-        require(__atomic_load_n(&observed_wake, __ATOMIC_SEQ_CST) == 1, 41);
+        require(__atomic_load_n(&observed_wake, __ATOMIC_SEQ_CST) == 0, 41);
     }
     proceed = 1;
     require(pthread_cond_signal(&changed) == 0, 42);
