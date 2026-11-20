@@ -8,14 +8,20 @@ import json
 import math
 import os
 import re
+import socket
+import ssl
 import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
+import urllib.request
+import urllib.response
 import zipfile
 from contextlib import redirect_stderr, redirect_stdout
+from email.message import Message
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 from xml.etree import ElementTree
 
 from autosar_tooling import (
@@ -76,25 +82,56 @@ class ConfigurationTests(unittest.TestCase):
 
 
 class OfficialArchiveTests(unittest.TestCase):
-    def fetch(self, root: Path, content: bytes) -> tuple[int, str]:
+    URL = "https://example.invalid/a.zip"
+
+    def setUp(self):
+        self.sleep = self.enterContext(patch.object(official.time, "sleep"))
+        self.resolve = self.enterContext(patch.object(
+            official.socket,
+            "getaddrinfo",
+            return_value=[
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.1", 0)),
+                (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2001:db8::1", 0, 0, 0)),
+            ],
+        ))
+
+    def fetch(self, root: Path) -> tuple[int, str]:
         errors = io.StringIO()
-        with patch.object(official, "tls_context", return_value=None), patch.object(official.urllib.request, "urlopen", return_value=io.BytesIO(content)), redirect_stdout(io.StringIO()), patch.object(official.sys, "stderr", errors):
+        with (
+            patch.object(official, "tls_context", return_value=None),
+            redirect_stdout(io.StringIO()),
+            redirect_stderr(errors),
+        ):
             return official.fetch(root), errors.getvalue()
 
     def catalog(self, root: Path, content: bytes) -> Path:
         (root / "core/resources").mkdir(parents=True)
-        entry = {"name": "archive", "environment": "UNSET_TEST_ARCHIVE", "path": "official/a.zip", "url": "https://example.invalid/a.zip", "sha256": hashlib.sha256(content).hexdigest()}
+        entry = {
+            "name": "archive",
+            "environment": "UNSET_TEST_ARCHIVE",
+            "path": "official/a.zip",
+            "url": self.URL,
+            "sha256": hashlib.sha256(content).hexdigest(),
+        }
         (root / "core/resources/official.json").write_text(json.dumps([entry]))
         return root / "official/a.zip"
 
     def test_download_is_installed_only_with_the_pinned_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             target = self.catalog(Path(directory), b"archive")
-            status, errors = self.fetch(Path(directory), b"tampered")
+            with patch.object(
+                urllib.request.OpenerDirector, "open", return_value=io.BytesIO(b"tampered")
+            ) as request:
+                status, errors = self.fetch(Path(directory))
+            request.assert_called_once_with(self.URL, timeout=60)
             self.assertEqual(status, 1)
             self.assertIn("SHA-256 mismatch", errors)
             self.assertEqual(list(target.parent.iterdir()), [])
-            self.assertEqual(self.fetch(Path(directory), b"archive")[0], 0)
+            self.sleep.assert_not_called()
+            with patch.object(
+                urllib.request.OpenerDirector, "open", return_value=io.BytesIO(b"archive")
+            ):
+                self.assertEqual(self.fetch(Path(directory))[0], 0)
             self.assertEqual(target.read_bytes(), b"archive")
 
     def test_existing_archive_is_verified_and_never_replaced(self):
@@ -102,15 +139,122 @@ class OfficialArchiveTests(unittest.TestCase):
             target = self.catalog(Path(directory), b"archive")
             target.parent.mkdir()
             target.write_bytes(b"own copy")
-            with patch.object(official, "tls_context", side_effect=AssertionError("downloaded an existing archive")):
-                status, errors = self.fetch(Path(directory), b"archive")
+            with patch.object(urllib.request.OpenerDirector, "open") as request:
+                status, errors = self.fetch(Path(directory))
+            request.assert_not_called()
             self.assertEqual(status, 1)
             self.assertIn("existing", errors)
             self.assertEqual(target.read_bytes(), b"own copy")
 
     def test_intermediate_certificate_requires_the_pinned_fingerprint(self):
-        with patch.object(official.urllib.request, "urlopen", return_value=io.BytesIO(b"other certificate")), self.assertRaisesRegex(official.FetchError, "fingerprint"):
+        with (
+            patch.object(
+                urllib.request.OpenerDirector, "open", return_value=io.BytesIO(b"other certificate")
+            ) as request,
+            patch.object(ssl, "create_default_context") as context,
+            self.assertRaisesRegex(official.FetchError, "fingerprint"),
+        ):
             official.tls_context()
+        request.assert_called_once_with(official.INTERMEDIATE_URL, timeout=60)
+        context.assert_not_called()
+        self.sleep.assert_not_called()
+
+    def test_download_retries_a_refused_connection_and_verifies_the_archive(self):
+        refusal = urllib.error.URLError(ConnectionRefusedError("[WinError 10061] Connection refused"))
+        with tempfile.TemporaryDirectory() as directory:
+            target = self.catalog(Path(directory), b"archive")
+            with patch.object(
+                urllib.request.OpenerDirector, "open", side_effect=[refusal, io.BytesIO(b"archive")]
+            ) as request:
+                status, errors = self.fetch(Path(directory))
+            self.assertEqual(status, 0)
+            self.assertEqual(target.read_bytes(), b"archive")
+            self.assertEqual(list(target.parent.iterdir()), [target])
+        self.assertEqual(request.call_args_list, [call(self.URL, timeout=60)] * 2)
+        self.sleep.assert_called_once_with(1)
+        self.resolve.assert_called_once_with("example.invalid", None, type=socket.SOCK_STREAM)
+        for detail in (self.URL, "attempt 1/3", "WinError 10061", "192.0.2.1", "2001:db8::1"):
+            self.assertIn(detail, errors)
+
+    def test_download_stops_after_three_transport_failures(self):
+        refusal = urllib.error.URLError(ConnectionRefusedError("[WinError 10061] Connection refused"))
+        temporary_dns = socket.gaierror(socket.EAI_AGAIN, "lookup temporarily unavailable")
+        self.resolve.side_effect = temporary_dns
+        with tempfile.TemporaryDirectory() as directory:
+            target = self.catalog(Path(directory), b"archive")
+            with patch.object(
+                urllib.request.OpenerDirector, "open",
+                side_effect=[refusal, temporary_dns, refusal, refusal],
+            ) as request:
+                status, errors = self.fetch(Path(directory))
+            self.assertEqual(status, 1)
+            self.assertEqual(list(target.parent.iterdir()), [])
+        self.assertEqual(request.call_args_list, [call(self.URL, timeout=60)] * 3)
+        self.assertEqual(self.sleep.call_args_list, [call(1), call(2)])
+        self.assertIn(f"error: download failed for {self.URL} (attempt 3/3", errors)
+        self.assertIn("WinError 10061", errors)
+        self.assertIn("DNS lookup failed", errors)
+
+    def test_read_timeout_restarts_the_download_without_retaining_partial_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = self.catalog(Path(directory), b"archive")
+            response = io.BytesIO()
+            with (
+                patch.object(
+                    response, "read", side_effect=[b"incomplete first download", TimeoutError("read timed out")]
+                ),
+                patch.object(
+                    urllib.request.OpenerDirector, "open", side_effect=[response, io.BytesIO(b"archive")]
+                ) as request,
+            ):
+                status, errors = self.fetch(Path(directory))
+            self.assertEqual(status, 0)
+            self.assertEqual(target.read_bytes(), b"archive")
+        self.assertEqual(request.call_count, 2)
+        self.assertIn("TimeoutError: read timed out", errors)
+
+    def test_tls_http_and_permanent_dns_failures_are_not_retried(self):
+        failures = (
+            (
+                urllib.error.URLError(ssl.SSLCertVerificationError("certificate verify failed")),
+                "certificate verify failed",
+            ),
+            (urllib.error.HTTPError(self.URL, 503, "Service Unavailable", None, None), "HTTP Error 503"),
+            (socket.gaierror(socket.EAI_NONAME, "host not found"), "host not found"),
+        )
+        for failure, diagnostic in failures:
+            with self.subTest(diagnostic=diagnostic), tempfile.TemporaryDirectory() as directory:
+                target = self.catalog(Path(directory), b"archive")
+                with patch.object(
+                    urllib.request.OpenerDirector, "open", side_effect=failure
+                ) as request:
+                    status, errors = self.fetch(Path(directory))
+                self.assertEqual(status, 1)
+                self.assertEqual(list(target.parent.iterdir()), [])
+                request.assert_called_once_with(self.URL, timeout=60)
+                self.assertIn(diagnostic, errors)
+        self.sleep.assert_not_called()
+
+    def test_download_refuses_redirects_before_contacting_the_other_url(self):
+        headers = Message()
+        headers["Location"] = "https://elsewhere.invalid/a.zip"
+        response = urllib.response.addinfourl(io.BytesIO(), headers, self.URL, 302)
+        response.msg = "Found"
+        redirected = urllib.response.addinfourl(
+            io.BytesIO(b"archive"), Message(), headers["Location"], 200
+        )
+        redirected.msg = "OK"
+        with tempfile.TemporaryDirectory() as directory:
+            target = self.catalog(Path(directory), b"archive")
+            with patch.object(
+                urllib.request.HTTPSHandler, "https_open", side_effect=[response, redirected]
+            ) as request:
+                status, errors = self.fetch(Path(directory))
+            self.assertEqual(status, 1)
+            self.assertEqual(list(target.parent.iterdir()), [])
+        self.assertEqual([args[0].full_url for args, _ in request.call_args_list], [self.URL])
+        self.assertIn("HTTP Error 302", errors)
+        self.sleep.assert_not_called()
 
 
 def specification(*items: str, states: dict[str, str] | None = None) -> bytes:

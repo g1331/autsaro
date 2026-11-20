@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
+import io
 import json
 import os
 import shutil
+import socket
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import BinaryIO
+from urllib.parse import urlsplit
 
 from autosar_tooling.config import ROOT, archive_path
 
@@ -21,18 +27,63 @@ from autosar_tooling.config import ROOT, archive_path
 INTERMEDIATE_URL = "http://certificates.starfieldtech.com/repository/sfig2.crt"
 INTERMEDIATE_SHA256 = "93a07898d89b2cca166ba6f1f8a14138ce43828e491b831926bc8247d391cc72"
 TIMEOUT = 60
+ATTEMPTS = 3
 
 
 class FetchError(Exception):
     pass
 
 
-def tls_context() -> ssl.SSLContext:
+class RejectRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def dns_diagnostic(url: str) -> str:
+    host = urlsplit(url).hostname
     try:
-        with urllib.request.urlopen(INTERMEDIATE_URL, timeout=TIMEOUT) as response:
-            certificate = response.read()
-    except (urllib.error.URLError, OSError) as error:
-        raise FetchError(f"cannot download the intermediate certificate {INTERMEDIATE_URL}: {error}") from error
+        records = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    except OSError as error:
+        return f"URL host {host} DNS lookup failed: {error}"
+    addresses = ", ".join(dict.fromkeys(record[4][0] for record in records))
+    return f"URL host {host} DNS addresses: {addresses}"
+
+
+def download(url: str, output: BinaryIO, context: ssl.SSLContext | None = None) -> None:
+    opener = urllib.request.build_opener(
+        RejectRedirects(), urllib.request.HTTPSHandler(context=context)
+    )
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            with opener.open(url, timeout=TIMEOUT) as response:
+                output.seek(0)
+                output.truncate()
+                shutil.copyfileobj(response, output, 1 << 20)
+        except (OSError, http.client.HTTPException) as error:
+            reason = error.reason if isinstance(error, urllib.error.URLError) else error
+            retryable = isinstance(reason, (ConnectionError, TimeoutError)) or (
+                isinstance(reason, socket.gaierror) and reason.errno == socket.EAI_AGAIN
+            )
+            message = (
+                f"download failed for {url} (attempt {attempt}/{ATTEMPTS}, "
+                f"socket timeout {TIMEOUT}s): {type(reason).__name__}: {error}"
+            )
+            if isinstance(error, urllib.error.HTTPError):
+                error.close()
+            else:
+                message += f"; {dns_diagnostic(url)}"
+            if not retryable or attempt == ATTEMPTS:
+                raise FetchError(message) from error
+            print(f"warning: {message}; retrying", file=sys.stderr)
+            time.sleep(attempt)
+        else:
+            return
+
+
+def tls_context() -> ssl.SSLContext:
+    output = io.BytesIO()
+    download(INTERMEDIATE_URL, output)
+    certificate = output.getvalue()
     fingerprint = hashlib.sha256(certificate).hexdigest()
     if fingerprint != INTERMEDIATE_SHA256:
         raise FetchError(
@@ -64,14 +115,14 @@ def fetch(root: Path = ROOT) -> int:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 partial = target.with_name(target.name + ".part")
                 try:
-                    with urllib.request.urlopen(item["url"], timeout=TIMEOUT, context=context) as response, partial.open("wb") as output:
-                        shutil.copyfileobj(response, output, 1 << 20)
+                    with partial.open("wb") as output:
+                        download(item["url"], output, context)
                     actual = file_digest(partial)
                     if actual != expected:
                         raise FetchError(f"{name}: SHA-256 mismatch for {item['url']}: downloaded {actual}, required {expected}")
                     os.replace(partial, target)
-                except (urllib.error.URLError, OSError) as error:
-                    raise FetchError(f"{name}: download failed for {item['url']}: {error}") from error
+                except OSError as error:
+                    raise FetchError(f"{name}: cannot write archive {target}: {error}") from error
                 finally:
                     partial.unlink(missing_ok=True)
                 print(f"{name}: downloaded {target}; SHA-256 {expected}")
