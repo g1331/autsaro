@@ -58,6 +58,9 @@ class BaselineReuseTests(unittest.TestCase):
         compiler.write_bytes(b"controlled compiler")
         (root / "driver.py").write_bytes(b"current driver\n")
         (root / "sample.arxml").write_bytes(b"current sample\n")
+        wrapper = root / c_baseline.WRAPPER
+        wrapper.parent.mkdir(parents=True)
+        wrapper.write_bytes(b"current wrapper\n")
         for path in (project, candidate / "project"):
             metadata = json.loads((path / "meta/integration.json").read_text())
             metadata["plan"].update(
@@ -74,7 +77,8 @@ class BaselineReuseTests(unittest.TestCase):
     def patches(self, stack, root, summary, compiler):
         stack.enter_context(patch.object(c_baseline, "ROOT", root))
         stack.enter_context(patch.object(c_baseline, "git", side_effect=lambda *args:
-                                        "driver.py\0sample.arxml\0" if args[0] == "ls-files"
+                                        f"driver.py\0sample.arxml\0{c_baseline.WRAPPER}\0"
+                                        if args[0] == "ls-files"
                                         else "parent"))
         stack.enter_context(patch.dict(os.environ, {
             "GITHUB_REPOSITORY": "owner/repo", "AUTOSAR_CC": str(compiler),
@@ -219,8 +223,73 @@ class BaselineReuseTests(unittest.TestCase):
                     source = json.loads((output / "baseline-source.json").read_text())
                     self.assertEqual(source["kind"], "same-run")
                     self.assertEqual(source["tree"], "parent")
-                    self.assertIn("artifact_missing" if field == "missing" else "reuse_refused",
-                                  source["reason"])
+                    if field == "missing":
+                        self.assertEqual(source["reason"], "artifact_missing")
+                    elif field == "producer_attempt":
+                        self.assertIn("different run attempt", source["reason"])
+                    else:
+                        self.assertIn("identity differs: " + field, source["reason"])
+
+    def test_legacy_wrapper_matches_only_exact_transition_and_other_inputs(self):
+        wrapper_bytes = Path(c_baseline.__file__).read_bytes().replace(b"\r\n", b"\n")
+        revisions = {
+            b"\n": "86d510532958d716a7e9d821e726c535793b93c14ee9434f5166fcaa7916c969",
+            b"\r\n": "6a0d29b1154f687be2cef02355fbf8a2a94e737ee652ddf1ce6fa268a180205a",
+        }
+        for eol, preceding_hash in revisions.items():
+            with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
+                root = Path(temporary).resolve()
+                summary, project, candidate, compiler = self.fixture(root)
+                semantic, acceptance = self.patches(stack, root, summary, compiler)
+                wrapper = root / c_baseline.WRAPPER
+                selector = root / c_baseline.JOB_SELECTOR
+                current = wrapper_bytes.replace(b"\n", eol)
+                wrapper.write_bytes(current)
+                selector.write_bytes(b"Updated job labels")
+                tracked = ("driver.py", "sample.arxml", c_baseline.WRAPPER, c_baseline.JOB_SELECTOR)
+                c_baseline.git.side_effect = lambda *args, tracked=tracked: (
+                    "\0".join(tracked) if args[0] == "ls-files" else "parent")
+
+                c_baseline.record(candidate, "parent", "linux", "standard-ecu")
+                legacy = c_baseline.read(candidate / "analysis-identity.json")
+                legacy["identity"] = c_baseline.identity(
+                    candidate / "project", "parent", "linux", "standard-ecu", summary["tool"],
+                    c_baseline.compiler_identity(compiler), summary["semanticIdentity"]["sdk"],
+                    previous=preceding_hash)
+                (candidate / "analysis-identity.json").write_text(json.dumps(legacy))
+
+                def download(_repo, _tree, _target, sample, directory,
+                             root=root, candidate=candidate):
+                    self.assertEqual(directory.parent, root / "analysis")
+                    shutil.copytree(candidate, directory / sample)
+                    return {"kind": "master-artifact", "tree": "parent", "run": 1, "attempt": 1}
+
+                for changed in ("selector", "driver", "wrapper"):
+                    with self.subTest(eol=eol, changed=changed):
+                        wrapper.write_bytes(current + (b"# changed" if changed == "wrapper" else b""))
+                        (root / "driver.py").write_bytes(
+                            b"changed driver" if changed == "driver" else b"current driver\n")
+                        output = root / "analysis" / changed
+                        semantic.reset_mock()
+                        acceptance.reset_mock()
+
+                        def fresh(_project, _target, result, candidate=candidate, **_kwargs):
+                            shutil.copytree(candidate, result)
+                            return 1
+
+                        with patch.object(c_baseline, "download", side_effect=download), \
+                                patch.object(c_baseline.c_check, "check", side_effect=fresh) as scan:
+                            c_baseline.analyze("baseline", "linux", "standard-ecu", project, output)
+                            source = c_baseline.read(output / "baseline-source.json")
+                            if changed == "selector":
+                                scan.assert_not_called()
+                                semantic.assert_called_once()
+                                acceptance.assert_called_once()
+                                self.assertEqual(source["kind"], "master-artifact")
+                            else:
+                                scan.assert_called_once()
+                                self.assertEqual(source["kind"], "same-run")
+                                self.assertIn("identity differs: inputs", source["reason"])
 
     def test_sdk_or_current_checker_changes_refuse_cached_analysis(self):
         for changed in ("sdk", "coverage", "driver", "configuration", "source",
