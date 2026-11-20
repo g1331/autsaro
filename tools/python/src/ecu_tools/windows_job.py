@@ -549,15 +549,20 @@ class WindowsJob:
     def wait(
         self, deadline_ns: int, *, close_tree_on_exit: bool = False
     ) -> tuple[str, int | None, bool]:
+        hosts: set[tuple[int, int]] = set()
         while time.monotonic_ns() < deadline_ns:
             code = self.poll()
+            try:
+                if code is None:
+                    # The host may lose its image path before poll sees the root exit.
+                    hosts.update(console_hosts(self.job))
+                else:
+                    orphaned = self._orphaned_after_root_exit(deadline_ns, hosts)
+            except BaseException:
+                # A classification failure must not skip the Job's reclaim.
+                self.close()
+                raise
             if code is not None:
-                try:
-                    orphaned = self._orphaned_after_root_exit(deadline_ns)
-                except BaseException:
-                    # A classification failure must not skip the Job's reclaim.
-                    self.close()
-                    raise
                 self.close()
                 status = (
                     "orphaned_members"
@@ -571,10 +576,12 @@ class WindowsJob:
         self.evidence.finish("timeout", self.poll(), False)
         return "timeout", self.poll(), False
 
-    def _orphaned_after_root_exit(self, deadline_ns: int) -> bool:
+    def _orphaned_after_root_exit(
+        self, deadline_ns: int, hosts: set[tuple[int, int]]
+    ) -> bool:
         # The active count can lag a reaped cooperative exit briefly.
         grace = min(deadline_ns, time.monotonic_ns() + GRACE_NS)
-        hosts = console_hosts(self.job)
+        hosts.update(console_hosts(self.job))
         self.evidence.observe("root_exited", self.pid, self.job)
         while self._active() and time.monotonic_ns() < grace:
             hosts |= console_hosts(self.job)

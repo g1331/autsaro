@@ -333,6 +333,17 @@ impl ProcessTree {
     pub(crate) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         self.child.try_wait()
     }
+    pub(crate) fn try_wait_tracking_hosts(
+        &mut self,
+        hosts: &mut BTreeSet<console_host::Identity>,
+    ) -> io::Result<Option<ExitStatus>> {
+        let status = self.try_wait()?;
+        if status.is_none() {
+            // A console host can lose its image path before we observe the root exit.
+            hosts.extend(self.console_hosts());
+        }
+        Ok(status)
+    }
     pub(crate) fn id(&self) -> u32 {
         self.child.id()
     }

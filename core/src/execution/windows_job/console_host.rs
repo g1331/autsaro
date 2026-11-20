@@ -362,7 +362,7 @@ mod tests {
     }
 
     #[test]
-    fn a_real_console_host_is_recognised_while_its_client_runs() {
+    fn root_wait_polls_record_the_real_console_host_before_client_exit() {
         let scratch = crate::generator::output::reserve_directory(
             &std::env::temp_dir(),
             "console-host",
@@ -377,11 +377,11 @@ mod tests {
             .stderr(std::process::Stdio::null());
         let mut tree = ProcessTree::spawn(&mut command, &scratch.join("stderr.log")).unwrap();
         let end = Instant::now() + Duration::from_secs(8);
-        let mut found = hosts(&tree.job);
+        let mut found = BTreeSet::new();
         while found.is_empty() {
             assert!(Instant::now() < end, "no console host appeared in the Job");
+            assert!(tree.try_wait_tracking_hosts(&mut found).unwrap().is_none());
             std::thread::sleep(Duration::from_millis(10));
-            found = hosts(&tree.job);
         }
         // The Python client still runs, so the Job holds more than exited hosts.
         assert!(!only_exited_hosts(&tree.job, &found));

@@ -121,8 +121,8 @@ host）中 p50 为 2.6 ms，p99 为 6.5 ms，滞后超过 100 ms 的只有同一
 `WindowsJob._hosts_finished` 只在以下条件同时成立时继续等待：
 
 - 剩余成员全部是此前记录的 `GetSystemDirectoryW` 所返回目录下的 `conhost.exe`；读不到系统目录时
-  不识别任何 host。身份按 PID＋创建时间记录，镜像在收尾阶段会因拒绝访问读不出，所以根退出时先
-  记录一次，宽限内每 10 ms 再记录。
+  不识别任何 host。身份按 PID＋创建时间记录。#414 的 Windows protocol 现场中，根退出时镜像查询
+  已拒绝访问，因此等待根退出的每次轮询、首次观察到根退出及宽限期内都记录可读取的宿主身份。
 - 这些 host 的 `GetExitCodeProcess` 已不是 `STILL_ACTIVE`。
 
 等待上限取 5 s，与 `stop` 在 `TerminateJobObject` 后等待成员离开的既有预算一致，并受命令的绝对
