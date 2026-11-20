@@ -79,6 +79,8 @@
 
 ### Fixed
 
+- C analysis rejects unexpected include search changes from project flags and evaluated resource existence probes, and reports SDK link permission and I/O failures (#620)
+
 - `fetch-official` retries transient download failures up to twice, reports connection diagnostics, and rejects redirects before requesting a different URL (#614)
 
 - C analysis refuses untracked header existence checks and compares compiler macros with the project's include flags. Regenerate v2 and v3 comparison baselines (#576)
