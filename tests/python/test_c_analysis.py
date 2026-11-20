@@ -92,15 +92,20 @@ class CAnalysisTests(unittest.TestCase):
             directory = Path(temporary)
             project = directory / "project"
             for name, now in changes.items():
-                with self.subTest(change=name), patch.object(
-                        c_check, "probe_include_search", return_value=([], now)) as probe, patch.object(
-                        c_check, "probe_predefines", return_value=predefines):
+                with self.subTest(change=name), \
+                        patch.object(c_check, "probe_include_search", return_value=([], now)) as probe, \
+                        patch.object(c_check, "verify_project_include_search") as project_probe, \
+                        patch.object(c_check, "probe_predefines", return_value=predefines):
                     if name == "unchanged":
                         c_check.recheck_compiler_inputs(scope, project)
+                        project_probe.assert_called_once_with(
+                            "/usr/bin/gcc", ["-std=c99"], [tool_argument(project)],
+                            probe.call_args.args[2], False, recorded, cwd=directory)
                     else:
                         with self.assertRaisesRegex(ValueError,
                                                     "include search order or variables"):
                             c_check.recheck_compiler_inputs(scope, project)
+                        project_probe.assert_not_called()
                     self.assertEqual(probe.call_args.args[:2], ("/usr/bin/gcc", ["-std=c99"]))
                     self.assertEqual(probe.call_args.args[2].parent, directory)
                     self.assertEqual(probe.call_args.kwargs["cwd"], directory)
@@ -132,6 +137,7 @@ class CAnalysisTests(unittest.TestCase):
                      "compiler predefined macros changed")):
                 with self.subTest(name=name), \
                         patch.object(c_check, "probe_include_search", return_value=([], now)), \
+                        patch.object(c_check, "verify_project_include_search"), \
                         patch.object(c_check, "probe_predefines", return_value=macros), \
                         patch.object(c_check, "semantic_identity",
                                      return_value=summary["semanticIdentity"]):
