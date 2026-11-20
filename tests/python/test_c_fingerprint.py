@@ -203,6 +203,18 @@ class FingerprintTests(unittest.TestCase):
                     self.assertEqual(set(result["staleDispositions"]), approved)
                     self.assertEqual(len(result["unacceptedNew"]), 2)
 
+    def test_primary_origin_rejects_a_clang_line_one_marker(self):
+        for root, windows in (("/private/var/tmp/project", False), ("C:/Checkout", True)):
+            with self.subTest(root=root):
+                source = f'"{root}/source.c"'
+                gcc = f'# 0 {source}\n# 1 {source}\nint value;\n'
+                clang = f'# 1 {source}\n# 1 "<built-in>" 1\n# 1 {source} 2\nint value;\n'
+                wanted = {"source.c": {1}}
+                _, anchors = c_fingerprint.compiler_context(gcc, "source.c", {}, wanted, windows=windows)
+                self.assertEqual(anchors, {("source.c", 1): [["int", "value", ";"]]})
+                with self.assertRaisesRegex(ValueError, r"^Primary compiler-origin marker differs: source\.c$"):
+                    c_fingerprint.compiler_context(clang, "source.c", {}, wanted, windows=windows)
+
     def test_windows_sdk_and_checkout_markers_ignore_case(self):
         original = (
             '# 0 "C:/Checkout/Source.c"\n# 1 "C:/msys64/mingw64/include/Header.h"\n'

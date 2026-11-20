@@ -45,11 +45,13 @@ class SimulatedJob:
         exit_code: int,
         leaves_ms: float | None,
         image_readable_ms: float = 10_000,
+        exits_ms: float = 0,
         created: int | None = None,
     ) -> None:
         self.members[pid] = {
             "image": image,
             "exit_code": exit_code,
+            "exits": int(exits_ms * MS),
             "leaves": None if leaves_ms is None else int(leaves_ms * MS),
             "readable": int(image_readable_ms * MS),
             "created": created if created is not None else 1000 + pid,
@@ -90,20 +92,25 @@ class SimulatedJob:
             "created_100ns": value["created"],
             "image": value["image"] if readable else None,
             "image_error": None if readable else 5,
-            "exit_code": value["exit_code"],
+            "exit_code": value["exit_code"] if self.now >= value["exits"] else 259,
         }
 
     def run(
         self,
         *,
         deadline_ms: float = 60_000,
+        root_exits_ms: float = 0,
+        root_exit_code: int = 0,
         observe_ms: float = 0,
         close_tree_on_exit: bool = False,
         system_host: str | None = SYSTEM_HOST.lower(),
     ):
         root = windows_job.WindowsJob.__new__(windows_job.WindowsJob)
         root.job = 1
-        root.child = SimpleNamespace(pid=100, poll=lambda: 0)
+        root.child = SimpleNamespace(
+            pid=100,
+            poll=lambda: root_exit_code if self.now >= root_exits_ms * MS else None,
+        )
         root.evidence = SimpleNamespace(
             observe=lambda *args: self.sleep(observe_ms / 1000),
             finish=lambda *args: None,
@@ -131,6 +138,23 @@ class SimulatedJob:
 
 
 class ConsoleHostWaitTests(unittest.TestCase):
+    def test_host_image_lost_before_root_exit_is_remembered(self) -> None:
+        # The failing gcc commands left an exiting host whose image was already
+        # unreadable when the root first reported its expected error exit.
+        job = SimulatedJob()
+        job.add(
+            632,
+            SYSTEM_HOST,
+            exit_code=0,
+            leaves_ms=1100,
+            image_readable_ms=795,
+            exits_ms=795,
+        )
+        self.assertEqual(
+            job.run(root_exits_ms=800, root_exit_code=1), ("exited", 1, False)
+        )
+        self.assertEqual(job.now, 1100 * MS)
+
     def test_exited_host_finishing_after_the_grace_is_waited_out(self) -> None:
         # The observed failure: the host exited with its client but left the Job
         # 400 ms later, and its image became unreadable before then.
@@ -212,10 +236,17 @@ class ConsoleHostWaitTests(unittest.TestCase):
 
     def test_live_descendant_fails_without_the_extra_wait(self) -> None:
         job = SimulatedJob()
-        job.add(632, SYSTEM_HOST, exit_code=0, leaves_ms=404)
+        job.add(
+            632,
+            SYSTEM_HOST,
+            exit_code=0,
+            leaves_ms=404,
+            image_readable_ms=45,
+            exits_ms=45,
+        )
         job.add(700, r"C:\Python\python.exe", exit_code=259, leaves_ms=None)
-        self.assertEqual(job.run(), ("orphaned_members", 0, True))
-        self.assertLess(job.now, 300 * MS)
+        self.assertEqual(job.run(root_exits_ms=50), ("orphaned_members", 0, True))
+        self.assertEqual(job.now, 250 * MS)
 
     def test_running_host_is_not_a_teardown(self) -> None:
         # A host that has not exited still serves a client that may be alive.

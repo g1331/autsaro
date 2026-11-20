@@ -112,6 +112,9 @@ jobs:
       - run: uv sync --locked
       - run: uv run --locked ruff check tools tests/python scripts
       - run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python
+        env:
+          # The fingerprint fixtures consume GCC line markers. macOS's unversioned gcc runs Clang.
+          AUTOSAR_CC: ${{ runner.os == 'macOS' && 'gcc-15' || '' }}
       - run: uv build --out-dir build/python
   receiver:
     needs: changes
