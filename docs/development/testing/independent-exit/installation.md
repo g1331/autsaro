@@ -1,8 +1,7 @@
 # B4 安装包实测
 
-由 [#63](https://github.com/g1331/autsaro/issues/63) 承接。按[发布说明](../../../maintainers/releasing.md)取得同一冻结提交的
-Linux／Windows 安装介质，保存工件来源和 SHA-256。每个平台使用断网、无源码的干净 VM。Linux 预装目标包要求的依赖，
-Windows 从管理员 PowerShell 7 操作。先安装，通过工作台手工检查后再卸载。
+由 [#63](https://github.com/g1331/autsaro/issues/63) 承接，由与实现无关的独立会话执行。按[发布说明](../../../maintainers/releasing.md)取得同一冻结提交的
+Linux／Windows 安装介质，保存工件来源和 SHA-256。Linux 保持在断网、无源码的干净 VM 中操作并预装目标包要求的依赖；Windows 若在独立干净离线 VM 执行则保持整机断网与无源码，若按 [#56 方案 1](https://github.com/g1331/autsaro/issues/56#issuecomment-7031215781) 在 GitHub 托管 Windows runner（`windows-2025-vs2026`）执行，则不检出源码、仅下载安装介质、以管理员 PowerShell 7 配置防火墙禁止已安装／被测应用联网，并在验收记录中如实写明与“整机断网”原要求的唯一差距（runner 自身需与 GitHub 通信）。先安装，通过工作台手工检查后再卸载。执行记录与证据工件随 #63 与 #56 收口，不设维护者人工签字。
 
 ## 安装
 

@@ -2,7 +2,7 @@
 
 先按[执行篇](execution.md)准备冻结版本、受控工具和 B3 验证版工作台。这里单独运行两个场景，使用新的结果目录。
 两个场景均通过真实 Tauri／IPC 编辑、保存、重开并生成封存树。接下来的 HostBatch 和 probe 从该场景刚生成的目录独立构建并实际运行。
-固定四个 profile 从 `c_analysis::` 生成，再按[执行篇的 B1](execution.md#b1-搬移包并实际断网)执行回归。
+固定四个 profile 从 `c_analysis::` 生成，再按[执行篇的 B1](execution.md#b1-搬移包与隔离复验)执行回归。
 
 | 场景 | 通过判据 |
 | --- | --- |
@@ -14,7 +14,7 @@
 
 ## Linux
 
-在已完成 B3 构建准备的发送端源码目录执行。`AUTOSAR_RECEIVER_PYTHON` 使用[执行篇](execution.md)选定的绝对路径。
+由与实现无关的独立会话在已完成 B3 构建准备的发送端源码目录执行。`AUTOSAR_RECEIVER_PYTHON` 使用[执行篇](execution.md)选定的绝对路径。
 
 ```bash
 (
@@ -38,7 +38,7 @@
 
 ## Windows
 
-在执行篇的专用 Windows 会话中使用同一验证版工作台。先完成 B3 的构建及环境变量设置，再运行：
+在执行篇的 GitHub 托管 Windows runner（`windows-2025-vs2026`）或隔离专用会话中，由与实现无关的独立会话使用同一验证版工作台。先完成 B3 的构建及环境变量设置，再运行：
 
 ```powershell
 $env:AUTOSAR_DESKTOP_RESULTS = "$Root/results/A1-edited-desktop"
