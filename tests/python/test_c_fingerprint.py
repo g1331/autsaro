@@ -118,6 +118,25 @@ class FingerprintTests(unittest.TestCase):
         (output / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
         return summary
 
+    def test_exact_rejection_only_driver_revision_preserves_registered_fingerprints(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            summary = self.scan(output)
+            code = summary["semanticIdentity"]["analysisCode"]
+            code["c_check.py"] = "0f933b3b794d240d3a97c674bec20c50dbe0634f9753b831fdbae942d437ebba"
+            registered = self.inventory(summary, output)
+            self.assertTrue(all(row["fingerprint"] for row in registered))
+            driver = Path(c_check.__file__).read_text(encoding="utf-8").encode("utf-8")
+            current_hash = hashlib.sha256(driver).hexdigest()
+            code["c_check.py"] = current_hash
+            self.assertEqual(self.inventory(summary, output), registered)
+            self.assertEqual(code["c_check.py"], current_hash)
+            code["c_check.py"] = hashlib.sha256(driver + b"\n").hexdigest()
+            self.assertNotEqual(self.inventory(summary, output), registered)
+            code["c_check.py"] = current_hash
+            code["c_addon.py"] = "changed"
+            self.assertNotEqual(self.inventory(summary, output), registered)
+
     def test_target_tokens_and_configuration_invalidate_only_relevant_fingerprints(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

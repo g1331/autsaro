@@ -39,7 +39,7 @@ int main(void) { int divisor = FALLBACK_TOKEN; return 1 / divisor; }
 
 class ActualCAnalysisTests(unittest.TestCase):
     def project(self, root: Path, source: str, source_name: str = "bsw/src/main.c", extra_files: dict[str, str] | None = None,
-                unbuilt: tuple[str, ...] = ()) -> Path:
+                unbuilt: tuple[str, ...] = (), *, pedantic: bool = True) -> Path:
         project = root / "sources"
         project.mkdir()
         target = "windows-x64-controlled-v1" if platform.system() == "Windows" else "linux-x64-controlled-v1"
@@ -47,7 +47,7 @@ class ActualCAnalysisTests(unittest.TestCase):
         extra_files = extra_files or {}
         files = {**extra_files, source_name: source, "target.json": json.dumps({
             "format": "autosar-build-target-v3", "target": target, "abi": abi, "profile": "host",
-            "compilerFlags": ["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"],
+            "compilerFlags": ["-std=c99", "-Wall", "-Wextra", "-Werror", *(["-pedantic"] if pedantic else [])],
             "sources": [source_name, *(name for name in extra_files if name.endswith(".c") and name not in unbuilt)],
             "includePaths": ["."]})}
         for name, text in files.items():
@@ -663,6 +663,103 @@ int main(int argc, char **argv)
                         self.assertRaisesRegex(ValueError, "Analysis is incomplete"):
                     c_comparison.compare(summary, project, current, previous, source_tree=source_tree)
 
+    def test_c99_resource_existence_probe_follows_actual_compiler_support(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            compiler = os.environ.get("AUTOSAR_CC") or shutil.which("gcc")
+            capability = subprocess.run(
+                [compiler, "-std=c99", "-E", "-P", "-x", "c", "-"], check=True,
+                input="#ifdef __has_embed\nembed_available\n#endif\n",
+                capture_output=True, text=True,
+            )
+            has_embed = capability.stdout.strip() == "embed_available"
+            compiler_env = {}
+            if platform.system() == "Linux":
+                specs = root / "compiler.specs"
+                specs.write_text("*cpp:\n%{I*:-DAUTSARO_COMPILER_HAS_EMBED=0}\n\n", encoding="utf-8")
+                wrapper = root / "gcc"
+                wrapper.write_text(
+                    f'#!/bin/sh\nexec {shlex.quote(compiler)} -specs={shlex.quote(str(specs))} "$@"\n',
+                    encoding="utf-8",
+                )
+                wrapper.chmod(0o700)
+                compiler_env["AUTOSAR_CC"] = str(wrapper)
+            resource = root / "probe.bin"
+            resource.write_bytes(b"data")
+            source = (
+                "#if defined(__has_embed)\n"
+                "#define EMBED_AVAILABLE 1\n"
+                "#else\n"
+                "#define EMBED_AVAILABLE 0\n"
+                "#endif\n"
+                "int main(void) { return EMBED_AVAILABLE; }\n"
+            )
+            project = self.project(root, source, pedantic=False)
+            target = c_gate.read(project / "target.json")["target"]
+            output = root / "defined-only"
+            with patch.dict(os.environ, compiler_env):
+                self.assertEqual(c_check.check(project, target, output), 0)
+            self.assertIn(f"#define EMBED_AVAILABLE {int(has_embed)}",
+                          (output / "compiler-defines-0.stdout.log").read_text())
+            active = root / "active"
+            active.mkdir()
+            project = self.project(active, (
+                f'#if __has_embed("{resource.as_posix()}" limit(1))\n'
+                "#define RESOURCE_FOUND 1\n"
+                "#else\n"
+                "#define RESOURCE_FOUND 0\n"
+                "#endif\n"
+                "int main(void) { return RESOURCE_FOUND; }\n"
+            ), pedantic=False)
+            output = root / "probed"
+            with patch.dict(os.environ, compiler_env), redirect_stderr(io.StringIO()):
+                self.assertEqual(c_check.check(project, target, output), 1)
+            failed = c_gate.read(output / "summary.json")
+            if has_embed:
+                defines = (output / "compiler-defines-0.stdout.log").read_text()
+                self.assertIn("#define RESOURCE_FOUND 1", defines)
+                if compiler_env:
+                    self.assertIn("#define AUTSARO_COMPILER_HAS_EMBED 0", defines)
+                self.assertIn("Cannot verify absence of untracked header existence probes", failed["error"])
+            else:
+                self.assertIn("Compiler validation failed", failed["error"])
+            self.assertIn("__has_embed", failed["error"])
+
+    @unittest.skipUnless(platform.system() == "Linux", "Uses GCC specs")
+    def test_project_include_flags_cannot_add_a_non_project_search_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            gcc = os.environ.get("AUTOSAR_CC") or shutil.which("gcc")
+            injected = root / "injected"
+            injected.mkdir()
+            specs = root / "compiler.specs"
+            compiler = root / "gcc"
+            compiler.write_text(f'#!/bin/sh\nexec {shlex.quote(gcc)} -specs={shlex.quote(str(specs))} "$@"\n',
+                                encoding="utf-8")
+            compiler.chmod(0o700)
+            specs.write_text("*cpp:\n%{I*:}\n\n", encoding="utf-8")
+            project = self.project(root, "int main(void) { return 0; }\n")
+            target = c_gate.read(project / "target.json")["target"]
+            with patch.dict(os.environ, {"AUTOSAR_CC": str(compiler)}):
+                baseline = root / "baseline"
+                self.assertEqual(c_check.check(project, target, baseline), 0)
+                scope = c_gate.read(baseline / "summary.json")["scope"]
+                for flag, stage in (("dM", "compiler-defines-0"), ("dD", "compiler-origins-0")):
+                    with self.subTest(flag=flag):
+                        # This directory is hidden from a driver -v probe and from the other TU pass.
+                        specs.write_text(f"*cpp:\n%{{I*:%{{!v:%{{{flag}:-isystem {injected}}}}}}}\n\n",
+                                         encoding="utf-8")
+                        rejection = ("Unexpected compiler search order with project include flags "
+                                     f"in bsw/src/main.c (-{flag})")
+                        with self.assertRaises(ValueError) as replay_error:
+                            c_check.recheck_compiler_inputs(scope, baseline / "project")
+                        self.assertEqual(str(replay_error.exception), rejection)
+                        output = root / f"changed-{flag}"
+                        with redirect_stderr(io.StringIO()):
+                            self.assertEqual(c_check.check(project, target, output), 1)
+                        self.assertEqual(c_gate.read(output / "summary.json")["error"], rejection)
+                        self.assertIn(str(injected), (output / f"{stage}.stderr.log").read_text())
+
     @unittest.skipUnless(platform.system() == "Linux", "Uses GCC specs")
     def test_project_include_flags_bind_specs_macros_in_both_comparisons(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -782,6 +879,43 @@ int main(int argc, char **argv)
             link = (include / "branch").as_posix().lstrip("/")
             self.assertEqual(scope["sdkInventory"]["links"][link],
                              {"kind": "dir", "target": "usr/include/x86_64-linux-gnu/sys"})
+
+    @unittest.skipUnless(platform.system() == "Linux", "Uses real directory symlinks")
+    def test_opening_a_header_through_a_link_to_a_non_provider_fails_acceptance(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            include = root / "include"
+            include.mkdir()
+            link = include / "branch"
+            project = self.gate_project(root / "fixture", (
+                "#include <limits.h>\n#include <branch/outside.h>\n"
+                "int main(void) { return CHAR_BIT; }\n"
+            ), debug=False)
+            target = c_gate.read(project / "target.json")["target"]
+            inventories = []
+            for name in ("first", "second"):
+                with self.subTest(name=name):
+                    header = root / name / "outside.h"
+                    header.parent.mkdir()
+                    header.write_text("/* Outside every provider. */\n", encoding="utf-8")
+                    link.symlink_to(header.parent, target_is_directory=True)
+                    output = root / f"analysis-{name}"
+                    with patch.dict(os.environ, {"CPATH": str(include)}):
+                        self.assertEqual(c_check.check(project, target, output), 0)
+                    summary = c_gate.read(output / "summary.json")
+                    self.assertIsNone(summary["error"])
+                    scope = summary["scope"]
+                    inventories.append(scope["sdkInventory"])
+                    self.assertNotIn(link.as_posix().lstrip("/"), scope["sdkInventory"]["links"])
+                    self.assertIn(header.as_posix(), scope["sdkTranslationUnits"]["bsw/src/main.c"])
+                    record = next(row for row in scope["sdkHeaders"] if row["path"] == header.as_posix())
+                    self.assertEqual(record["category"], "unclassified")
+                    acceptance = summary["projectAcceptance"]
+                    self.assertEqual(acceptance["status"], "error")
+                    self.assertEqual(acceptance["objects"][-1]["reason"],
+                                     "Incomplete SDK source provenance")
+                    link.unlink()
+            self.assertEqual(*inventories)
 
     def test_semantic_inputs_from_real_producer_refuse_changed_macro_and_allow_relocation(self):
         from autosar_tooling.c_comparison import compare
