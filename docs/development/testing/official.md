@@ -8,6 +8,8 @@ uv run --locked python -m autosar_tooling fetch-official
 
 已存在的文件只校验、不覆盖，哈希不一致即失败；新下载的文件哈希不一致时丢弃。`www.autosar.org` 在 TLS 握手中不发送中间证书（Windows 的 Schannel curl 同样不会自动补全），命令从证书 AIA 地址取得 Starfield Secure Certificate Authority - G2，校验固定指纹后与系统信任库一起使用，不关闭证书校验。站点更换证书后指纹校验会失败，需审阅新证书链后再更新 `autosar_tooling/official.py` 中的固定值。
 
+档案和中间证书都只从登记的 URL 获取，收到 HTTP 重定向即失败。连接拒绝、连接重置、套接字超时或临时 DNS 故障最多尝试 3 次，两次重试分别等待 1 秒和 2 秒，每次仍使用 60 秒套接字超时。HTTP、TLS 和哈希校验失败立即退出。网络失败日志记录 URL、尝试次数和原始异常，并在适用时附 URL 主机的 DNS 查询结果。DNS 地址可用来比对故障现场，实际 TCP 对端还取决于 runner 的代理和出站网络。
+
 CI 中的 `Official archive comparison`（`acceptance.yml`）在 GitHub 托管的 `ubuntu-24.04` 与 `windows-2025-vs2026` runner 上运行 `fetch-official`、`cargo test --locked -p autosar-config-core --features official-oracles --test official --no-fail-fast` 和条款处置核算（见[标准基线 §5](../../standards/README.md#5-条款处置与核算)）：`core/resources/requirements/` 中已提交清单的文档从档案做完整检查，并核对清单与档案一致；其余被引用的文档只检查失效引用，列表在工作流的 `Requirement dispositions` 步骤中。档案按 `official.json` 的哈希存入本仓库的 Actions 缓存，不作为 artifact 上传，日志只记录路径和哈希。触发方式：
 
 - 手动运行（workflow_dispatch）；

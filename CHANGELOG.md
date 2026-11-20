@@ -79,6 +79,8 @@
 
 ### Fixed
 
+- `fetch-official` retries transient download failures up to twice, reports connection diagnostics, and rejects redirects before requesting a different URL (#614)
+
 - C analysis refuses untracked header existence checks and compares compiler macros with the project's include flags. Regenerate v2 and v3 comparison baselines (#576)
 - SDK integration acceptance compares header contents and active definitions without requiring the recorded package version to match (#572)
 
