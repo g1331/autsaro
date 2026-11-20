@@ -79,6 +79,8 @@
 
 ### Fixed
 
+- The Linux x64 controlled ECU delivery can now compile `Arti.h`, `Os.h`, `Os_Arti.h`, and `Os_Host.h` as the first or a repeated include in a C++17 translation unit (#434)
+
 - `fetch-official` retries transient download failures up to twice, reports connection diagnostics, and rejects redirects before requesting a different URL (#614)
 
 - C analysis refuses untracked header existence checks and compares compiler macros with the project's include flags. Regenerate v2 and v3 comparison baselines (#576)
