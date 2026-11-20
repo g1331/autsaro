@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import c_fingerprint, c_gate, ci_reporting
+from autosar_tooling import c_check, c_fingerprint, c_gate, ci_reporting
 
 HEADER = "#define VALUE 1\ntypedef unsigned int Count;\n"
 SOURCE = (
@@ -18,6 +18,15 @@ SOURCE = (
     "const char *source_path = __FILE__;\n"
     "Count read_count(void) { return VALUE + 2; }\n"
 )
+CHECKER_SOURCE = """\
+#ifdef __CPPCHECK__
+typedef unsigned char x;
+#define ARG(x) (x)
+int checker_branch(void) { return ARG(266); }
+#endif
+int read_count(void) { int count; return count; }
+"""
+CHANGED_CHECKER_SOURCE = CHECKER_SOURCE.replace("ARG(x) (x)", "ARG (x) (x)")
 
 
 class FingerprintTests(unittest.TestCase):
@@ -107,21 +116,11 @@ class FingerprintTests(unittest.TestCase):
                         self.assertEqual(len(result["unacceptedNew"]), 2)
 
     def test_cppcheck_only_macro_spelling_changes_the_fingerprint(self):
-        source = """\
-#ifdef __CPPCHECK__
-typedef unsigned char x;
-#define ARG(x) (x)
-int checker_branch(void) { return ARG(266); }
-#endif
-int read_count(void) { int count; return count; }
-"""
-        texts = source, source.replace("ARG(x) (x)", "ARG (x) (x)"), "\n\n" + source
+        texts = CHECKER_SOURCE, CHANGED_CHECKER_SOURCE, "\n\n" + CHECKER_SOURCE
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             fingerprints = []
             gcc_hashes = []
-            checker_output = []
-            executable = os.environ.get("CPPCHECK") or shutil.which("cppcheck")
             for index, text in enumerate(texts):
                 output = root / str(index)
                 summary = self.scan(output, source=text, rule="uninitvar")
@@ -130,21 +129,30 @@ int read_count(void) { int count; return count; }
                 fingerprints.append(self.inventory(summary, output))
                 compiler = (output / "compiler-origins-0.stdout.log").read_text(encoding="utf-8")
                 gcc_hashes.append(c_fingerprint.compiler_context(compiler, "source.c", {}, {})[0])
-                if executable:
-                    checked = subprocess.check_output(
-                        [executable, "--quiet", "-E", str(output / "project/source.c")],
-                        encoding="utf-8",
-                    )
-                    checker_output.append("".join(checked.split()))
             self.assertEqual(gcc_hashes, [gcc_hashes[0]] * 3)
-            if executable:
-                self.assertIn("return(266);", checker_output[0])
-                self.assertIn("return(x)(x)(266);", checker_output[1])
             approved = {row["fingerprint"] for row in fingerprints[0]}
             result = c_fingerprint.verdict(fingerprints[1], fingerprints[0], approved)
             self.assertEqual(result["status"], "blocked")
             self.assertEqual(set(result["staleDispositions"]), approved)
             self.assertEqual(fingerprints[0], fingerprints[2])
+
+    def test_pinned_cppcheck_preprocesses_macro_spelling_differently(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            try:
+                executable, _, _ = c_check.tool_identity(root)
+            except (OSError, RuntimeError, ValueError) as error:
+                if os.environ.get("CPPCHECK"):
+                    self.fail(f"Configured CPPCHECK is unusable: {error}")
+                self.skipTest(f"Pinned Cppcheck unavailable: {error}")
+            source = root / "source.c"
+            for text, expected in ((CHECKER_SOURCE, "return(266);"),
+                                   (CHANGED_CHECKER_SOURCE, "return(x)(x)(266);")):
+                source.write_text(text, encoding="utf-8")
+                checked = subprocess.check_output(
+                    [str(executable), "--quiet", "-E", str(source)], encoding="utf-8", timeout=30,
+                )
+                self.assertIn(expected, "".join(checked.split()))
 
     def test_cppcheck_only_line_macro_keeps_physical_lines_in_identity(self):
         source = (
@@ -202,6 +210,35 @@ int read_count(void) { int count; return count; }
         ))
         self.assertNotEqual(c_fingerprint.compiler_context(original, "Source.c", {}, {})[0],
                             c_fingerprint.compiler_context(alias, "Source.c", {}, {})[0])
+
+    def test_windows_sdk_spellings_remain_distinct_and_collisions_are_refused(self):
+        paths = ("C:/msys64/include/Straße.h", "C:/msys64/include/Strasse.h")
+        sdk = c_fingerprint.path_index(zip(paths, ("sdk:eszett", "sdk:double-s")), True)
+        snapshots = []
+        for path, identity in zip(paths, ("sdk:eszett", "sdk:double-s")):
+            log = f'# 0 "C:/Checkout/Source.c"\n# 1 "{path}"\nint value;\n'
+            snapshot = c_fingerprint.compiler_context(
+                log, "Source.c", sdk, {identity: {1}}, windows=True,
+            )
+            self.assertEqual(snapshot[1], {(identity, 1): [["int", "value", ";"]]})
+            snapshots.append(snapshot[0])
+        self.assertNotEqual(*snapshots)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            summary = self.scan(root)
+            scope = summary["scope"]
+            scope["target"] = "windows-x64-controlled-v1"
+            scope["sdkHeaders"] = [
+                {"path": "C:/MSYS64/Include/Example.h", "key": "first"},
+                {"path": "c:/msys64/include/example.h", "key": "second"},
+            ]
+            with self.assertRaisesRegex(ValueError, "Ambiguous registered fingerprint path"):
+                self.inventory(summary, root)
+            scope["sdkHeaders"] = []
+            scope["cppcheckInputs"]["source.c"]["project"].append("Source.C")
+            with self.assertRaisesRegex(ValueError, "Ambiguous registered fingerprint path"):
+                self.inventory(summary, root)
 
     def test_ctu_checker_includes_other_program_units(self):
         with tempfile.TemporaryDirectory() as directory:

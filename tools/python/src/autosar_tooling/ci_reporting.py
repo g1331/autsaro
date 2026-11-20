@@ -19,6 +19,7 @@ from autosar_tooling import c_fingerprint
 # GitHub truncates displayed results above this limit even when upload succeeds.
 SARIF_RESULTS_PER_RUN = 5000
 SARIF_RUNS_PER_FILE = 20
+CPPCHECK_RUNS_PER_PROGRAM = SARIF_RUNS_PER_FILE // 2
 
 
 def summary(title: str, lines: list[str]) -> None:
@@ -195,13 +196,19 @@ def sarif(rows: list[dict], tool: str, *, categories: tuple[str, ...] = ()) -> d
         groups.setdefault(row.get("category"), []).append(row)
     runs = []
     for category, group in groups.items():
-        if len(group) <= SARIF_RESULTS_PER_RUN:
-            runs.append(sarif_run(group, tool, category))
-            continue
-        for part, start in enumerate(range(0, len(group), SARIF_RESULTS_PER_RUN), 1):
-            part_category = category if category and part == 1 else f"{category or tool}-part-{part}"
-            runs.append(sarif_run(group[start:start + SARIF_RESULTS_PER_RUN], tool,
-                                  part_category))
+        parts = max(1, (len(group) + SARIF_RESULTS_PER_RUN - 1) // SARIF_RESULTS_PER_RUN)
+        if category in categories:
+            # Publish every slot after a complete scan, even when its previous
+            # findings moved or disappeared. Actions jobs have no shared state.
+            if parts > CPPCHECK_RUNS_PER_PROGRAM:
+                raise ValueError(f"SARIF exceeds {CPPCHECK_RUNS_PER_PROGRAM} runs for {category}")
+            parts = CPPCHECK_RUNS_PER_PROGRAM
+        for part in range(1, parts + 1):
+            part_category = category
+            if part > 1 or (category is None and parts > 1):
+                part_category = f"{category or tool}-part-{part}"
+            start = (part - 1) * SARIF_RESULTS_PER_RUN
+            runs.append(sarif_run(group[start:start + SARIF_RESULTS_PER_RUN], tool, part_category))
     if len(runs) > SARIF_RUNS_PER_FILE:
         raise ValueError("SARIF exceeds GitHub's run limit; distribute samples across files")
     return {

@@ -31,6 +31,7 @@ TOKEN = re.compile(
 SOURCE_TOKEN = re.compile(r"/\*.*?\*/|//[^\n]*|" + TOKEN.pattern, re.DOTALL)
 FUNCTION_MACRO = re.compile(r"#define [A-Za-z_]\w*\(")
 LINE_SENSITIVE = re.compile(r"\b__LINE__\b|##|%:%:|(?:\\|\?\?/)[ \t]*(?:\n|$)")
+ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 
 
 def sha(value: object) -> str:
@@ -41,7 +42,18 @@ def sha(value: object) -> str:
 
 def path_key(name: str, windows: bool = False) -> str:
     path = posixpath.normpath(name.replace("\\", "/"))
-    return path.casefold() if windows else path
+    # Only identify ASCII case aliases across hosts. Non-ASCII spelling stays exact.
+    return path.translate(ASCII_LOWER) if windows else path
+
+
+def path_index(entries, windows: bool) -> dict[str, str]:
+    index = {}
+    for name, identity in entries:
+        key = path_key(name, windows)
+        if key in index:
+            raise ValueError(f"Ambiguous registered fingerprint path: {name} ({key})")
+        index[key] = identity
+    return index
 
 
 def source_root(lines: list[str], unit: str, windows: bool) -> str:
@@ -68,7 +80,7 @@ def compiler_context(text: str, unit: str, sdk: dict[str, str],
     project_paths = project_paths or {}
     # __FILE__ can put the source checkout in a string literal as well as a line marker.
     checkout = re.compile("|".join(map(re.escape, (root + "/", root.replace("/", "\\\\") + "\\\\"))),
-                          re.IGNORECASE if windows else 0)
+                          re.IGNORECASE | re.ASCII if windows else 0)
     digest = hashlib.sha256()
     expanded = defaultdict(list)
     filename, number = unit, 0
@@ -149,10 +161,10 @@ def inventory(summary: dict, output: Path, compiler_identity: dict) -> list[dict
     """Emit one identity per raw diagnostic location and program."""
     scope = summary["scope"]
     windows = scope["target"].startswith("windows-")
-    sdk = {path_key(row["path"], windows): "sdk:" + row["key"] for row in scope["sdkHeaders"]}
-    project_paths = {path_key(name, windows): name
-                     for unit, paths in scope["projectTranslationUnits"].items()
-                     for name in {*paths, *scope["cppcheckInputs"][unit]["project"]}}
+    sdk = path_index(((row["path"], "sdk:" + row["key"]) for row in scope["sdkHeaders"]), windows)
+    project_names = {name for unit, paths in scope["projectTranslationUnits"].items()
+                     for name in (*paths, *scope["cppcheckInputs"][unit]["project"])}
+    project_paths = path_index(((name, name) for name in sorted(project_names)), windows)
 
     def logical_path(name):
         key = path_key(name, windows)

@@ -110,15 +110,24 @@ Stale citations (not an official item of R24-11):
             }
             for index in range(5001)
         ]
-        result = report.sarif(rows, "Cppcheck")
-        self.assertEqual([len(run["results"]) for run in result["runs"]], [5000, 1])
-        self.assertEqual([run["automationDetails"]["id"] for run in result["runs"]],
+        category = "cppcheck-target-sample-probe"
+        result = report.sarif(rows, "Cppcheck", categories=(category,))
+        runs = result["runs"]
+        self.assertEqual([len(run["results"]) for run in runs[:2]], [5000, 1])
+        self.assertEqual([run["automationDetails"]["id"] for run in runs[:2]],
                          ["cppcheck-target-sample-probe/",
                           "cppcheck-target-sample-probe-part-2/"])
         entries = [entry for run in result["runs"] for entry in run["results"]]
         self.assertEqual([entry["partialFingerprints"] for entry in entries],
                          [row["partialFingerprints"] for row in rows])
         self.assertTrue(all(entry["baselineState"] == "unchanged" for entry in entries))
+        next_runs = report.sarif(rows[1:], "Cppcheck", categories=(category,))["runs"]
+        self.assertEqual([run["automationDetails"]["id"] for run in next_runs],
+                         [run["automationDetails"]["id"] for run in runs])
+        self.assertEqual(len(next_runs[0]["results"]), 5000)
+        self.assertEqual(next_runs[0]["results"][-1]["partialFingerprints"],
+                         runs[1]["results"][0]["partialFingerprints"])
+        self.assertTrue(all(not run["results"] for run in next_runs[1:]))
 
     def test_cppcheck_cli_publishes_empty_runs_for_scanned_programs(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -135,8 +144,11 @@ Stale citations (not an official item of R24-11):
                     "sarif", "--cppcheck-directory", str(sample.parent), "--output", str(output),
                 ]), 0)
             runs = json.loads(output.read_text(encoding="utf-8"))["runs"]
-            self.assertEqual([run["automationDetails"]["id"] for run in runs],
-                             ["cppcheck-target-sample/", "cppcheck-target-sample-probe/"])
+            self.assertEqual(len(runs), report.SARIF_RUNS_PER_FILE)
+            ids = {run["automationDetails"]["id"] for run in runs}
+            self.assertEqual(len(ids), len(runs))
+            self.assertIn("cppcheck-target-sample/", ids)
+            self.assertIn("cppcheck-target-sample-probe/", ids)
             self.assertTrue(all(not run["results"] for run in runs))
 
     def test_cppcheck_runtime_mapping_new_and_missing_baseline_are_distinct(self):
