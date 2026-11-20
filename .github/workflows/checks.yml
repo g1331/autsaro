@@ -1189,7 +1189,7 @@ jobs:
               result = subprocess.run(['uv', 'run', '--locked', 'python', '-m', 'autosar_tooling.c_baseline',
                   '--side', os.environ['ANALYSIS_SIDE'], '--sample', name,
                   '--target', os.environ['ANALYSIS_TARGET'], '--project', str(samples / name),
-                  '--output-directory', str(output)])
+                  '--output-directory', str(output), '--fingerprints'])
               try:
                   summary = json.loads((output / 'summary.json').read_text(encoding='utf-8'))
                   evidence = summary.get('preprocessingEvidence', {})
@@ -1425,7 +1425,7 @@ jobs:
           sys.exit(subprocess.run([sys.executable, '-m', 'autosar_tooling.c_gate', 'scan',
               '--target', os.environ['ANALYSIS_TARGET'],
               '--sample', os.environ['ANALYSIS_SAMPLE'],
-              '--scope-directory', 'build/c-analysis-scope']).returncode)
+              '--scope-directory', 'build/c-analysis-scope', '--fingerprints']).returncode)
       - name: Summarize and convert Cppcheck diagnostics
         if: always()
         run: python -m autosar_tooling.ci_reporting sarif --cppcheck-directory build/c-analysis-results --baseline-directory build/c-analysis-baseline --output build/cppcheck.sarif

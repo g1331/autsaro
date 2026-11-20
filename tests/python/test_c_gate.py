@@ -409,7 +409,7 @@ class SourceGateTests(unittest.TestCase):
                 self.assertEqual(run.call_args.args[0], [
                     sys.executable, "-m", "autosar_tooling.c_gate", "scan",
                     "--target", "linux-x64-controlled-v1", "--sample", "standard-ecu",
-                    "--scope-directory", "build/c-analysis-scope",
+                    "--scope-directory", "build/c-analysis-scope", "--fingerprints",
                 ])
 
     def test_both_scan_sides_share_prepare_and_run_without_cross_dependency(self):
@@ -451,7 +451,8 @@ class SourceGateTests(unittest.TestCase):
             self.assertIn("${{ inputs.index }}", artifact["name"])
             self.assertIn("${{ inputs.side }}", artifact["name"])
             self.assertEqual([path.rsplit("/", 1)[1] for path in artifact["path"].splitlines()],
-                             ["summary.json", "project", "analysis-identity.json", "identifier-evidence",
+                             ["summary.json", "project", "analysis-identity.json",
+                              "diagnostic-fingerprints.json", "identifier-evidence",
                               "baseline-source.json", "platform-model.h", "platform-library.cfg"])
             self.assertEqual(current["env"]["ANALYSIS_SIDE"], "current")
             self.assertEqual(baseline["env"]["ANALYSIS_SIDE"], "baseline")

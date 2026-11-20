@@ -151,6 +151,8 @@ def location(
 
 def sarif(rows: list[dict], tool: str) -> dict:
     results = []
+    # SARIF 2.1.0 requires baselineState on either all results in a run or none.
+    complete_comparison = all("baselineState" in row for row in rows)
     for row in rows:
         name = relative(row["file"])
         line = int(row["line"])
@@ -161,6 +163,8 @@ def sarif(rows: list[dict], tool: str) -> dict:
                 "ruleId": row["rule"],
                 "level": "warning",
                 "message": {"text": row["message"]},
+                **({"partialFingerprints": row["partialFingerprints"]} if "partialFingerprints" in row else {}),
+                **({"baselineState": row["baselineState"]} if complete_comparison else {}),
                 "locations": [
                     {
                         "physicalLocation": {
@@ -237,10 +241,28 @@ def cppcheck(
             if metadata.is_file()
             else {}
         )
-        for diagnostic in data.get("diagnostics", []):
+        fingerprint_rows = {}
+        previous_fingerprints = set()
+        compared = False
+        gate = path.with_name("gate.json")
+        if gate.is_file():
+            from autosar_tooling import c_fingerprint
+
+            preview = json.loads(gate.read_text(encoding="utf-8")).get("diagnosticFingerprints")
+            if preview is not None:
+                if preview["format"] != c_fingerprint.FORMAT:
+                    raise ValueError("Unsupported diagnostic fingerprint report")
+                for item in preview["current"]:
+                    if fingerprint := item["fingerprint"]:
+                        key = item["diagnostic"], item["locationIndex"]
+                        fingerprint_rows.setdefault(key, []).append(fingerprint)
+                previous_fingerprints = {item["fingerprint"] for item in preview["baseline"]}
+                compared = (None not in previous_fingerprints
+                            and all(item["fingerprint"] is not None for item in preview["current"]))
+        for index, diagnostic in enumerate(data.get("diagnostics", [])):
             if diagnostic["id"] == "checkersReport":
                 continue
-            for place in diagnostic["locations"]:
+            for position, place in enumerate(diagnostic["locations"]):
                 if not place.get("line") or int(place["line"]) < 1:
                     continue
                 name, line = location(
@@ -252,7 +274,14 @@ def cppcheck(
                     "line": line,
                     "message": diagnostic["message"],
                 }
-                if row not in rows:
+                fingerprints = fingerprint_rows.get((index, position), ())
+                if fingerprints:
+                    rows.extend({
+                        **row, "partialFingerprints": {c_fingerprint.SARIF_KEY: fingerprint},
+                        **({"baselineState": "unchanged" if fingerprint in previous_fingerprints else "new"}
+                           if compared else {}),
+                    } for fingerprint in fingerprints)
+                elif row not in rows:
                     rows.append(row)
                 source = (
                     (project / relative(place["file"]))

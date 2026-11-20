@@ -13,7 +13,7 @@ import subprocess
 from collections import Counter
 from pathlib import Path
 
-from autosar_tooling import c_acceptance, c_comparison, c_rename
+from autosar_tooling import c_acceptance, c_comparison, c_fingerprint, c_rename
 from autosar_tooling.config import ROOT
 
 SAMPLES = c_comparison.MATRIX_SAMPLES
@@ -219,10 +219,44 @@ def load_scope_matrix(directory: Path, side: str) -> dict:
     return c_comparison.scope_matrix(receipts)
 
 
-def scan(target: str, sample: str, scope_directory: Path | None = None) -> None:
+def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict) -> dict:
+    """Report the prospective comparison while dispositions still use grouped approvals."""
+    inside = {}
+    for side, summary in summaries.items():
+        headers = c_comparison.matrix_headers(summary, matrices[side])
+        inside[side] = [
+            row for row in inventories[side]
+            if (not (locations := summary["diagnostics"][row["diagnostic"]]["locations"])
+                or c_comparison.location_scope(summary["scope"], locations[row["locationIndex"]],
+                                               headers=headers) == "in-scope")
+        ]
+    current = summaries["current"]
+    accepted = {(row["diagnostic"], row["locationIndex"])
+                for row in current["projectAcceptance"]["occurrences"]
+                if row["assessment"] == "accepted"}
+    mandatory = {"misra-c2012-" + row["id"][1:] for row in current["coverage"]["rules"]
+                 if row["category"] == "Mandatory"}
+    candidates = {
+        row["fingerprint"] for row in inside["current"]
+        if row["fingerprint"] is not None
+        and (row["diagnostic"], row["locationIndex"]) in accepted
+        and current["diagnostics"][row["diagnostic"]]["id"] not in mandatory
+    }
+    comparison = c_fingerprint.verdict(inside["current"], inside["baseline"], candidates)
+    del comparison["staleDispositions"]
+    return {"format": c_fingerprint.FORMAT, "mode": "migration-preview", **comparison,
+            "current": inventories["current"], "baseline": inventories["baseline"],
+            "candidateDispositions": sorted(candidates)}
+
+
+def scan(target: str, sample: str, scope_directory: Path | None = None, *,
+         fingerprints: bool = False) -> None:
+    if fingerprints and scope_directory is None:
+        raise ValueError("Fingerprint comparison requires the complete scope matrix")
     outputs = {}
     evidence = {}
     evidence_errors = []
+    inventories = {}
     parent = git("rev-parse", "HEAD^1")
     # Same-run c-check producers already validate actual target semantics before
     # and after scanning. Rebind transferred source bytes to those fresh inputs.
@@ -239,6 +273,9 @@ def scan(target: str, sample: str, scope_directory: Path | None = None) -> None:
             **({"sdk_revision": parent} if side == "baseline" else {}))
         if identity != summary["projectAcceptance"]["inputIdentity"]:
             raise ValueError(f"Transferred {side} analysis inputs changed: {sample}")
+        if fingerprints:
+            manifest = read(output / "analysis-identity.json")
+            inventories[side] = c_fingerprint.read_receipt(output, summary, manifest["fingerprintSha256"])
         outputs[side] = output
         try:
             evidence[side] = c_rename.evidence(output, sha(output / "summary.json"))
@@ -264,6 +301,10 @@ def scan(target: str, sample: str, scope_directory: Path | None = None) -> None:
                      **({"baseline_matrix": matrices["baseline"]} if matrices else {}))
     if matrices:
         result["baselineScopeMatrix"] = matrices["baseline"]
+    if fingerprints:
+        result["diagnosticFingerprints"] = fingerprint_comparison(
+            {side: read(path / "summary.json") for side, path in outputs.items()}, inventories, matrices,
+        )
     result.update(format=FORMAT, target=target, sample=sample,
                   baselineSource=source,
                   commit=git("rev-parse", "HEAD"), baseline=git("rev-parse", "HEAD^1"),
@@ -272,7 +313,12 @@ def scan(target: str, sample: str, scope_directory: Path | None = None) -> None:
                   inputIdentity={side: read(path / "summary.json")["projectAcceptance"][
                       "inputIdentity"] for side, path in outputs.items()})
     (current / "gate.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps(result, indent=2))
+    print(json.dumps({key: value for key, value in result.items() if key != "diagnosticFingerprints"},
+                     indent=2))
+    if fingerprints:
+        preview = result["diagnosticFingerprints"]
+        print(f"Fingerprint preview: {preview['status']}; {len(preview['new'])} new; "
+              f"{len(preview['removed'])} removed; {preview['unavailable']} unavailable")
     if result["status"] != "passed":
         raise ValueError(f"New source diagnostics without current precise disposition: {sample}")
 
@@ -354,6 +400,7 @@ def main() -> None:
     scanning.add_argument("--target", choices=TARGETS, required=True)
     scanning.add_argument("--sample", choices=SAMPLES, required=True)
     scanning.add_argument("--scope-directory", type=Path, default=ROOT / "build/c-analysis-scope")
+    scanning.add_argument("--fingerprints", action="store_true")
     aggregation = commands.add_parser("aggregate")
     aggregation.add_argument("directory", type=Path)
     args = parser.parse_args()
@@ -362,7 +409,7 @@ def main() -> None:
     elif args.command == "stage":
         stage(args.baseline)
     elif args.command == "scan":
-        scan(args.target, args.sample, args.scope_directory)
+        scan(args.target, args.sample, args.scope_directory, fingerprints=args.fingerprints)
     else:
         aggregate(args.directory)
 
