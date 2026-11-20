@@ -1,6 +1,6 @@
 # 双平台执行命令
 
-按[验收入口](README.md)冻结版本。每个平台准备同一个提交的工作台、参考工程输入和本平台封存包。发布工具及主机依赖见[开发环境](../../environment.md)
+按[验收入口](README.md)冻结版本，Linux 与 Windows 均由与实现无关的独立会话执行。每个平台准备同一个提交的工作台、参考工程输入和本平台封存包。发布工具及主机依赖见[开发环境](../../environment.md)
 及[交付说明](../../../architecture/targets-and-delivery.md)。工具路径用实际安装位置。Windows 使用 PowerShell 7、MSVC／WebView2，
 并按[必需 CI 的编译器安装定义](../../../../.github/actions/native-analysis-compiler/action.yml)安装同版 MinGW GCC／binutils。
 Linux 使用受控版本 GCC／binutils。目标清单要求的身份由包内 build 自行核对。接收者 Python 使用交付支持的 3.11–3.14。Linux 本地验证命令以 `nice -n 10` 串行执行。
@@ -65,7 +65,7 @@ cargo test --locked -p autosar-config-core --test it -- delivery:: \
 
 ## Windows 发送端
 
-在专用桌面会话中运行。先把受控 MinGW 和配套 WebDriver 放到 PATH，并从 Visual Studio 开发环境启动。
+在 GitHub 托管的 Windows runner（`windows-2025-vs2026`）或隔离专用桌面会话中，由与实现无关的独立会话运行。先把受控 MinGW 和配套 WebDriver 放到 PATH，并从 Visual Studio 开发环境启动。
 
 ```powershell
 $Rev = 'FULL_MASTER_SHA'
@@ -144,14 +144,14 @@ Save-Check A3-delivery cargo @('test','--locked','-p','autosar-config-core','--t
 - **A2 Windows crypto。** 历史要求针对 9.1 的 BCrypt／SecurityAccess 档案。当前主线按
   [#33](https://github.com/g1331/autsaro/issues/33) 与 [PR #124](https://github.com/g1331/autsaro/pull/124) 把该能力交给 R7。
   在 Windows 运行 `A3-config` 中的 SecurityAccess 配置拒绝和 `A2-native` 的
-  `single_component_meets_independent_protocol_and_timing_vectors`，核对 SID `0x27` 返回 NRC `0x11`。独立验收人将原正向 BCrypt 向量按该移交裁决登记，历史备注与当前支持范围的最终判定由 #56 负责人确认。
+  `single_component_meets_independent_protocol_and_timing_vectors`，核对 SID `0x27` 返回 NRC `0x11`。独立验收人将原正向 BCrypt 向量按该移交裁决登记，历史备注与当前支持范围的最终判定由协调者在 #56 出口判定中确认。
 - **A3 保护。** 在 `A3-delivery` 与 `A2-native` 核对旧 profile／清单／包身份拒绝、篡改与重新封签伪造、旧有效产物保留；
   在 B3 实际跑过外部改动使预览失效、用户源 create-only 与快照导入。把失败对象、错误码、拒绝前后用户文件及封存摘要留在同一条记录。
   旧格式原生用例缺失或跳过时回到交付／工作台 owner 补证。构建模式中的 test 入口属夹具，生产交付的两个 main 分别验收。
 
-## B1 搬移包并实际断网
+## B1 搬移包与隔离复验
 
-发送端用下列命令，从冻结的四份回归样本生成 SHA-256 清单。包、脚本、`identity.txt` 随介质移交。
+发送端用下列命令，从冻结的四份回归样本生成 SHA-256 清单。包、脚本、`identity.txt` 随交付工件或介质移交（在 GitHub 托管 Windows runner 上，发送端作业将其作为工件上传，接收端作业只下载该工件、不检出源码）。
 通过可信交接渠道单独发送 `sender-seals.json`，并注明冻结 SHA 和目标。收到同名的其他有效封存树也须在任何包内代码运行前拒绝。
 
 Linux 发送端：
@@ -169,8 +169,12 @@ Windows 发送端：
 if ($LASTEXITCODE -ne 0) { throw "Could not record the sender seals" }
 ```
 
-接收端使用空目录所在的独立主机环境，只带四个样本、脚本、可信清单、已安装的 Python、受控 GCC／binutils 与 Git。
-断开网卡，移除共享 checkout／挂载，保留隔离记录。解析四个固定相对路径并逐个比较发送端摘要，缺项或不符即停止。
+双平台接收端均由与实现无关的独立会话在只含四个样本、脚本、可信清单、已安装 Python、受控 GCC／binutils 与 Git 的空目录中执行，不得读取或挂载源码 checkout：
+
+- **Linux 接收端**：保持原有离线与无源码核验标准不放松——在独立主机或隔离环境中**断开网卡、移除共享 checkout／挂载**，保留隔离记录。
+- **Windows 接收端（#56 方案 1）**：在 GitHub 托管的 `windows-2025-vs2026` runner 上执行——**不检出源码仓库**（仅下载搬移包与清单工件），通过 Windows 防火墙出站阻断规则禁止被测程序及接收构建／运行入口联网，并保存防火墙规则记录。在 `#56` 验收记录中须如实写明与“整机断网”原要求的唯一差距：GitHub 托管 runner 自身仍需与 GitHub 通信，仅做到被测程序断网。
+
+接收端解析四个固定相对路径并逐个比较发送端摘要，缺项或不符即停止。
 预检通过后，即使构建或运行失败也再比较同样的四条摘要。`seal-after.json` 保留四个固定路径的实际摘要或读取错误，
 某个路径缺失时仍记录其他路径。保留前后摘要、比较错误和各阶段退出码。
 正常 `test_offline_delivery.py` 的矩阵补充 Python 兼容性和发送端路径检查。
@@ -204,8 +208,8 @@ if [ "$run_code" -ne 0 ]; then exit "$run_code"; fi
 exit "$seal_code"
 ```
 
-Windows 在断网、无宿主共享 checkout 的专用 Windows 主机／VM 中，由接收者从移交的说明独立完成并签录（历史 D-24）。
-进入接收目录，把 `$Python` 改成预装 CPython 的绝对路径：
+Windows 按 [#56 方案 1](https://github.com/g1331/autsaro/issues/56#issuecomment-7031215781) 在不检出源码的 GitHub 托管 Windows runner（`windows-2025-vs2026`）独立会话中执行（历史 D-24 义务按此方式落实，并在记录中写明仅被测程序断网的差距；不设维护者人工签字）。
+进入仅含搬移包工件的接收目录，把 `$Python` 改成预装 CPython 的绝对路径，先配置并记录禁止被测程序出站联网的 Windows 防火墙规则再运行：
 
 ```powershell
 $env:AUTOSAR_CC = (Get-Command gcc.exe).Source
@@ -214,6 +218,22 @@ $env:AUTOSAR_GIT = (Get-Command git.exe).Source
 $Python = 'C:/absolute/path/to/receiver/python.exe'
 $PSNativeCommandUseErrorActionPreference = $false
 New-Item -ItemType Directory receipts | Out-Null
+$RuleGroup = 'Autsaro-Independent-Exit-B1'
+$BlockedPrograms = @(
+    $Python, $env:AUTOSAR_CC, $env:AUTOSAR_OBJDUMP, $env:AUTOSAR_GIT,
+    (Join-Path $PWD 'receipts' 'standard-ecu' 'verify' 'ecu_host_batch.exe')
+) + (
+    'standard-ecu', 'component-pipeline', 'user-application', 'no-diagnostic' | ForEach-Object {
+        (Join-Path $PWD 'receipts' $_ 'probe' 'ecu_probe.exe')
+        (Join-Path $PWD 'receipts' $_ 'host-batch' 'ecu_host_batch.exe')
+    }
+) | ForEach-Object { [System.IO.Path]::GetFullPath($_) }
+foreach ($Program in $BlockedPrograms) {
+    New-NetFirewallRule -DisplayName "Block-$($Program)" -Group $RuleGroup `
+        -Direction Outbound -Action Block -Program $Program -Profile Any | Out-Null
+}
+Get-NetFirewallRule -Group $RuleGroup | Format-List DisplayName,Enabled,Direction,Action |
+    Out-File -Encoding utf8 receipts/firewall-rules.txt
 & $Python -I -S -c 'import pathlib, sys; print(pathlib.Path(sys.executable).resolve()); print(sys.version)' |
     Set-Content -Encoding utf8 receipts/python.txt
 if ($LASTEXITCODE -ne 0) { throw "Receiver Python is unavailable" }
@@ -235,11 +255,12 @@ try {
         2> receipts/seal-after.stderr.log | Set-Content -Encoding utf8 receipts/seal-after.json
     $SealCode = $LASTEXITCODE
     @("run $RunCode", "seal-after $SealCode") | Set-Content -Encoding utf8 receipts/exit-codes.txt
+    Remove-NetFirewallRule -Group $RuleGroup -ErrorAction SilentlyContinue
 }
 if ($SealCode -ne 0) { throw "End-of-run seal check failed with exit $SealCode" }
 ```
 
-保留发送端清单、解释器身份和前后匹配的摘要。每个样本须有 PASS、`identity.json`（含实际解释器、版本、包摘要和受控 PATH）、
+保留发送端清单、解释器身份、Linux 断网隔离记录或 Windows 防火墙规则记录以及前后匹配的摘要。每个样本须有 PASS、`identity.json`（含实际解释器、版本、包摘要和受控 PATH）、
 两个 `build-*.log` 以及 `host-batch.log`、`probe.log`。脚本给包内子进程使用受控工具路径和平台必要环境变量。
 standard-ecu 另有 `verify.log` 和 `verify/` 下的协议记录。component-pipeline 核对五次批次确认及五帧精确输出。
 可把同样的 standard-ecu 命令作为 CI 冒烟，输入取对应目标的 `c-analysis-inputs-*` 工件。
