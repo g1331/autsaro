@@ -2297,6 +2297,38 @@ class AcceptanceTests(unittest.TestCase):
                                  "accepted" if status == "owned_false_positive" else "blocked")
                 self.assertEqual(self.summary, raw)
 
+    def test_r24_false_positive_requires_the_reviewed_anonymous_enum_and_header_consumer(self):
+        self.owned_inputs()
+        shared, host_entry = self.summary["programs"][0]["translationUnits"]
+        for header in ("LSduR", "PduR"):
+            source = f"runtime/bsw/include/{header}.h"
+            delivered = source.removeprefix("runtime/")
+            path = self.root / source
+            original = path.read_bytes()
+            for tag, column, consumer, expected in (
+                (b"", 14, shared, "owned_false_positive"),
+                (b"R24Unused ", 14, shared, "unmatched"),
+                (b"", 13, shared, "unmatched"),
+                (b"", 14, host_entry, "unmatched"),
+                (b"", 14, None, "unmatched"),
+            ):
+                with self.subTest(header=header, tag=tag, column=column, consumer=consumer):
+                    path.write_bytes(original.replace(b"typedef enum {", b"typedef enum " + tag + b"{", 1))
+                    self.select_owned(source, "2.4", "typedef enum")
+                    report = self.summary["diagnostics"][0]
+                    report["locations"][0]["column"] = column
+                    report.update(severity="style",
+                                  message="misra violation (use --rule-texts=<file> to get proper output)")
+                    self.summary["scope"]["projectTranslationUnits"] = (
+                        {consumer: [consumer, delivered]} if consumer else {}
+                    )
+                    occurrence = c_acceptance._owned_positions(
+                        self.summary, self.project, {"originalBswSources": self.origins}, self.root,
+                    ).get((0, 0))
+                    self.assertEqual("owned_false_positive" if occurrence and occurrence["falsePositive"]
+                                     else "unmatched", expected)
+            path.write_bytes(original)
+
     def test_r89_resource_owner_false_positive_requires_the_file_scope_reference(self):
         self.owned_inputs()
         source = "runtime/os/src/Os_Backend.c"
