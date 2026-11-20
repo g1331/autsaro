@@ -18,11 +18,11 @@ FORMAT = "c-diagnostic-fingerprints-v4"
 SARIF_KEY = "autsaroDiagnostic/v4"
 RECEIPT = "diagnostic-fingerprints.json"
 SHA256 = re.compile(r"[0-9a-f]{64}")
-# #568 adds rejection checks before diagnostic production. Successful scans use
-# the same inputs and commands. Keep the identity of this exact driver revision
-# for dispositions; full analysis receipts still bind its actual source hash.
+# #568 adds rejection checks and reports the actual TU search path via cc1.
+# Successful scans retain their diagnostic inputs. Full analysis receipts still
+# bind the actual driver hash; only this exact revision reuses the disposition identity.
 REJECTION_ONLY_DRIVER_REVISIONS = {
-    "a21ca7b8e8dcf5ad15247dcd11789d15a522dc0cf2c45a6660a5d54a6ffc9785":
+    "a13646572c73a07345e658afb22a52c490894c97029a42e71aafdaef84ecb993":
         "0f933b3b794d240d3a97c674bec20c50dbe0634f9753b831fdbae942d437ebba",
 }
 # The pinned MISRA addon's analyse_ctu_info can report these using facts

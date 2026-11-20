@@ -78,6 +78,7 @@ class CAnalysisTests(unittest.TestCase):
                     "environment": {"CPATH": None, "C_INCLUDE_PATH": None}}
         predefines = "#define __GNUC__ 13"
         scope = {"target": "linux-x64-controlled-v1", "compilerFlags": ["-std=c99"], "includePaths": ["."],
+                 "translationUnits": ["main.c"],
                  "diagnosticCompiler": {"path": "/usr/bin/gcc"},
                  "compilerSemanticInputs": {"includeSearch": recorded, "predefines": [predefines]}}
         changes = {
@@ -89,18 +90,23 @@ class CAnalysisTests(unittest.TestCase):
             "directory added": {**recorded, "system": ["extra", *recorded["system"]]},
         }
         with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
+            directory = Path(temporary).resolve()
             project = directory / "project"
+            project.mkdir()
+            provider = c_check.c_sdk.provider_root("/usr/bin/gcc", False)
+            expected = {**recorded, "system": [c_check.c_sdk.relative_name(project, provider),
+                                               *recorded["system"]]}
             for name, now in changes.items():
                 with self.subTest(change=name), \
                         patch.object(c_check, "probe_include_search", return_value=([], now)) as probe, \
-                        patch.object(c_check, "verify_project_include_search") as project_probe, \
+                        patch.object(c_check, "preprocess_unit") as project_probe, \
                         patch.object(c_check, "probe_predefines", return_value=predefines):
                     if name == "unchanged":
                         c_check.recheck_compiler_inputs(scope, project)
                         project_probe.assert_called_once_with(
-                            "/usr/bin/gcc", ["-std=c99"], [tool_argument(project)],
-                            probe.call_args.args[2], False, recorded, cwd=directory)
+                            ["/usr/bin/gcc", "-std=c99", "-I" + tool_argument(project)],
+                            probe.call_args.args[2], 0, project, "main.c", provider, expected,
+                            cwd=directory)
                     else:
                         with self.assertRaisesRegex(ValueError,
                                                     "include search order or variables"):
@@ -110,6 +116,13 @@ class CAnalysisTests(unittest.TestCase):
                     self.assertEqual(probe.call_args.args[2].parent, directory)
                     self.assertEqual(probe.call_args.kwargs["cwd"], directory)
                     self.assertFalse(probe.call_args.args[3])
+            with patch.object(c_check, "probe_include_search", return_value=([], recorded)), \
+                    patch.object(c_check, "probe_predefines", return_value=predefines), \
+                    patch.object(c_check, "preprocess_unit") as project_probe:
+                bad_receipt = {**scope, "translationUnits": ["../outside.c"]}
+                with self.assertRaisesRegex(ValueError, "Invalid translation unit in analysis receipt"):
+                    c_check.recheck_compiler_inputs(bad_receipt, project)
+                project_probe.assert_not_called()
 
     @unittest.skipUnless(platform.system() in c_check.TARGETS.values(),
                          "the host has no controlled analysis target")
@@ -121,6 +134,7 @@ class CAnalysisTests(unittest.TestCase):
         tool = {"version": "2.21.0", "expectedSourceRevision": "revision", "addons": {"a": "b"}}
         predefines = "#define __GNUC__ 13"
         summary = {"scope": {"target": target, "compilerFlags": ["-std=c99"], "includePaths": ["."],
+                             "translationUnits": ["main.c"],
                              "diagnosticCompiler": {"path": "gcc"},
                              "compilerSemanticInputs": {"includeSearch": recorded, "predefines": [predefines]}},
                    "tool": tool, "programs": [{"name": "target"}],
@@ -137,7 +151,7 @@ class CAnalysisTests(unittest.TestCase):
                      "compiler predefined macros changed")):
                 with self.subTest(name=name), \
                         patch.object(c_check, "probe_include_search", return_value=([], now)), \
-                        patch.object(c_check, "verify_project_include_search"), \
+                        patch.object(c_check, "preprocess_unit"), \
                         patch.object(c_check, "probe_predefines", return_value=macros), \
                         patch.object(c_check, "semantic_identity",
                                      return_value=summary["semanticIdentity"]):

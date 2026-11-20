@@ -673,6 +673,17 @@ int main(int argc, char **argv)
                 capture_output=True, text=True,
             )
             has_embed = capability.stdout.strip() == "embed_available"
+            compiler_env = {}
+            if platform.system() == "Linux":
+                specs = root / "compiler.specs"
+                specs.write_text("*cpp:\n%{I*:-DAUTSARO_COMPILER_HAS_EMBED=0}\n\n", encoding="utf-8")
+                wrapper = root / "gcc"
+                wrapper.write_text(
+                    f'#!/bin/sh\nexec {shlex.quote(compiler)} -specs={shlex.quote(str(specs))} "$@"\n',
+                    encoding="utf-8",
+                )
+                wrapper.chmod(0o700)
+                compiler_env["AUTOSAR_CC"] = str(wrapper)
             resource = root / "probe.bin"
             resource.write_bytes(b"data")
             source = (
@@ -686,7 +697,8 @@ int main(int argc, char **argv)
             project = self.project(root, source, pedantic=False)
             target = c_gate.read(project / "target.json")["target"]
             output = root / "defined-only"
-            self.assertEqual(c_check.check(project, target, output), 0)
+            with patch.dict(os.environ, compiler_env):
+                self.assertEqual(c_check.check(project, target, output), 0)
             self.assertIn(f"#define EMBED_AVAILABLE {int(has_embed)}",
                           (output / "compiler-defines-0.stdout.log").read_text())
             active = root / "active"
@@ -700,12 +712,14 @@ int main(int argc, char **argv)
                 "int main(void) { return RESOURCE_FOUND; }\n"
             ), pedantic=False)
             output = root / "probed"
-            with redirect_stderr(io.StringIO()):
+            with patch.dict(os.environ, compiler_env), redirect_stderr(io.StringIO()):
                 self.assertEqual(c_check.check(project, target, output), 1)
             failed = c_gate.read(output / "summary.json")
             if has_embed:
-                self.assertIn("#define RESOURCE_FOUND 1",
-                              (output / "compiler-defines-0.stdout.log").read_text())
+                defines = (output / "compiler-defines-0.stdout.log").read_text()
+                self.assertIn("#define RESOURCE_FOUND 1", defines)
+                if compiler_env:
+                    self.assertIn("#define AUTSARO_COMPILER_HAS_EMBED 0", defines)
                 self.assertIn("Cannot verify absence of untracked header existence probes", failed["error"])
             else:
                 self.assertIn("Compiler validation failed", failed["error"])
@@ -730,15 +744,21 @@ int main(int argc, char **argv)
                 baseline = root / "baseline"
                 self.assertEqual(c_check.check(project, target, baseline), 0)
                 scope = c_gate.read(baseline / "summary.json")["scope"]
-                specs.write_text(f"*cpp:\n%{{I*:-isystem {injected}}}\n\n", encoding="utf-8")
-                rejection = "Unexpected compiler search order with project include flags"
-                with self.assertRaisesRegex(ValueError, rejection):
-                    c_check.recheck_compiler_inputs(scope, baseline / "project")
-                output = root / "changed"
-                with redirect_stderr(io.StringIO()):
-                    self.assertEqual(c_check.check(project, target, output), 1)
-                self.assertEqual(c_gate.read(output / "summary.json")["error"], rejection)
-                self.assertIn(str(injected), (output / "compiler-project-headers.stderr.log").read_text())
+                for flag, stage in (("dM", "compiler-defines-0"), ("dD", "compiler-origins-0")):
+                    with self.subTest(flag=flag):
+                        # This directory is hidden from a driver -v probe and from the other TU pass.
+                        specs.write_text(f"*cpp:\n%{{I*:%{{!v:%{{{flag}:-isystem {injected}}}}}}}\n\n",
+                                         encoding="utf-8")
+                        rejection = ("Unexpected compiler search order with project include flags "
+                                     f"in bsw/src/main.c (-{flag})")
+                        with self.assertRaises(ValueError) as replay_error:
+                            c_check.recheck_compiler_inputs(scope, baseline / "project")
+                        self.assertEqual(str(replay_error.exception), rejection)
+                        output = root / f"changed-{flag}"
+                        with redirect_stderr(io.StringIO()):
+                            self.assertEqual(c_check.check(project, target, output), 1)
+                        self.assertEqual(c_gate.read(output / "summary.json")["error"], rejection)
+                        self.assertIn(str(injected), (output / f"{stage}.stderr.log").read_text())
 
     @unittest.skipUnless(platform.system() == "Linux", "Uses GCC specs")
     def test_project_include_flags_bind_specs_macros_in_both_comparisons(self):

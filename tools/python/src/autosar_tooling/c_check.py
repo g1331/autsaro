@@ -14,7 +14,7 @@ import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
-from pathlib import Path
+from pathlib import Path, PurePath
 
 from ecu_tools.build import (
     FILE_HASHES,
@@ -53,7 +53,7 @@ ADDON_HASHES = {
 }
 TIMEOUT = 600
 HEADER_PROBE_OPERATORS = ("__has_include", "__has_include_next")
-EMBED_SUPPORT_MARKER = "AUTSARO_COMPILER_HAS_EMBED"
+EMBED_SUPPORT_LITERAL = '"AUTSARO_COMPILER_HAS_EMBED"'
 
 
 def run(argv: list[str], directory: Path, stage: str, timeout: int = TIMEOUT, *,
@@ -192,7 +192,7 @@ def probe_include_search(compiler: str, flags: list[str], directory: Path,
     """The include directories the compiler uses now, and its search order and variables."""
     empty = directory / "headers.c"
     empty.write_text("", encoding="utf-8")
-    _, _, header_log = run([compiler, *flags, "-E", "-v", "-x", "c", str(empty)], directory,
+    _, _, header_log = run([compiler, *flags, "-E", "-Wp,-v", "-x", "c", str(empty)], directory,
                            "compiler-headers", 30,
                            context="Cannot discover compiler include search paths", cwd=cwd)
     work = cwd or directory
@@ -212,28 +212,45 @@ def probe_predefines(compiler: str, flags: list[str], project: Path, includes: l
     return macros
 
 
-def verify_project_include_search(compiler: str, flags: list[str], includes: list[str],
-                                  directory: Path, windows: bool, search: dict, *,
-                                  cwd: Path | None = None) -> bool:
-    """Verify that sealed project includes add only their declared search directories."""
-    probe = directory / "project-headers.c"
-    probe.write_text(f"#ifdef __has_embed\n{EMBED_SUPPORT_MARKER}\n#endif\n", encoding="utf-8")
-    _, stdout, stderr = run([compiler, *flags, *("-I" + path for path in includes),
-                             "-E", "-v", "-x", "c", str(probe)], directory,
-                            "compiler-project-headers", 30, cwd=cwd,
-                            context="Cannot verify compiler include search with project flags")
-    root = c_sdk.provider_root(compiler, windows)
-    actual = c_sdk.include_search(stderr, cwd or directory, root, os.environ)
+def probe_embed_support(compiler_args: list[str], directory: Path) -> bool:
+    probe = directory / "compiler-embed.c"
+    # A specs-defined macro of the same name cannot expand inside a string.
+    probe.write_text(f"#ifdef __has_embed\n{EMBED_SUPPORT_LITERAL}\n#endif\n", encoding="utf-8")
+    _, stdout, _ = run([*compiler_args, "-E", str(probe)], directory, "compiler-embed", 30,
+                       context="Cannot discover compiler resource probe support")
+    return EMBED_SUPPORT_LITERAL in stdout.splitlines()
+
+
+def project_include_search(includes: list[str], root: PurePath, search: dict) -> dict:
     project_paths = dict.fromkeys(
         c_sdk.relative_name(Path(path).resolve(strict=True), root) for path in includes)
     # If a declared -I already occurs in the ambient search, GCC may deduplicate it.
     # Keep its original position in the comparison instead of masking a move.
     ambient = set(search["system"]) | set(search["quote"])
     project_only = [path for path in project_paths if path not in ambient]
-    expected = {**search, "system": [*project_only, *search["system"]]}
-    if actual != expected:
-        raise ValueError("Unexpected compiler search order with project include flags")
-    return EMBED_SUPPORT_MARKER in stdout.splitlines()
+    return {**search, "system": [*project_only, *search["system"]]}
+
+
+def preprocess_unit(compiler_args: list[str], directory: Path, index: int, project: Path,
+                    name: str, provider: PurePath, search: dict, *,
+                    cwd: Path | None = None) -> tuple[str, str]:
+    """Capture search order on both real TU preprocessing invocations."""
+    source = project / name
+    # Pass verbosity directly to cc1. Driver -v would change the specs evaluated
+    # for the actual preprocessing options, notably rules conditional on !v.
+    args = [*compiler_args, "-Wp,-v", "-E"]
+    _, definitions, log = run([*args, "-dM", str(source)], directory, f"compiler-defines-{index}", 60,
+                              cwd=cwd, context=f"Compiler preprocessing failed for {name}")
+    if c_sdk.include_search(log, cwd or directory, provider, os.environ) != search:
+        raise ValueError(f"Unexpected compiler search order with project include flags in {name} (-dM)")
+    _, provenance, log = run([*args, "-dD", *c_preprocessor.WARNINGS,
+                              "-MD", "-MF", str(directory / f"compiler-origins-{index}.d"),
+                              "-MT", "autsaro-tu", tool_argument(source)],
+                             directory, f"compiler-origins-{index}", 60, cwd=cwd,
+                             context=f"Compiler source tracing failed for {name}")
+    if c_sdk.include_search(log, cwd or directory, provider, os.environ) != search:
+        raise ValueError(f"Unexpected compiler search order with project include flags in {name} (-dD)")
+    return definitions, provenance
 
 
 def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str], list[dict], dict]:
@@ -315,8 +332,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     predefines = sorted(macros.splitlines())
     (output / "compiler-predefines.h").write_text(macros, encoding="utf-8")
     includes = [tool_argument(root / name) for name in includes]
-    has_embed = verify_project_include_search(
-        compiler, flags, includes, output, target_id.startswith("windows"), search)
+    provider = c_sdk.provider_root(compiler, target_id.startswith("windows"))
+    unit_search = project_include_search(includes, provider, search)
     builtins = ["-D" + line[8:].replace(" ", "=", 1) for line in macros.splitlines()
                 if line.startswith("#define ") and line[8:].split(" ", 1)[0] in {
                     "__GNUC__", "__GNUC_MINOR__", "__GNUC_PATCHLEVEL__", "__x86_64__",
@@ -353,6 +370,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     function_macro_names = standard_constants & external_names
     candidate_names = external_names | mode_names
     unit_flags = [*flags, *("-I" + path for path in includes)]
+    compiler_args = [compiler, *unit_flags]
+    has_embed = probe_embed_support(compiler_args, output)
     operators = (*HEADER_PROBE_OPERATORS, "__has_embed") if has_embed else HEADER_PROBE_OPERATORS
     probe_traps = [f"{name}(operand)=AUTSARO_UNTRACKED_HEADER_PROBE(" for name in operators]
     trap_definitions = {"#define " + trap.replace("=", " ", 1) for trap in probe_traps}
@@ -363,9 +382,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         run([compiler, *unit_flags,
             "-fsyntax-only", str(root / name)], output, f"compiler-unit-{index}", 60,
             context=f"Compiler validation failed for {name}")
-        _, definitions, _ = run([compiler, *unit_flags, "-dM", "-E", str(root / name)],
-                                output, f"compiler-defines-{index}", 60,
-                                context=f"Compiler preprocessing failed for {name}")
+        definitions, provenance = preprocess_unit(
+            compiler_args, output, index, root, name, provider, unit_search)
         # GCC's dependency list omits paths tested without opening them.
         # Keep defined(operator) true but make evaluating the operator fail.
         # GCC warns when replacing these built-ins, even with -Wno-builtin-macro-redefined.
@@ -377,13 +395,6 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         if (not trap_definitions <= trapped_definitions
                 or trapped_definitions - trap_definitions != set(definitions.splitlines())):
             raise ValueError(f"Header existence probe check changed compiler macro discovery in {name}")
-        # Use the replay's path spelling so that __FILE__ expands to the same C token.
-        _, provenance, _ = run([compiler, *flags, *("-I" + path for path in includes),
-                                    "-E", "-dD", *c_preprocessor.WARNINGS,
-                                    "-MD", "-MF", str(output / f"compiler-origins-{index}.d"),
-                                    "-MT", "autsaro-tu", tool_argument(root / name)],
-                                    output, f"compiler-origins-{index}", 60,
-                                    context=f"Compiler source tracing failed for {name}")
         inputs = c_sdk.preprocessing(provenance, root, identifiers)
         dependency_text = (output / f"compiler-origins-{index}.d").read_text(encoding="utf-8")
         headers = c_sdk.dependency_headers(dependency_text, root)
@@ -762,13 +773,20 @@ def recheck_compiler_inputs(scope: dict, project: Path) -> None:
             compiler, flags, Path(temporary), scope["target"].startswith("windows"), cwd=directory)
         if search != scope["compilerSemanticInputs"]["includeSearch"]:
             raise ValueError("Actual include search order or variables changed since analysis")
-        verify_project_include_search(
-            compiler, flags, [tool_argument(project / name) for name in scope["includePaths"]],
-            Path(temporary), scope["target"].startswith("windows"), search, cwd=directory)
         macros = probe_predefines(compiler, flags, project, scope["includePaths"],
                                  Path(temporary), cwd=directory)
         if sorted(macros.splitlines()) != scope["compilerSemanticInputs"]["predefines"]:
             raise ValueError("Actual compiler predefined macros changed since analysis")
+        includes = [tool_argument(project / name) for name in scope["includePaths"]]
+        provider = c_sdk.provider_root(compiler, scope["target"].startswith("windows"))
+        unit_search = project_include_search(includes, provider, search)
+        compiler_args = [compiler, *flags, *("-I" + path for path in includes)]
+        for index, name in enumerate(scope["translationUnits"]):
+            if not isinstance(name, str) or not safe_relative(name) or not name.endswith(".c"):
+                raise ValueError(f"Invalid translation unit in analysis receipt: {name}")
+            refuse_links(project / name, project)
+            preprocess_unit(compiler_args, Path(temporary), index, project, name,
+                            provider, unit_search, cwd=directory)
 
 
 def recheck_semantic_inputs(summary: dict, project: Path, tool: tuple[Path, Path, dict]) -> None:
