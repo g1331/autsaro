@@ -721,12 +721,13 @@ jobs:
           key: >-
             ${{ format('cppcheck-{0}-{1}-{2}-{3}-{4}', runner.os, runner.arch, env.CACHE_IMAGE,
             'e73bf44c3e49686b7495fab352d03a6c6075516b',
-            hashFiles('.github/workflows/checks.yml', 'pyproject.toml', 'uv.lock')) }}
+            hashFiles('.github/workflows/checks.yml', '.github/cmake/cppcheck-windows.cmake', 'pyproject.toml', 'uv.lock')) }}
       - name: Configure pinned open Cppcheck
         if: steps.cppcheck-cache.outputs.cache-hit != 'true'
         run: >-
           uv run --locked cmake -S build/cppcheck-source -B build/cppcheck-build
           -DCMAKE_BUILD_TYPE=Release -DUSE_MATCHCOMPILER=OFF -DBUILD_GUI=OFF -DBUILD_TESTING=OFF
+          ${{ runner.os == 'Windows' && format('"-DCMAKE_PROJECT_Cppcheck_INCLUDE={0}/.github/cmake/cppcheck-windows.cmake"', github.workspace) || '' }}
       - name: Build pinned open Cppcheck
         if: steps.cppcheck-cache.outputs.cache-hit != 'true'
         run: >-
