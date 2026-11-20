@@ -18,7 +18,7 @@ cargo test --locked -p autosar-config-core --features official-oracles --test of
 
 `native-os` 在两平台运行 27 个 OS suites 和主机锁／I/O 错误边界。Windows 用 `AUTOSAR_OS_SHARD=k/n` 按序号分两片，每个 suite 串行运行，边界测试放在较轻的 `1/2`；Linux 用 `0/1`。失败现场以 `os-suites-*` 上传并保留 14 天。
 
-`native-delivery` 下载准备任务的样本，与分析并行运行封存构建模式、CMake 构建及搬迁后的接收端验证；Windows 将接收端放在第二个 runner。两平台用 uv 管理的 `AUTOSAR_RECEIVER_PYTHON` 3.11 直接运行四个样本的包内工具，不安装开发工具；Extended 覆盖完整解释器／样本矩阵。这证明解释器兼容性，网络隔离安装另行验收。`official` 由 Extended 按路径调用（见[官方对照](official.md)），桌面 GUI／IPC 由必需层按路径调用（见[桌面场景](desktop.md)）。
+`native-delivery` 下载准备任务的样本，与分析并行运行封存构建模式、CMake 构建及搬迁后的接收端验证；Windows 将接收端放在第二个 runner。两平台用 uv 管理的 `AUTOSAR_RECEIVER_PYTHON` 3.11 直接运行四个样本的包内工具，不安装开发工具；Extended 覆盖完整解释器／样本矩阵。这证明解释器兼容性，网络隔离安装另行验收。`official` 由 Extended 按路径调用（见[官方对照](official.md)），桌面 GUI／IPC 在每次 master push 上调用（见[桌面场景](desktop.md)）。
 
 新增原生测试须核对并实跑CI入口。
 
@@ -50,7 +50,7 @@ setarch x86_64 -R uv run --locked python -B -m unittest discover -s tests/python
 
 `port-restart` suite 直接验证原生展开的有界重入、未处理／无关异常，以及检测器对丢弃调用帧的处理；Linux 具备内核 SHSTK 时还执行实际启用的正反对照和真实 Task／ARTI 消费者，不具备时保留 `not_assessed`。全部被展开的 C 单元（含应用与检测器构建）使用交付清单中的 `-fexceptions`，不能只为端口单元添加该选项。
 
-必需 CI 的 `native-sanitizers` 任务在 Linux 上运行上述命令：`address,undefined` 用一个 runner；`thread` 把 Cargo 插桩程序与串行的 OS suites 分到两个 runner，每个步骤仍只运行一次；与 `native`、`native-os` 并行。
+master push 的 `native-sanitizers` 任务在 Linux 上运行上述命令：`address,undefined` 用一个 runner；`thread` 把 Cargo 插桩程序与串行的 OS suites 分到两个 runner，每个步骤仍只运行一次；与 `native`、`native-os` 并行。
 
 ## 平台与路径
 
@@ -81,7 +81,7 @@ Tauri 的 Windows MSVC 单测也需要 Common Controls v6 manifest：命令元�
 - 排查 Linux `/proc` 观察竞态时，复现 UID 与权限也须匹配现场：root 可能掩盖普通用户在进程退出期间遇到的 `EACCES`。先记录清理的分项原因、PID 与 errno；根据已注册的进程／组归属或确定的退出状态判断，不能把权限错误一律当作已退出，也不能抢收其他 launcher 的退出码。 测试存活观察器也要处理 stat 打开后 read 的 `ESRCH`，以注入反例保证 `EACCES` 等错误仍显式失败。
 - 间歇超时在首次关闭前同时记录线程、握手和墙钟时间线；Linux HostBatch 的入口、负对照及负载判别见[watchdog 取证](native-watchdog.md)。保留原期限、断言和完整向量。
 - 长时间原生验收启动前，核对后续消费者阶段所需的全部外层工具路径，保持应用配置阶段的工具隔离；不能把缺失前置条件留到末尾才发现。含大响应时，将完整事件逐条写入既有证据文件，避免在内存保留全部历史 snapshot；保留原有 payload、场景与断言，并分别核查驱动和产品进程的内存，不能用证据写入优化掩盖产品内存问题。
-- 间歇失败不再复现时不跳过、不重试、不放宽期限：测试留在必需 CI，由自动取证等待复发；Issue 离开阶段出口清单的条件见 [ADR 0031](../../adr/0031-intermittent-failure-exit-policy.md)。
+- 间歇失败不再复现时不跳过、不重试、不放宽期限：测试留在原有作业，由自动取证等待复发；Issue 离开阶段出口清单的条件见 [ADR 0031](../../adr/0031-intermittent-failure-exit-policy.md)。
 
 开发工具的 Git 文件／属性查询与 clang-tidy 的内核补丁应用使用同一个 `ecu_tools.process.run_bounded`，期限为 30 秒；失败包含阶段／样本、命令、原始 exit 与 stdout／stderr 末尾。c-check 的工具探测／补丁为 30 秒、单 TU 编译为 60 秒、分析为 600 秒；只有 Cppcheck 的正常诊断退出码 1 被作为分析结果保留，挂起和其他异常退出仍失败。对应挂起回归可用 `uv run --locked python -B -m unittest discover -s tests/python/process -p test_feedback.py` 单独运行。
 

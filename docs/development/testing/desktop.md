@@ -45,7 +45,7 @@ Linux 的 responsiveness 与 standard-delivery 场景自动启用请求取证，
 
 在沙箱或容器外执行的会话，须在执行会话的同一宿主 PID 命名空间核对进程退出；另一命名空间的 `/proc` 看不到目标 PID，不能证明它已退出。归因时记录每次进程／线程读取的实际时间，集合入口时间不能代表所有后续读取；缺页次数和 CPU 时间是生命周期累计量，只有同一请求区间的增量及对应栈才能说明该次等待中的活动。
 
-`desktop.yml` 在 GitHub 托管的 `ubuntu-24.04` 与 `windows-2025-vs2026` 上各构建一次验证版，将应用、资源与 tauri-driver 上传为工件，再按 workflow 的 `matrix.include` 在每个平台运行两个场景分片。Windows 将原来较短的启动与进程场景和交付场景安排在同一台 runner，复用工具安装。每个文件只属于一个分片，Python 开发测试检查全量覆盖。Linux 分片内文件并发数为 2，Windows 为 1；文件内有状态的检查保持顺序。每个分片都保留自己的结果工件 14 天，任一分片失败或取消都会使调用方的 `CI required` 失败。它由 [`Development checks`](README.md#ci) 按路径调用：PR 与 master 推送改动界面、桌面后端、core、runtime、桌面场景、Python 工具、共享依赖／构建配置或桌面 workflow 时运行；路径列表不完整或基准未知时运行全量。纯文档与无关路径跳过，汇总只在检测明确未选择时接受跳过。Extended 不重复自动运行桌面；手动 Extended 仍运行全量。手动运行 `desktop.yml` 可在 `scenarios` 中填写以空格分隔的场景文件或 glob，只运行受影响的场景，默认全部。这些场景验证开发构建的界面与 IPC，不提供安装包、无源码 checkout 或断网环境的验收证据。
+`desktop.yml` 在 GitHub 托管的 `ubuntu-24.04` 与 `windows-2025-vs2026` 上各构建一次验证版，将应用、资源与 tauri-driver 上传为工件，再按 workflow 的 `matrix.include` 在每个平台运行两个场景分片。Windows 将原来较短的启动与进程场景和交付场景安排在同一台 runner，复用工具安装。每个文件只属于一个分片，Python 开发测试检查全量覆盖。Linux 分片内文件并发数为 2，Windows 为 1；文件内有状态的检查保持顺序。每个分片都保留自己的结果工件 14 天，任一分片失败或取消都会使 master 的 `Post-merge checks result` 失败。每次 master push 由 [`Development checks`](README.md#ci) 调用完整场景。Extended 不重复自动运行桌面；手动 Extended 仍运行全量。手动运行 `desktop.yml` 可在 `scenarios` 中填写以空格分隔的场景文件或 glob，只运行受影响的场景，默认全部。这些场景验证开发构建的界面与 IPC，不提供安装包、无源码 checkout 或断网环境的验收证据。
 
 ## 编写场景
 
@@ -62,4 +62,4 @@ Linux 的 responsiveness 与 standard-delivery 场景自动启用请求取证，
 
 核查每次运行的 commit、触发事件和 `run_attempt`，再从各分片的实际日志核对文件名单、执行／失败／跳过数量及 Node 场景耗时。构建依赖、验证版应用构建、分片准备、场景步骤和排队分别计时；并行分片的平台场景关键路径取最慢分片，不把所有分片相加，也不把构建到末片结束的墙钟时间称为场景耗时。部分选择的手动运行不能代替全量证据。jobs、日志或工件不可读时保留证据缺口，不凭汇总成功提升门禁。
 
-门禁复用现有 `desktop.yml` 调用与共享构建，在 Development checks 按相关路径选择并加入 `CI required`；Extended 不重复自动调用，独立手动入口保留。#311 的历史请求归因须依其自身出口判断，后续绿色运行不构成其根因修复证明。
+Development checks 复用 `desktop.yml` 的共享构建和分片，在 master 的 `Post-merge checks result` 汇总。Extended 的手动入口保留。#311 的历史请求归因须依其自身出口判断，后续绿色运行不构成其根因修复证明。

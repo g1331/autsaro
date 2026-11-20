@@ -77,9 +77,9 @@ CI 分层：
 
 草稿只跑变更检测和 `quality`；`CI required` 失败并报“草稿，完整检查待转就绪”。完整检查请转就绪：`ready_for_review` 无须推送即检查 head，自动合并需显式开启。转回草稿取消旧运行。
 
-- **PR 层**：分支规则要求 `checks.yml` 的 `CI required`，阻塞作业见其 `needs`。失败和取消阻塞合并，仅接受明确未选的跳过。PR 与 master 按应用、运行时、工具和构建输入选择真实 GUI／IPC（每平台共享构建和两个场景分片）。core／runtime 改动在 Windows 和 Linux 运行原生、OS、检测器、交付和生成 C 分析；接收端用 Python 3.11 跑四样本（含多组件 HostBatch 独立期望）。Python 矩阵为 Linux 3.12／3.14、Windows 3.14，覆盖 ecu_tools 和 `test_sealed_sources`。
+- **PR 层**：分支规则要求 `checks.yml` 的 `CI required`。按改动保留 quality、Python、core、桌面应用构建、Linux native、双平台原生交付和 C 分析。只有明确未选的作业可跳过。Python 矩阵保留 Linux 3.12／3.14、Windows 3.14。选中分析时仍生成双平台八份回执及重绑输入。
 - **PR 选择**：变更检测记录本轮目标分支快照到实际合并树的差异和选择结果。纯读者文档、代理配置或 PR 模板仅跑质量检查。选择器列出的分析单测、交接演练脚本及单测走 Python 矩阵；同时修改分析驱动或原生分析行为测试时加跑双平台完整 C 分析。`ui/` 或桌面场景 JavaScript 走 Python、双平台 UI／desktop 和按路径选择的 GUI／IPC。重命名、差异缺失或达到 3,000 条时全跑。选择与汇总由 `test_ci_selection.py` 验证。分支无需同步 master，合并后 master 照常检查。
-- **扩展层**：`Extended checks`（`extended.yml`）不属于必需检查，不设定时任务，按改动路径选择：离线接收端 Python 3.11–3.14 × 四样本的 Linux／Windows 完整矩阵、其余 Python 版本与 macOS 上的 Python／UI（改动 Python 或 UI 源码时）、[官方对照](official.md)和[模糊测试](fuzzing.md)（官方对照在 PR 与 master 均按路径运行；模糊测试在 PR 上只随目标直接消费的源码运行，master 按完整输入路径运行）。自动 PR／master 由同一 `Development checks` 在 `CI required` 成功后调用它，检出同一 SHA；接收端矩阵按 core／runtime／工具／测试与构建配置路径选择；桌面场景已由必需层负责，扩展层不重复自动执行；手动 Extended 仍运行桌面全量。PR 改动官方对照相关路径时运行官方对照。明确添加 `full-ci` 标签会先重新验证必需检查，再运行其余扩展检查；无关标签不取消 PR 检查或产生同名必需结果。手动运行全部。汇总任务 `Extended checks result` 给出结果，未被选中的检查记为跳过。
+- **合并后层**：master 每次 push 跑完整 Development 矩阵，含 Windows native 各分片、双平台 native-os、Linux sanitizers 和双平台 GUI／IPC（每平台共享构建、两分片）。同一 SHA 的 `Extended checks` 再按输入运行其他 Python／macOS、完整离线接收端矩阵、[官方对照](official.md)与[模糊测试](fuzzing.md)，手动入口可运行完整矩阵及桌面场景。`Post-merge checks result` 汇总整个运行。`full-ci` 标签可重触发 PR 必需检查，无关标签不替换必需结果。
 
 自动合并检查后仍为 `BLOCKED` 时，及时处理保护或讨论阻塞；存量诊断先回复依据再解决，保留告警。
 
@@ -87,7 +87,7 @@ CI 分层：
 
 在功能分支上收集完整扩展证据：`gh workflow run extended.yml --ref <branch>`，再用 `gh run list --workflow extended.yml --branch <branch>` 定位运行；用 `gh run cancel <run-id>` 取消本分支已被替代的运行，不取消其他开发者的作业。
 
-开新 PR 或合并前先看 master 最近一次 `Extended checks` 的结果：失败与本 PR 无关时，确认已有 Issue 跟踪（不稳定的套件明确暂停并开 Issue 跟踪根因）后照常合并，由引入失败的 PR 修复或回滚；相关或无法判断的先查明。master 推送的 `Development checks` 共用一个并发组，组内只保留一个等待中的运行：重跑较旧提交的失败作业会取消最新提交待运行的检查，确认偶发失败时重跑 master 最新提交的运行。
+开新 PR 或合并前查看 master 最近完成的 `Post-merge checks result`。失败运行有摘要和 `area:quality-ci` Issue，已有同类问题时将失败记录归到原 Issue。无关且已有 Issue 跟踪的失败不耽搁 PR。相关或归属未明的先查清，引入回归的 PR 作者修复，影响交付或关键主线行为时维护者及时回滚，见 [ADR 0032](../../adr/0032-pr-checks-and-master-validation.md)。master 推送各用独立运行，核对原因时保留首次尝试的结果。
 
 `checks.yml` 和 `extended.yml` 的直接测试命令通过 `python -m autosar_tooling.ci_reporting run -- <原命令>` 流式保留日志与退出码，并在运行摘要列出失败测试名；成功时只写简短结果。条款核算摘要保留未处置与失效引用的数量、编号。Cppcheck／MISRA 和 clang-tidy 的原始诊断转换为 SARIF，按平台／样本分类上传到 GitHub code scanning；可追溯的 runtime 拷贝映射到仓库源码行，生成文件保留实际生成路径，不虚构 emitter 行号。
 
