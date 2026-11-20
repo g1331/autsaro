@@ -1542,8 +1542,10 @@ class AcceptanceTests(unittest.TestCase):
 
 
         library_evidence = {
-            "R21.1": ("not_assessed", "#539", "Future Library Directions", "NDEBUG"),
-            "R21.2": ("not_assessed", "#539", "namespace／scope", "BUILTIN"),
+            "R21.1": ("not_assessed", "#539", "Future Library Directions", "NDEBUG",
+                      "_PTHREAD_H／_WINDOWS_", "待完成集成处置"),
+            "R21.2": ("not_assessed", "#539", "namespace／scope", "BUILTIN",
+                      "Windows 目标 GCC 的声明集合及集成处置"),
             "R21.3": ("satisfied", "AMD2.78", "aligned_alloc", "pvPortMalloc"),
             "R21.4": ("satisfied", "AMD3.67", "jmp_buf", "Os_Stack"),
             "R21.5": ("satisfied", "AMD3.68", "sig_atomic_t", "SIG_IGN"),
@@ -1579,6 +1581,21 @@ class AcceptanceTests(unittest.TestCase):
         self.assertIn("去注释保留其中全部换行", library_text)
         self.assertIn("每条记录均回查原文件对应标识符", library_text)
         self.assertIn("1,442 个自有文件实例", library_text)
+        heading = "## R21.1／R21.2 保留名称接续核查"
+        self.assertIn(heading, library_text)
+        reserved_names = library_text.split(heading, 1)[1].split(
+            "<!-- misra-checker-obligations-begin -->", 1)[0]
+        for detail in (
+            "44814255256", "888 个程序 TU", "452 份独立 GCC C99 展开",
+            "GCC `-MD` 与 Cppcheck 项目文件并集", "`patchedLines`",
+            "WG14 N1256", "§7.26 Future Library Directions", "`NDEBUG`",
+            "2,108／2,108／2,252／2,171", "`-dD`", "`-dM`",
+            "`mode` 只是 fopen 的形参名", "`__atomic_*_n`",
+            "`pthread.h:548`", "`minwinbase.h:13`", "Windows 的 GCC intrinsic",
+            "`passed=false`", "`completeCompliance=false`", "`blocked`",
+        ):
+            with self.subTest(reserved_names=detail):
+                self.assertIn(detail, reserved_names)
         for guideline, (status, *evidence) in library_evidence.items():
             with self.subTest(library=guideline):
                 row = by_id[guideline]

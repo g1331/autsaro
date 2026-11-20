@@ -44,9 +44,16 @@ R20.7为Required（主文印刷159–160／PDF167–168，AMD2追加C11），约
 
 ## 非ISO SDK的保留名字
 
-R21.1／R21.2（Required，主文印刷165–167／PDF173–175，含TC1更正及AMD2语言扩展）的SDK责任不能用系统目录或供应方身份销项。pthread.h的_PTHREAD_H、unwind.h的_UNWIND_H及_Unwind_Word等声明、Linux UAPI的_LINUX_FUTEX_H／_LINUX_TYPES_H与__le16等类型，是当前实际包含的具体构造。既有TU宏收据确认这些guard生效；主文§6.7对ISO标准头内容的原有边界保留，不把所有宏／声明都算作项目自有代码，也不把非ISO头整批豁免。
+R21.1／R21.2 的[双平台保留名称核查](../types/language-constructs/library-resources.md#r211r212-保留名称接续核查)
+记录了 `Os_Backend.c` 经平台适配实际导入的非 ISO SDK 宏和声明。
+Linux 的 `_UNWIND_H`／`_Unwind_Word` 另由主机 restart 实现引入，
+`_LINUX_FUTEX_H`／`_LINUX_TYPES_H`／`__le16` 由三个主机 futex 实现引入。
+后两条包含路径按 ADR 0030 归主机层。主文 §6.7 涵盖 ISO 标准头及处理该头时所包含的
+文件，项目侧使用标准接口仍须评估。
 
-当前材料对应libc6-dev 2.39-0ubuntu8.9、libgcc-13-dev 13.3.0-6ubuntu2~24.04.1和linux-libc-dev 6.8.0-147.147。原SDK提案未自动覆盖这两条；保留现有ABI名字／guard的具体补充仍待人类决定与独立技术复核，不建Accepted ADR、批准表或MR12。删显式头却保留间接路径、手写声明或换名字隐藏同一设施不能作为修复；真正更改供应方头／实现须重证线程、信号帧、unwind及交付身份。该边界不扩ADR0024，也不替Windows实际provider取证。
+[#444 的已有授权](https://github.com/g1331/autsaro/issues/444#issuecomment-6716477031)
+未涵盖这两条规则。补齐 Windows 目标 GCC 的非 ISO 声明作用域后，先核对哪些 SDK 依赖
+可移出目标 TU。仍须保留的实例由维护者决定是否按 ADR 0025 登记类别处置，并独立复核。
 
 ## 汇编输入参数的实际用途
 

@@ -148,42 +148,42 @@ GCC／Cppcheck 输入。Windows 以实际检出的换行重算，原始 summary 
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "28aacf218d5c8fcdcd95739eacb5d63d3c4d394765a9d4942c7e240aea95b56b"
+      "inputIdentity": "4543d92fe00ae820e6d5ff944ed13b4825ea82af7dc376318fd7ec727463f044"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "e10d762429475b47de5f268a7b1e0566499549e9580e4c32aa789ebac4760324"
+      "inputIdentity": "8caf4a24c6bcdbe75d0b290bed7bfd3110b99df4f03dd8effe6ba4abab59be01"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "6e84d02d4905a42fc0ba0ccd6d89741b19f98a0852285bf494a61294df98a01d"
+      "inputIdentity": "62fb0076e28d0d90e8a98b123a7c0bc629e4ef561c8ece9a96782537ebdd0a98"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "0c5cd04b88b2324b7f3fb94e7e863fb7c78c75a6aada4c82468fc516b881ed48"
+      "inputIdentity": "3b7cc2e9bab8cda6b8c809b285db9351a816311880e513ca54b9602a55c74a74"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "ddbf28cf19e372831211f5a3031641ecf208e0168bdd71a6efe34fb1e22b2d8f"
+      "inputIdentity": "16861cb5987ba0824e6d5a8be13943767b6d36377f9e3aa00df45475b959d344"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "2fa690b837709ad5508c2295b32db2bdacfb030c4a2c5b4dfb4e72a2f57e998f"
+      "inputIdentity": "3a6ba309605ece1dff64f634a43c7577a973060bbf5a2b6222a345d3c76f5780"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "417d931acb1f83daff3946f50bb43c59f9385447ffd0a11ab1aee25d44947682"
+      "inputIdentity": "c973db91eb4cf917ef8335d580495fa13b5af3da87b2ad252e3903db48c94c57"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "201cfe2db52c6d0238c47359ec45103c829e758a77c5c5c71db18d18dcfb4187"
+      "inputIdentity": "aaaf38f358288df8fd9d0879cdac44a425d02a52bedb48eceb9779e204879f40"
     }
   ],
   "records": {
