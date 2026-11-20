@@ -390,13 +390,17 @@ impl OwnedProcess {
                     "backend.execution.already_completed"
                 ));
             }
+            let mut hosts = std::collections::BTreeSet::new();
             let status = loop {
-                if let Some(status) = tree.try_wait().map_err(|error| error.to_string())? {
+                if let Some(status) = tree
+                    .try_wait_tracking_hosts(&mut hosts)
+                    .map_err(|error| error.to_string())?
+                {
                     // The Job's active count may lag a just-reaped cooperative exit.
                     let grace_end = monotonic_ns()?.saturating_add(
                         u64::try_from(windows_job::ACCOUNTING_GRACE.as_nanos()).unwrap_or(u64::MAX),
                     );
-                    let mut hosts = tree.console_hosts();
+                    hosts.extend(tree.console_hosts());
                     tree.observe("root_exited");
                     tree.wait_grace(&mut hosts, grace_end)?;
                     // Console hosts finish their own teardown after their clients;
