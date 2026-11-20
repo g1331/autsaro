@@ -1657,7 +1657,7 @@ void Os_TestAfterFaultReader(void)
                 "stop", "stop-before-wait", "stop-held",
             ), 0),
             ("missing-publication", publication, "        (void)mutex;", ("before-wait",), 52),
-            ("missing-invalidation", "(void)InterlockedIncrement(address);", "(void)address;",
+            ("missing-invalidation", "(void)advance_mutex_epoch(address, false);", "(void)address;",
              ("before-wait",), 52),
             ("missing-request-check", signal, "(void)signal_number;", ("before-register",), 52),
             ("missing-stop-invalidation", "        invalidate_mutex_wait(thread);",
@@ -1787,22 +1787,25 @@ void Os_TestAfterFaultReader(void)
 
         snapshot = (
             "        const int32_t generation = "
-            "InterlockedCompareExchange(&handle->mutex_generation, 0, 0);\n"
+            "__atomic_load_n(&handle->mutex_generation, __ATOMIC_SEQ_CST);\n"
             "        outcome = try_wait_mutex(handle);"
         )
         variants = (
-            ("control", None, None, ("before-wait", "during-wait", "wait-error")),
-            ("missing-generation", "(void)InterlockedIncrement(&mutex->mutex_generation);",
-             "(void)mutex;", ("before-wait",)),
+            ("control", None, None, ("before-wait", "during-wait", "wait-error"), 0),
+            ("missing-generation",
+             "const bool waiting = advance_mutex_epoch(&mutex->mutex_generation, true);",
+             "const bool waiting = false;", ("before-wait",), 52),
+            ("unconditional-wake", "if (waiting) {",
+             "if (waiting || (released == 0)) {", ("before-wait",), 41),
             ("missing-wake", "Os_LinuxFutexWake(&mutex->mutex_generation);",
-             "(void)mutex;", ("during-wait",)),
+             "(void)mutex;", ("during-wait",), 52),
             ("late-snapshot", snapshot,
              ("        outcome = try_wait_mutex(handle);\n"
               "        const int32_t generation = "
-              "InterlockedCompareExchange(&handle->mutex_generation, 0, 0);"),
-             ("before-wait",)),
+              "__atomic_load_n(&handle->mutex_generation, __ATOMIC_SEQ_CST);"),
+             ("before-wait",), 52),
         )
-        for name, before, after, scenarios in variants:
+        for name, before, after, scenarios, expected in variants:
             with self.subTest(variant=name), tempfile.TemporaryDirectory() as temporary, \
                     os_suites.host_target():
                 directory = Path(temporary)
@@ -1822,13 +1825,13 @@ void Os_TestAfterFaultReader(void)
                     )
                     for scenario in scenarios:
                         result = os_suites.run_native([str(binary), scenario], timeout=10)
-                        self.assertEqual(result.returncode, 0 if name == "control" else 52, result)
+                        self.assertEqual(result.returncode, expected, result)
                         self.assertEqual(result.stdout, (
                             f"mutex_wakeup scenario={scenario} acquisition=observed masks=restored\n"
                             if name == "control" else ""
                         ), result)
                         self.assertEqual(result.stderr, (
-                            "" if name == "control" else "mutex_wakeup_rejected stage=52\n"
+                            "" if expected == 0 else f"mutex_wakeup_rejected stage={expected}\n"
                         ), result)
 
     def test_native_handle_errors_and_resource_reuse(self):

@@ -32,6 +32,8 @@
 #define OS_HOST_HANDLES       96u
 #define OS_HOST_DEFAULT_STACK 262144u
 #define OS_HOST_WAIT_SLICE_NS 10000000L
+#define OS_MUTEX_WAITING      1
+#define OS_MUTEX_EPOCH_STEP   2
 
 typedef enum {
     OS_HOST_UNUSED = 0,
@@ -70,8 +72,7 @@ struct Os_HostHandleType {
     const void *bootstrap_bottom;
     size_t bootstrap_size;
 #endif
-    volatile int32_t
-        mutex_generation; /**< Atomic unlock/wait publication; reset before creation. */
+    volatile int32_t mutex_generation;    /**< Unlock epoch with the waiter hint in its low bit. */
     volatile int32_t *mutex_wait_address; /**< Atomic cached static wait cell; no Init reset. */
 };
 
@@ -182,7 +183,7 @@ OS_MEMMAP static void park_signal(int signal_number, siginfo_t *info, void *nati
             for (;;) {
                 const int32_t resumed = __atomic_load_n(&thread->resumed, __ATOMIC_ACQUIRE);
                 /* Stop an already parked actor without nesting another signal handler. */
-                if (InterlockedCompareExchange(&thread->requested, 0, 0) == INT32_MAX) {
+                if (__atomic_load_n(&thread->requested, __ATOMIC_SEQ_CST) == INT32_MAX) {
                     terminal_park(thread);
                 }
                 if (resumed == generation) {
@@ -238,7 +239,7 @@ OS_MEMMAP static DWORD actor_body(void *argument)
     HANDLE thread = current_thread;
     (void)argument;
     OS_LINUX_STACK_FINISH(NULL, &thread->bootstrap_bottom, &thread->bootstrap_size);
-    __atomic_store_n(&thread->thread_id, GetCurrentThreadId(), __ATOMIC_RELEASE);
+    __atomic_store_n(&thread->thread_id, Os_LinuxThreadId(), __ATOMIC_RELEASE);
     DWORD result;
     int registered = 1;
     const int register_host = thread->register_host;
@@ -593,7 +594,19 @@ OS_MEMMAP static int interruptible_mutex_wait(HANDLE mutex,
         }
     }
     if (result == 0) {
-        result = Os_LinuxFutexWait(&mutex->mutex_generation, generation, duration);
+        const int32_t expected =
+            generation + (((generation % OS_MUTEX_EPOCH_STEP) == 0) ? OS_MUTEX_WAITING : 0);
+        if (generation != expected) {
+            int32_t observed = generation;
+            /* A failed CAS either finds the hint set or leaves a stale futex expectation. */
+            (void)__atomic_compare_exchange_n(&mutex->mutex_generation,
+                                              &observed,
+                                              expected,
+                                              false,
+                                              __ATOMIC_SEQ_CST,
+                                              __ATOMIC_SEQ_CST);
+        }
+        result = Os_LinuxFutexWait(&mutex->mutex_generation, expected, duration);
     }
     return result;
 }
@@ -609,7 +622,7 @@ OS_MEMMAP static DWORD wait_mutex(HANDLE handle, DWORD milliseconds, uint64_t en
             (current_thread != NULL)
                 ? __atomic_load_n(&current_thread->acknowledged, __ATOMIC_SEQ_CST)
                 : 0;
-        const int32_t generation = InterlockedCompareExchange(&handle->mutex_generation, 0, 0);
+        const int32_t generation = __atomic_load_n(&handle->mutex_generation, __ATOMIC_SEQ_CST);
         outcome = try_wait_mutex(handle);
         if (outcome != WAIT_TIMEOUT) {
             pending = 0;
@@ -936,6 +949,25 @@ OS_MEMMAP DWORD WaitForMultipleObjects(DWORD count,
     return result;
 }
 
+/* Advance the epoch and consume its waiter hint atomically. Otherwise an
+ * earlier unlock could clear a later owner's waiter before it enters futex. */
+OS_MEMMAP static bool advance_mutex_epoch(volatile int32_t *address, bool unlock)
+{
+    int32_t observed = __atomic_load_n(address, __ATOMIC_SEQ_CST);
+    int32_t waiting;
+    int32_t next;
+    do {
+        waiting = observed % OS_MUTEX_EPOCH_STEP;
+        const int32_t epoch = observed - waiting;
+        next = (epoch >= (INT32_MAX - OS_MUTEX_WAITING)) ? 0 : (epoch + OS_MUTEX_EPOCH_STEP);
+        if (!unlock) {
+            next += waiting;
+        }
+    } while (!__atomic_compare_exchange_n(
+        address, &observed, next, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST));
+    return waiting != 0;
+}
+
 OS_MEMMAP BOOL ReleaseMutex(HANDLE mutex)
 {
     int released = EINVAL;
@@ -949,8 +981,10 @@ OS_MEMMAP BOOL ReleaseMutex(HANDLE mutex)
                 __atomic_store_n(&mutex->mutex_owner, 0u, __ATOMIC_RELEASE);
                 released = pthread_mutex_unlock(&mutex->mutex);
                 if (released == 0) {
-                    (void)InterlockedIncrement(&mutex->mutex_generation);
-                    Os_LinuxFutexWake(&mutex->mutex_generation);
+                    const bool waiting = advance_mutex_epoch(&mutex->mutex_generation, true);
+                    if (waiting) {
+                        Os_LinuxFutexWake(&mutex->mutex_generation);
+                    }
                 }
             }
             if (released == 0) {
@@ -1032,7 +1066,7 @@ OS_MEMMAP static void invalidate_mutex_wait(HANDLE thread)
     volatile int32_t *address = __atomic_load_n(&thread->mutex_wait_address, __ATOMIC_SEQ_CST);
     if (address != NULL) {
         /* The signal interrupts an entered futex; a not-yet-entered wait sees EAGAIN. */
-        (void)InterlockedIncrement(address);
+        (void)advance_mutex_epoch(address, false);
     }
 }
 
@@ -1090,7 +1124,7 @@ OS_MEMMAP DWORD ResumeThread(HANDLE thread)
     if ((thread != NULL) && (thread->kind == OS_HOST_THREAD)) {
         const int32_t generation = __atomic_load_n(&thread->requested, __ATOMIC_ACQUIRE);
         if ((generation != 0) && (generation != INT32_MAX)) {
-            const int32_t acknowledged = InterlockedCompareExchange(&thread->acknowledged, 0, 0);
+            const int32_t acknowledged = __atomic_load_n(&thread->acknowledged, __ATOMIC_SEQ_CST);
             if (acknowledged == generation) {
                 __atomic_store_n(&thread->resumed, generation, __ATOMIC_RELEASE);
                 futex_wake(&thread->resumed);
@@ -1118,7 +1152,12 @@ OS_MEMMAP BOOL GetThreadContext(HANDLE thread, CONTEXT *context)
     return result;
 }
 
-OS_MEMMAP DWORD GetCurrentThreadId(void) { return Os_LinuxThreadId(); }
+OS_MEMMAP DWORD GetCurrentThreadId(void)
+{
+    /* Managed actors publish their TID before restoring the startup mask. */
+    const HANDLE thread = current_thread;
+    return (thread != NULL) ? GetThreadId(thread) : Os_LinuxThreadId();
+}
 
 OS_MEMMAP DWORD GetThreadId(HANDLE thread)
 {
