@@ -390,4 +390,6 @@ test.each(languages)(
     for (const key of ['shell.delivery.output', 'shell.delivery.buildDirectory'])
       expect(view.getByRole('textbox', { name: translate(key) })).toBeTruthy();
   },
+  // The full jsdom workbench walkthrough takes about five seconds on the shared Linux host.
+  10_000,
 );
