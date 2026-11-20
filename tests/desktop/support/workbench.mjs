@@ -25,6 +25,17 @@ export const existing = (objectId) => ({ kind: 'existing', objectId });
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 export const json = JSON.stringify;
 
+// A concurrent workspace commit can invalidate the fingerprint between the
+// capabilities and projection requests. Only transition polls use this sample.
+export async function sampleProjection(projection) {
+  try {
+    return await projection();
+  } catch (error) {
+    if (error.ipc?.key !== 'backend.workbench.stale_delivery') throw error;
+    return null;
+  }
+}
+
 // Bind the desktop round trip to the sealed package the native receiver will build.
 export async function recordEditedDelivery(delivery, project, original, reopened, values) {
   const directory = delivery.directory;
@@ -376,6 +387,8 @@ export async function openWorkbench(name, options) {
     return projection();
   }
   async function awaitImportedSources(sources) {
+    // Both entry points import from the start page. Its first workspace tabs
+    // appear only after the open_project reply, so these reads stay strict.
     const expected = [...sources].sort();
     const deadline = Date.now() + 60000;
     do {
@@ -617,13 +630,7 @@ export async function openWorkbench(name, options) {
         );
         const deadline = Date.now() + 60000;
         do {
-          try {
-            view = await invoke('project_projection');
-          } catch (error) {
-            // Opening the selected member may publish between this read's
-            // capability snapshot and request. Retry only this read-only poll.
-            if (error.ipc?.key !== 'backend.workbench.stale_delivery') throw error;
-          }
+          view = await sampleProjection(projection);
           if (view?.projectPath === manifest) break;
           await new Promise((resolve) => setTimeout(resolve, 75));
         } while (Date.now() < deadline);

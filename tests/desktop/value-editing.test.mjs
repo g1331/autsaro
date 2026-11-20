@@ -20,6 +20,7 @@ const {
   choose,
   evaluate,
   key,
+  capabilities,
   invoke,
   projection,
   input,
@@ -337,13 +338,15 @@ check('extension-isolation-and-default-preservation', async () => {
 });
 check('definition-catalog-decisions-use-in-app-dialogs', async () => {
   const accepted = async () => (await projection()).acceptedExtensionDefinitions;
-  const acceptedCount = async (count, description) => {
+  const awaitCatalogResult = async (expected, description) => {
+    // The settings rows come from the accepted write reply. Read the native
+    // projection only after that reply is rendered and the control is ready.
     await until(
-      `(${catalogResultReady.toString()})(${dialogNamed('设置')}, ${count})`,
+      `(${catalogResultReady.toString()})(${dialogNamed('设置')}, ${expected.length})`,
       description,
       30000,
     );
-    assert.equal((await accepted()).length, count, description);
+    assert.deepEqual(await accepted(), expected, description);
   };
   const alertdialog = (title) => `Boolean(${dialogNamed(title)}?.matches('[role=alertdialog]'))`;
   const closed = (title) => `!${dialogNamed(title)}`;
@@ -380,7 +383,7 @@ check('definition-catalog-decisions-use-in-app-dialogs', async () => {
   await until(alertdialog('移除扩展定义'), 'second removal confirmation');
   await click('移除扩展', dialogNamed('移除扩展定义'));
   await until(closed('移除扩展定义'), 'catalog removal confirmed');
-  await acceptedCount(0, 'catalog removed after confirmation');
+  await awaitCatalogResult([], 'catalog removed after confirmation');
   await until(`Boolean(${dialogNamed('设置')})`, 'settings return after removal');
 
   const chooseCatalog = () =>
@@ -400,10 +403,15 @@ check('definition-catalog-decisions-use-in-app-dialogs', async () => {
   assert.deepEqual(await accepted(), [], 'Cancel keeps the catalog out');
   await until(`Boolean(${dialogNamed('设置')})`, 'settings return after cancel');
   await chooseCatalog();
+  const beforeAcceptance = (await capabilities()).fingerprint;
   await click('接纳', dialogNamed('接纳扩展定义'));
   await until(closed('接纳扩展定义'), 'catalog acceptance confirmed');
-  await acceptedCount(1, 'catalog accepted after confirmation');
-  assert.deepEqual(await accepted(), [extension.identity]);
+  await awaitCatalogResult([extension.identity], 'catalog accepted after confirmation');
+  await assert.rejects(
+    invoke('project_projection', {}, beforeAcceptance),
+    { ipc: { key: 'backend.workbench.stale_delivery', params: {} } },
+    'The native projection must reject the capability snapshot taken before acceptance',
+  );
   await key('Escape');
   await until(`!document.querySelector('[role=dialog]')`, 'settings closed');
 });
