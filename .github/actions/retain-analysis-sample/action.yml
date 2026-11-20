@@ -25,6 +25,7 @@ runs:
           build/analysis-output/${{ inputs.sample }}/*/summary.json
           build/analysis-output/${{ inputs.sample }}/*/project
           build/analysis-output/${{ inputs.sample }}/*/analysis-identity.json
+          build/analysis-output/${{ inputs.sample }}/*/diagnostic-fingerprints.json
           build/analysis-output/${{ inputs.sample }}/*/identifier-evidence
           build/analysis-output/${{ inputs.sample }}/*/baseline-source.json
           build/analysis-output/${{ inputs.sample }}/*/platform-model.h

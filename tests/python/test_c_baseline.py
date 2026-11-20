@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import test_c_comparison as comparison_tests
-from autosar_tooling import c_baseline
+from autosar_tooling import c_baseline, c_fingerprint
 from ecu_tools.build import digest
 
 
@@ -106,7 +106,15 @@ class BaselineReuseTests(unittest.TestCase):
             root = Path(temporary).resolve()
             summary, project, candidate, compiler = self.fixture(root)
             semantic, acceptance = self.patches(stack, root, summary, compiler)
-            c_baseline.record(candidate, "parent", "linux", "standard-ecu")
+            fingerprints = [
+                {"diagnostic": index, "locationIndex": position, "program": program,
+                 "fingerprint": c_fingerprint.sha((index, position, program))}
+                for index, diagnostic in enumerate(summary["diagnostics"])
+                for position in range(len(diagnostic["locations"]) or 1)
+                for program in diagnostic["programs"]
+            ]
+            c_baseline.record(candidate, "parent", "linux", "standard-ecu", fingerprints=True,
+                              cached_fingerprints=fingerprints)
             proof = candidate / "identifier-evidence/main.c.json.gz"
             proof.parent.mkdir()
             proof.write_bytes(b"historical proof")
@@ -143,7 +151,7 @@ class BaselineReuseTests(unittest.TestCase):
             scan = stack.enter_context(patch.object(c_baseline.c_check, "check"))
             output = root / "result"
             self.assertEqual(c_baseline.analyze(
-                "baseline", "linux", "standard-ecu", project, output), 1)
+                "baseline", "linux", "standard-ecu", project, output, fingerprints=True), 1)
             scan.assert_not_called()
             semantic.assert_called_once()
             acceptance.assert_called_once()
@@ -156,6 +164,9 @@ class BaselineReuseTests(unittest.TestCase):
             manifest = json.loads((output / "analysis-identity.json").read_text())
             self.assertEqual((manifest["run"], manifest["attempt"]), (9, 3))
             self.assertEqual(manifest["summarySha256"], digest(output / "summary.json"))
+            self.assertEqual(c_fingerprint.read_receipt(output, result, manifest["fingerprintSha256"]),
+                             fingerprints)
+            self.assertNotEqual(manifest["fingerprintSha256"], receipt["fingerprintSha256"])
             self.assertNotIn("identifierEvidence", manifest)
             self.assertFalse((output / "identifier-evidence").exists())
 

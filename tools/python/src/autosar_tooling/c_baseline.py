@@ -25,7 +25,14 @@ from ecu_tools.build import (
 )
 from ecu_tools.process import ProcessResult, ProcessSpec, run_bounded
 
-from autosar_tooling import c_acceptance, c_check, c_comparison, c_gate, c_rename
+from autosar_tooling import (
+    c_acceptance,
+    c_check,
+    c_comparison,
+    c_fingerprint,
+    c_gate,
+    c_rename,
+)
 from autosar_tooling.c_baseline_jobs import previous_wrapper, producer_matches
 from autosar_tooling.config import ROOT
 
@@ -110,7 +117,8 @@ def identity(project: Path, tree: str, target: str, sample: str, tool: dict,
     }
 
 
-def record(output: Path, tree: str, target: str, sample: str, candidates: set[str] | None = None) -> None:
+def record(output: Path, tree: str, target: str, sample: str, candidates: set[str] | None = None, *,
+           fingerprints: bool = False, cached_fingerprints: list[dict] | None = None) -> None:
     summary = read(output / "summary.json")
     c_acceptance._complete(summary)
     if summary["projectAcceptance"]["status"] not in {"accepted", "blocked"}:
@@ -125,10 +133,16 @@ def record(output: Path, tree: str, target: str, sample: str, candidates: set[st
     evidence_bytes = sum(c_rename._proof_path(output, name).stat().st_size for name in identifier_evidence)
     print(f"Identifier evidence: {len(identifier_evidence)} TUs, {evidence_bytes} bytes, "
           f"{time.perf_counter() - started:.3f} seconds to package and hash", flush=True)
+    fingerprint_fields = {}
+    if fingerprints:
+        rows = (c_fingerprint.inventory(summary, output, value["compiler"])
+                if cached_fingerprints is None else cached_fingerprints)
+        fingerprint_fields["fingerprintSha256"] = c_fingerprint.write_receipt(output, rows)
     (output / "analysis-identity.json").write_text(json.dumps({
         "format": FORMAT, "identity": value,
         "summarySha256": digest(output / "summary.json"),
         **({"identifierEvidence": identifier_evidence} if identifier_evidence else {}),
+        **fingerprint_fields,
         "run": int(os.environ["GITHUB_RUN_ID"]) if os.environ.get("GITHUB_RUN_ID") else None,
         "attempt": int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")),
     }, indent=2) + "\n", encoding="utf-8")
@@ -266,7 +280,8 @@ def restore(candidate: Path, project: Path, output: Path, tree: str,
         (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 
 
-def analyze(side: str, target: str, sample: str, project: Path, output: Path) -> int:
+def analyze(side: str, target: str, sample: str, project: Path, output: Path, *,
+            fingerprints: bool = False) -> int:
     refuse_links(project)
     refuse_links(output)
     project, output = project.resolve(strict=True), output.absolute().resolve()
@@ -279,6 +294,7 @@ def analyze(side: str, target: str, sample: str, project: Path, output: Path) ->
     print(f"Identifier candidates: {len(candidates)} TUs in {time.perf_counter() - started:.3f} seconds",
           flush=True)
     source = {"kind": "same-run", "tree": tree}
+    cached_fingerprints = None
     if side == "baseline":
         repository = os.environ.get("GITHUB_REPOSITORY")
         reason = "repository_unavailable"
@@ -299,7 +315,11 @@ def analyze(side: str, target: str, sample: str, project: Path, output: Path) ->
                         if (manifest["run"] != cached["run"]
                                 or manifest["attempt"] != cached["attempt"]):
                             raise ValueError("Cached artifact belongs to a different run attempt")
+                        rows = (c_fingerprint.read_receipt(candidate, read(candidate / "summary.json"),
+                                                           manifest["fingerprintSha256"])
+                                if fingerprints else None)
                         restore(candidate, project, output, tree, target, sample)
+                        cached_fingerprints = rows
                         source = cached
                     else:
                         reason = "artifact_missing"
@@ -318,7 +338,11 @@ def analyze(side: str, target: str, sample: str, project: Path, output: Path) ->
                                **({"sdk_revision": tree} if side == "baseline" else {}))
     else:
         result = 0 if read(output / "summary.json")["passed"] else 1
-    record(output, tree, target, sample, candidates)
+    if fingerprints:
+        record(output, tree, target, sample, candidates, fingerprints=True,
+               cached_fingerprints=cached_fingerprints)
+    else:
+        record(output, tree, target, sample, candidates)
     (output / "baseline-source.json").write_text(json.dumps(source, indent=2) + "\n",
                                                 encoding="utf-8")
     print("Raw analysis source:", json.dumps(source), flush=True)
@@ -333,8 +357,10 @@ def main() -> None:
     parser.add_argument("--sample", choices=c_gate.SAMPLES, required=True)
     parser.add_argument("--project", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
+    parser.add_argument("--fingerprints", action="store_true")
     args = parser.parse_args()
-    analyze(args.side, args.target, args.sample, args.project, args.output_directory)
+    analyze(args.side, args.target, args.sample, args.project, args.output_directory,
+            **({"fingerprints": True} if args.fingerprints else {}))
     # Source diagnostic status remains in the raw receipt, separately from orchestration errors.
     raise SystemExit(0)
 
