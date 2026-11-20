@@ -1437,6 +1437,7 @@ class AcceptanceTests(unittest.TestCase):
             "Windows 224 份中有 120 份", "项目文件没有解析错误或损坏的初始化节点",
             "210 项", "38 个数组列表显式覆盖全部元素", "patchedLines", "ADR 0025／0030",
             "自动结构／union 的兼容类型表达式", "部分指定子对象例外",
+            "R9.3 对数组的部分显式初始化只接受 `{0}`、全指定初始化或字符串。",
             "函数指针数组", "固定 addon 均漏报", "类型化核查检出两个实参反例",
             "`Os_ErrorParametersType`", "由错误记录传给 ErrorHook", "计数器工作栈的根项和子项",
             "`Ecu_OsConfig`", "`priorities[32]`", "`[30u] = 1u`", "`task_name` 使用字符串",
