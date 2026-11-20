@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import os
@@ -12,6 +13,12 @@ import subprocess
 from collections import Counter
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
+
+from autosar_tooling import c_fingerprint
+
+# GitHub truncates displayed results above this limit even when upload succeeds.
+SARIF_RESULTS_PER_RUN = 5000
+SARIF_RUNS_PER_FILE = 20
 
 
 def summary(title: str, lines: list[str]) -> None:
@@ -149,7 +156,7 @@ def location(
     return (project.relative_to(repository) / name).as_posix(), line
 
 
-def sarif(rows: list[dict], tool: str) -> dict:
+def sarif_run(rows: list[dict], tool: str, category: str | None) -> dict:
     results = []
     # SARIF 2.1.0 requires baselineState on either all results in a run or none.
     complete_comparison = all("baselineState" in row for row in rows)
@@ -178,22 +185,69 @@ def sarif(rows: list[dict], tool: str) -> dict:
                 ],
             }
         )
+    return {"tool": {"driver": {"name": tool}}, "results": results,
+            **({"automationDetails": {"id": category + "/"}} if category else {})}
+
+
+def sarif(rows: list[dict], tool: str, *, categories: tuple[str, ...] = ()) -> dict:
+    groups: dict[str | None, list[dict]] = {category: [] for category in categories}
+    for row in rows:
+        groups.setdefault(row.get("category"), []).append(row)
+    runs = []
+    for category, group in groups.items():
+        if len(group) <= SARIF_RESULTS_PER_RUN:
+            runs.append(sarif_run(group, tool, category))
+            continue
+        for part, start in enumerate(range(0, len(group), SARIF_RESULTS_PER_RUN), 1):
+            part_category = category if category and part == 1 else f"{category or tool}-part-{part}"
+            runs.append(sarif_run(group[start:start + SARIF_RESULTS_PER_RUN], tool,
+                                  part_category))
+    if len(runs) > SARIF_RUNS_PER_FILE:
+        raise ValueError("SARIF exceeds GitHub's run limit; distribute samples across files")
     return {
         "version": "2.1.0",
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-        "runs": [{"tool": {"driver": {"name": tool}}, "results": results}],
+        "runs": runs or [sarif_run([], tool, None)],
     }
 
 
+def fingerprint_comparison(path: Path, current_bytes: bytes, current: dict,
+                           baseline: Path | None) -> tuple[dict, set, set]:
+    gate = json.loads(path.with_name("gate.json").read_bytes())
+    preview = gate["diagnosticFingerprints"]
+    if preview["format"] != c_fingerprint.FORMAT:
+        raise ValueError("Unsupported diagnostic fingerprint report")
+    baseline_path = baseline if baseline is not None else path.with_name("baseline-summary.json")
+    baseline_bytes = baseline_path.read_bytes()
+    for side, content in (("current", current_bytes), ("baseline", baseline_bytes)):
+        if gate["summarySha256"][side] != hashlib.sha256(content).hexdigest():
+            raise ValueError(f"Gate {side} summary digest differs")
+    c_fingerprint.validate_occurrences(current, preview["current"])
+    c_fingerprint.validate_occurrences(json.loads(baseline_bytes), preview["baseline"])
+    fingerprints = {(row["diagnostic"], row["locationIndex"], row["program"]): row["fingerprint"]
+                    for row in preview["current"]}
+    before = {row["fingerprint"] for row in preview["baseline"]}
+    incomplete = {row["program"] for side in ("current", "baseline") for row in preview[side]
+                  if row["fingerprint"] is None}
+    return fingerprints, before, incomplete
+
+
+def cppcheck_category(prefix: str, program: str) -> str:
+    # HostBatch keeps the pre-split category so its next run updates those alerts.
+    return prefix if program == "host-batch" else f"{prefix}-{program}"
+
+
 def cppcheck(
-    directory: Path, repository: Path, baseline: Path | None = None
+    directory: Path, repository: Path, baseline: Path | None = None, *,
+    categories: set[str] | None = None,
 ) -> list[dict]:
     repository = repository.absolute().resolve()
     directory = (repository / directory).resolve()
     rows = []
     details = []
     for path in sorted(directory.glob("*/summary.json")):
-        data = json.loads(path.read_text(encoding="utf-8"))
+        current_bytes = path.read_bytes()
+        data = json.loads(current_bytes)
         project = path.parent / "project"
         details.append(
             f"{path.parent.name}: source passed={data['passed']}; analysis error={data['error']}"
@@ -243,22 +297,20 @@ def cppcheck(
         )
         fingerprint_rows = {}
         previous_fingerprints = set()
-        compared = False
+        incomplete = set()
         gate = path.with_name("gate.json")
         if gate.is_file():
-            from autosar_tooling import c_fingerprint
-
-            preview = json.loads(gate.read_text(encoding="utf-8")).get("diagnosticFingerprints")
-            if preview is not None:
-                if preview["format"] != c_fingerprint.FORMAT:
-                    raise ValueError("Unsupported diagnostic fingerprint report")
-                for item in preview["current"]:
-                    if fingerprint := item["fingerprint"]:
-                        key = item["diagnostic"], item["locationIndex"]
-                        fingerprint_rows.setdefault(key, []).append(fingerprint)
-                previous_fingerprints = {item["fingerprint"] for item in preview["baseline"]}
-                compared = (None not in previous_fingerprints
-                            and all(item["fingerprint"] is not None for item in preview["current"]))
+            try:
+                fingerprint_rows, previous_fingerprints, incomplete = fingerprint_comparison(
+                    path, current_bytes, data, baseline / path.parent.name / "summary.json"
+                    if baseline is not None else None,
+                )
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                details.append(f"Fingerprint comparison unavailable for {path.parent.name}: {error}")
+        target = data.get("scope", {}).get("target", "unknown-target")
+        prefix = f"cppcheck-{target}-{path.parent.name}"
+        if categories is not None and data["error"] is None:
+            categories.update(cppcheck_category(prefix, row["name"]) for row in data.get("programs", []))
         for index, diagnostic in enumerate(data.get("diagnostics", [])):
             if diagnostic["id"] == "checkersReport":
                 continue
@@ -274,15 +326,16 @@ def cppcheck(
                     "line": line,
                     "message": diagnostic["message"],
                 }
-                fingerprints = fingerprint_rows.get((index, position), ())
-                if fingerprints:
-                    rows.extend({
-                        **row, "partialFingerprints": {c_fingerprint.SARIF_KEY: fingerprint},
-                        **({"baselineState": "unchanged" if fingerprint in previous_fingerprints else "new"}
-                           if compared else {}),
-                    } for fingerprint in fingerprints)
-                elif row not in rows:
-                    rows.append(row)
+                for program in diagnostic.get("programs") or ("raw",):
+                    item = {**row, "category": cppcheck_category(prefix, program)}
+                    fingerprint = fingerprint_rows.get((index, position, program))
+                    if fingerprint is not None:
+                        item["partialFingerprints"] = {c_fingerprint.SARIF_KEY: fingerprint}
+                        if program not in incomplete:
+                            item["baselineState"] = (
+                                "unchanged" if fingerprint in previous_fingerprints else "new"
+                            )
+                    rows.append(item)
                 source = (
                     (project / relative(place["file"]))
                     .read_text(encoding="utf-8")
@@ -400,9 +453,11 @@ def main(argv: list[str] | None = None) -> int:
         return run(command)
     if bool(args.cppcheck_directory) == bool(args.clang_tidy):
         parser.error("select exactly one scanner input")
+    categories: set[str] = set()
     if args.cppcheck_directory:
         rows = cppcheck(
-            args.cppcheck_directory.resolve(), Path.cwd(), args.baseline_directory
+            args.cppcheck_directory.resolve(), Path.cwd(), args.baseline_directory,
+            categories=categories,
         )
         tool = "Cppcheck / MISRA"
     else:
@@ -412,7 +467,8 @@ def main(argv: list[str] | None = None) -> int:
         tool = "clang-tidy"
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
-        json.dumps(sarif(rows, tool), ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(sarif(rows, tool, categories=tuple(sorted(categories))), ensure_ascii=False) + "\n",
+        encoding="utf-8",
     )
     return 0
 

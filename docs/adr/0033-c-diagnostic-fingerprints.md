@@ -8,7 +8,7 @@
 
 ## 指纹
 
-一个指纹对应规则的一条诊断、一个位置和一个程序。格式 `c-diagnostic-fingerprints-v1`
+一个指纹对应规则的一条诊断、一个位置和一个程序。格式 `c-diagnostic-fingerprints-v2`
 以 UTF-8 规范 JSON（键排序、无分隔空白）计算 SHA-256，输入含以下内容。
 
 - 检查器规则 ID、严重度、程序名、位置序号及整条诊断的有序位置列表。这保留关联位置与
@@ -16,13 +16,17 @@
 - 每个位置的交付相对路径或经验证的 SDK 头身份、定位的原始 token 在文件内的序号、该 token
   和它前后各至多八个 token，以及参与 TU 在此处发出的 GCC 展开 token。行列号只用于查找。
 - 参与 TU 的相对路径和摘要。取同一程序内包含诊断任一位置的 GCC 或 Cppcheck 实际 TU。
-  摘要覆盖 GCC `-E -dD` 顺序展开的 token 和活动宏定义、Cppcheck 读到的工程文件原始
-  token、逐 TU 定义与 SDK 头身份。GCC 行标记负责分段定位，原始 checkout 路径统一为相对
-  路径，展开到代码里的 `__FILE__` 也去除项目根目录。加入空行时，位置随行标记更新而
-  指纹仍保持。若 `__LINE__` 的展开值改变，指纹随实际输入改变。
+  摘要覆盖 GCC `-E -dD` 的展开 token 和活动宏定义、Cppcheck 实际输入文件的原始拼写、
+  逐 TU 定义与 SDK 头身份。原始拼写保留指令边界、宏名与左括号的邻接及实参中的空白，
+  因此只在 `__CPPCHECK__` 分支中生效的变化也会使指纹失效。遇到行号宏、token 拼接、
+  续行或 Cppcheck 读取的外部 SDK，保留物理空行。其余输入忽略纯空行，保留非空行和文件
+  末尾换行状态。
+- GCC 行标记用于定位，原始 checkout 根统一为相对路径，展开的 `__FILE__` 也去除项目根。
+  Windows 按大小写无关的路径键查找 SDK 和交付文件，摘要仍使用已登记的 SDK 身份及交付
+  相对路径。Linux 路径保持大小写区分。
 - 目标、编译参数及 include 顺序、编译器目标／版本和内置宏、检查器版本与源码 revision、
-  addon／库／模型和项目检查驱动的身份。用分析实际读取的规则内容绑定，规则或模型变化
-  会使受影响的旧处置失效。
+  实际 Cppcheck 二进制、GCC driver／cc1 的 SHA-256，以及 addon／库／模型和项目检查驱动
+  的身份。即使自报版本相同，二进制不同也会使旧处置失效。
 
 GCC 不为所有原始指令发出 C token。原始定位和 Cppcheck 工程输入仍覆盖这类报告。
 同一参与 TU 中的其他源码或共用头变化也可能使指纹变化。固定 MISRA addon 的
@@ -44,10 +48,17 @@ GCC 不为所有原始指令发出 C token。原始定位和 Cppcheck 工程输�
 缺少指纹清单的候选工件回到基准现场扫描。
 
 [SARIF 2.1.0 §3.27.17 和 §3.27.24](https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html)
-对应 `partialFingerprints.autsaroDiagnostic/v1` 和 `baselineState`。两侧结果完整匹配或
-区分时，当前报告根据第一父树标注 `new` 或 `unchanged`。`baselineState` 在同一次运行中
-全部提供或全部省略。消失及不能绑定的项留在比较回执。GitHub
+对应 `partialFingerprints.autsaroDiagnostic/v2` 和 `baselineState`。转换器先核对
+`gate.json` 中的双侧摘要和诊断／位置／程序覆盖，再按第一父树标注 `new` 或
+`unchanged`。摘要或覆盖无效时仅导出原始诊断。
+
+SARIF 按目标、样本和程序使用独立 run 与类别。每个 run 最多 5,000 条，超出时按原顺序
+分段并赋予独立类别，避免 GitHub 截断结果。HostBatch 沿用原样本类别，probe 使用独立类别。
+已扫描且零诊断的程序也输出相应的空 run。
+程序任一侧有未绑定结果时，该程序的 run
+省略 `baselineState`，可用的指纹照常导出。消失及不能绑定的项留在比较回执。GitHub
 告警匹配由平台处理，仓库门禁直接比较本次分析回执。
+[GitHub SARIF 限额](https://docs.github.com/en/code-security/reference/code-scanning/sarif-files/sarif-support#sarif-data-limits)
 
 迁移后以目标／样本索引处置，记录指纹、处置类别和原批准或误报依据。PR 阻断范围内未处置
 的新增诊断、失效处置和不完整的证据。诊断修复后，删除其绑定即可。基准仍是实际测试提交的

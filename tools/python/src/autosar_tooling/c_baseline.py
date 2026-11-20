@@ -135,7 +135,7 @@ def record(output: Path, tree: str, target: str, sample: str, candidates: set[st
           f"{time.perf_counter() - started:.3f} seconds to package and hash", flush=True)
     fingerprint_fields = {}
     if fingerprints:
-        rows = (c_fingerprint.inventory(summary, output)
+        rows = (c_fingerprint.inventory(summary, output, value["compiler"])
                 if cached_fingerprints is None else cached_fingerprints)
         fingerprint_fields["fingerprintSha256"] = c_fingerprint.write_receipt(output, rows)
     (output / "analysis-identity.json").write_text(json.dumps({

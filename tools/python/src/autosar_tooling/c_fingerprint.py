@@ -14,8 +14,8 @@ from ecu_tools.build import digest
 
 from autosar_tooling import c_preprocessor
 
-FORMAT = "c-diagnostic-fingerprints-v1"
-SARIF_KEY = "autsaroDiagnostic/v1"
+FORMAT = "c-diagnostic-fingerprints-v2"
+SARIF_KEY = "autsaroDiagnostic/v2"
 RECEIPT = "diagnostic-fingerprints.json"
 SHA256 = re.compile(r"[0-9a-f]{64}")
 # The pinned MISRA addon's analyse_ctu_info can report these using facts
@@ -30,6 +30,7 @@ TOKEN = re.compile(
 )
 SOURCE_TOKEN = re.compile(r"/\*.*?\*/|//[^\n]*|" + TOKEN.pattern, re.DOTALL)
 FUNCTION_MACRO = re.compile(r"#define [A-Za-z_]\w*\(")
+LINE_SENSITIVE = re.compile(r"\b__LINE__\b|##|%:%:|(?:\\|\?\?/)[ \t]*(?:\n|$)")
 
 
 def sha(value: object) -> str:
@@ -38,17 +39,19 @@ def sha(value: object) -> str:
     ).encode("utf-8")).hexdigest()
 
 
-def path_key(name: str) -> str:
-    return posixpath.normpath(name.replace("\\", "/"))
+def path_key(name: str, windows: bool = False) -> str:
+    path = posixpath.normpath(name.replace("\\", "/"))
+    return path.casefold() if windows else path
 
 
-def source_root(lines: list[str], unit: str) -> str:
+def source_root(lines: list[str], unit: str, windows: bool) -> str:
     """The primary GCC marker records the original root even after artifact transfer."""
     marker = next((m for line in lines if (m := c_preprocessor.LINE.fullmatch(line))), None)
     name = path_key(marker[2].replace("\\\\", "\\")) if marker else ""
-    if marker is None or marker[1] != "0" or not name.endswith("/" + unit):
+    if (marker is None or marker[1] != "0"
+            or not path_key(name, windows).endswith("/" + path_key(unit, windows))):
         raise ValueError(f"Primary compiler-origin marker differs: {unit}")
-    return name.removesuffix("/" + unit)
+    return name.rsplit("/", unit.count("/") + 1)[0]
 
 
 def tokens(text: str) -> list[str]:
@@ -56,12 +59,16 @@ def tokens(text: str) -> list[str]:
 
 
 def compiler_context(text: str, unit: str, sdk: dict[str, str],
-                     wanted: dict[str, set[int]]) -> tuple[str, dict]:
+                     wanted: dict[str, set[int]], *, windows: bool = False,
+                     project_paths: dict[str, str] | None = None) -> tuple[str, dict]:
     """Hash the ordered expanded TU and collect expanded tokens at diagnostic anchors."""
     lines = text.splitlines()
-    root = source_root(lines, unit)
+    root = source_root(lines, unit, windows)
+    root_key = path_key(root, windows)
+    project_paths = project_paths or {}
     # __FILE__ can put the source checkout in a string literal as well as a line marker.
-    root_spellings = (root, root.replace("/", "\\\\"))
+    checkout = re.compile("|".join(map(re.escape, (root + "/", root.replace("/", "\\\\") + "\\\\"))),
+                          re.IGNORECASE if windows else 0)
     digest = hashlib.sha256()
     expanded = defaultdict(list)
     filename, number = unit, 0
@@ -70,12 +77,11 @@ def compiler_context(text: str, unit: str, sdk: dict[str, str],
         marker = c_preprocessor.LINE.fullmatch(line)
         if marker:
             number = int(marker[1])
-            path = path_key(marker[2].replace("\\\\", "\\"))
-            filename = path.removeprefix(root + "/")
-            filename = sdk.get(filename, filename)
+            path = path_key(marker[2].replace("\\\\", "\\"), windows)
+            relative = path.removeprefix(root_key + "/")
+            filename = sdk.get(path, project_paths.get(relative, relative))
         elif line.strip():
-            for spelling in root_spellings:
-                line = line.replace(spelling + ("/" if spelling == root else "\\\\"), "<project>/")
+            line = checkout.sub("<project>/", line)
             words = tokens(line)
             if FUNCTION_MACRO.match(line):
                 words.insert(3, "<function-macro>")
@@ -115,7 +121,7 @@ class SourceContext:
                 self.tokens[index][0], [token[0] for token in self.tokens[index + 1:index + 9]])
 
 
-def canonical_config(summary: dict) -> dict:
+def canonical_config(summary: dict, compiler_identity: dict) -> dict:
     scope = summary["scope"]
     semantic = summary["semanticIdentity"]
     tool = summary["tool"]
@@ -123,7 +129,10 @@ def canonical_config(summary: dict) -> dict:
         "target": scope["target"],
         "options": scope["compilerFlags"],
         "includePaths": scope["includePaths"],
-        "tool": {key: tool[key] for key in ("version", "expectedSourceRevision", "addons")},
+        "tool": {key: tool[key] for key in (
+            "version", "expectedSourceRevision", "binarySha256", "addons",
+        )},
+        "compilerBinaries": compiler_identity,
         "compiler": {key: semantic["compiler"][key] for key in (
             "machine", "release", "predefines", "builtins",
         )},
@@ -136,25 +145,36 @@ def canonical_config(summary: dict) -> dict:
     }
 
 
-def inventory(summary: dict, output: Path) -> list[dict]:
+def inventory(summary: dict, output: Path, compiler_identity: dict) -> list[dict]:
     """Emit one identity per raw diagnostic location and program."""
     scope = summary["scope"]
-    sdk = {path_key(row["path"]): "sdk:" + row["key"] for row in scope["sdkHeaders"]}
+    windows = scope["target"].startswith("windows-")
+    sdk = {path_key(row["path"], windows): "sdk:" + row["key"] for row in scope["sdkHeaders"]}
+    project_paths = {path_key(name, windows): name
+                     for unit, paths in scope["projectTranslationUnits"].items()
+                     for name in {*paths, *scope["cppcheckInputs"][unit]["project"]}}
+
+    def logical_path(name):
+        key = path_key(name, windows)
+        return sdk.get(key, project_paths.get(key, key))
+
     diagnostic_paths = defaultdict(set)
     for diagnostic in summary["diagnostics"]:
         if diagnostic["id"] != "checkersReport":
             for place in diagnostic["locations"]:
-                name = path_key(place["file"])
-                diagnostic_paths[sdk.get(name, name)].add(int(place["line"] or 0))
+                diagnostic_paths[logical_path(place["file"])].add(int(place["line"] or 0))
 
     project = output / "project"
     raw_context = {}
     raw_hashes = {}
+    line_sensitive = set()
     consumers = defaultdict(set)
     expanded = defaultdict(dict)
     unit_hashes = {}
     unresolved = set()
-    config = sha(canonical_config(summary))
+    config = sha(canonical_config(summary, compiler_identity))
+    compiler_settings = [*scope["compilerFlags"], *summary["semanticIdentity"]["compiler"]["builtins"]]
+    line_sensitive_options = LINE_SENSITIVE.search("\n".join(compiler_settings))
     for index, unit in enumerate(scope["translationUnits"]):
         analyzer = scope["cppcheckInputs"][unit]
         if analyzer.get("unbound"):
@@ -162,19 +182,31 @@ def inventory(summary: dict, output: Path) -> list[dict]:
         paths = set(scope["projectTranslationUnits"][unit]) | set(analyzer["project"])
         sdk_paths = {*scope["sdkTranslationUnits"][unit], *analyzer["sdk"]}
         for name in paths | sdk_paths:
-            key = path_key(name)
-            consumers[sdk.get(key, key)].add(unit)
+            consumers[logical_path(name)].add(unit)
         for name in paths:
             if name not in raw_context:
-                raw_context[name] = SourceContext((project / name).read_text(encoding="utf-8"))
-                raw_hashes[name] = sha([token[0] for token in raw_context[name].tokens])
+                text = (project / name).read_text(encoding="utf-8")
+                raw_context[name] = SourceContext(text)
+                raw_hashes[name] = (sha(text), sha((
+                    [line for line in text.split("\n") if line], text.endswith("\n"),
+                )))
+                if LINE_SENSITIVE.search(text):
+                    line_sensitive.add(name)
         compiler = (output / f"compiler-origins-{index}.stdout.log").read_text(encoding="utf-8")
-        expanded_digest, anchors = compiler_context(compiler, unit, sdk, diagnostic_paths)
+        expanded_digest, anchors = compiler_context(
+            compiler, unit, sdk, diagnostic_paths, windows=windows, project_paths=project_paths,
+        )
+        defines = summary["semanticIdentity"]["defines"][unit]
+        # Preserve the physical lines when a checker input may expand a line number
+        # or splice a newline. Raw spelling covers branches only Cppcheck opens.
+        exact_lines = (line_sensitive.intersection(analyzer["project"]) or analyzer["sdk"]
+                       or line_sensitive_options or LINE_SENSITIVE.search("\n".join(defines)))
         unit_hashes[unit] = sha({
             "expanded": expanded_digest,
-            "defines": summary["semanticIdentity"]["defines"][unit],
-            "analyzerSources": {name: raw_hashes[name] for name in analyzer["project"]},
-            "sdk": sorted(sdk[path_key(name)] for name in sdk_paths),
+            "defines": defines,
+            "analyzerSources": {name: raw_hashes[name][0 if exact_lines else 1]
+                                for name in analyzer["project"]},
+            "sdk": sorted(sdk[path_key(name, windows)] for name in sdk_paths),
         })
         for key, lines in anchors.items():
             expanded[key][unit] = lines
@@ -182,7 +214,7 @@ def inventory(summary: dict, output: Path) -> list[dict]:
     programs = {row["name"]: set(row["translationUnits"]) for row in summary["programs"]}
     for header in scope["sdkHeaders"]:
         path = Path(header["path"])
-        key = sdk[path_key(header["path"])]
+        key = logical_path(header["path"])
         if key in diagnostic_paths and path.is_file() and digest(path) == header["sha256"]:
             raw_context[key] = SourceContext(path.read_text(encoding="utf-8"))
     rows = []
@@ -192,8 +224,7 @@ def inventory(summary: dict, output: Path) -> list[dict]:
             continue
         sites = []
         for place in diagnostic["locations"]:
-            path = path_key(place["file"])
-            name = sdk.get(path, path)
+            name = logical_path(place["file"])
             line = int(place["line"] or 0)
             column = int(place.get("column") or 0)
             context = raw_context.get(name)
@@ -248,13 +279,19 @@ def read_receipt(output: Path, summary: dict, expected_sha: str) -> list[dict]:
     receipt = json.loads(evidence)
     if receipt["format"] != FORMAT or receipt["summarySha256"] != digest(output / "summary.json"):
         raise ValueError("Fingerprint receipt does not bind the transferred raw summary")
+    rows = receipt["occurrences"]
+    validate_occurrences(summary, rows)
+    return rows
+
+
+def validate_occurrences(summary: dict, rows: list[dict]) -> None:
     expected = {(index, position, program)
                 for index, diagnostic in enumerate(summary["diagnostics"])
                 if diagnostic["id"] != "checkersReport"
                 for position in range(len(diagnostic["locations"]) or 1)
                 for program in diagnostic["programs"]}
     found, fingerprints = set(), set()
-    for row in receipt["occurrences"]:
+    for row in rows:
         key = row["diagnostic"], row["locationIndex"], row["program"]
         value = row["fingerprint"]
         reason = row.get("reason")
@@ -267,7 +304,6 @@ def read_receipt(output: Path, summary: dict, expected_sha: str) -> list[dict]:
             fingerprints.add(value)
     if found != expected:
         raise ValueError("Fingerprint receipt occurrence coverage differs")
-    return receipt["occurrences"]
 
 
 def verdict(current: list[dict], previous: list[dict], approved: set[str]) -> dict:
