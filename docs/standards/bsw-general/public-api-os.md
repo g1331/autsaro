@@ -54,49 +54,49 @@ SDK、采用内核与人工组保持各自未完成状态。新增实体或 body
 {
   "id": "owned-source-547-r59",
   "evidence": {
-    "head": "3ea235ddc0819aa9a9db6b0ba2ac452b6c4fdffa",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44647976436/attempts/1"
+    "head": "4290542118626cbd111bf81b5e5e1ea51e290ccf",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44672571288/attempts/1"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "77a3c471cd84ef19d4d5d84875f7483ada3fec5ede656c4bd81e79c7f6a2bbb0"
+      "inputIdentity": "42e83c7cb4cd8a9022c01fec31f80b7b1a61e1c0e8e20b8f4610e656c7f19aff"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "56d17c9c89be44f4a46885a27c13ca274ee76f550e006c83c9f2dc5fa3ea8fbc"
+      "inputIdentity": "3c7a236f1577ec6621f4f6e3df26544e982eafec9ac92d3fce329bfdc64eb075"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "0b1983bd47ba7b13cb1b2cc403718c1985b0cd41bb54e2ea4b790fa365444569"
+      "inputIdentity": "2c5b84917f23026ac0440ddf5389c1da320c3e03561c63eff0868ee88aeb72f0"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "2cb5283d3ff392e46229bfc2f58016b3467b395c6572de89d85324a3274d97c7"
+      "inputIdentity": "b0c9d467bab5663ed1dd3235ef47aefa4cb69c58b1a06dc0c36ba853f2a4d9d5"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "82468a9214892cdff51f014afab1f8193da3b25e294b5fb4a39f4474d3673552"
+      "inputIdentity": "860417823873ae4ad9db75cb5b594ade4e767123cf001cd84255aeef97fc93c5"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "c71ba23e4c319d582cbd98aed4ab7136e7c0d151b69a482067263e5cc58df251"
+      "inputIdentity": "777f11f1f8a7cbc432a00045e21d0830f1bcb797b895c286656e2099326c9ec0"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "1be5925451a9c27944687b7f83e555b4bc38379140204c226e79ad9aab765601"
+      "inputIdentity": "724d4b53429ece0b0c42fe50e2c642e4b3a50e36748c66e669c7853d8e7eb2b6"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "15edbfe933362de19242182c2a03562e0744da1a6c74b1d6eb443a11387511b2"
+      "inputIdentity": "995621b05ab99f0d4107a48efe95f9f11b4b2a216ab75818a93173a93f75fef6"
     }
   ],
   "records": {

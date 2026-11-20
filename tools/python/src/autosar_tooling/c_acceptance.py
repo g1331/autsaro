@@ -602,6 +602,22 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
               and _det_r82_hook_type(summary, project, root, metadata, owners, name, source)):
             result[index, position] = {"entity": "Det_ValidHooks", "reason": None, "falsePositive": True,
                 "record": {"file": "docs/standards/det.md", "text": "MISRA C:2012 Rule 8.2"}}
+        elif (diagnostic["id"] == "misra-c2012-8.9"
+              and original == "runtime/os/src/Os_Backend.c" and (line, column) == (306, 5)
+              and diagnostic["locations"] == [location]
+              and diagnostic.get("severity") == "style"
+              and diagnostic.get("message") == "misra violation (use --rule-texts=<file> to get proper output)"
+              and name in summary["scope"].get("projectTranslationUnits", {})
+              and all(any(row["name"] == program and name in row["translationUnits"]
+                          for row in summary["programs"]) for program in diagnostic["programs"])
+              and hashlib.sha256(source.encode("utf-8")).hexdigest()
+              == "66f6de7a76f7c2b369730cbe69b91a5c1681e6f6be089f2404bc752a3046132a"
+              and "## R8.9 资源所有者数组误报" in (root / "docs/standards/types/storage.md").read_text(
+                  encoding="utf-8")):
+            result[index, position] = {
+                "entity": "resource_owner", "reason": None, "falsePositive": True,
+                "record": {"file": "docs/standards/types/storage.md", "text": "## R8.9 资源所有者数组误报"},
+            }
         elif (diagnostic["id"] == "misra-c2012-17.3"
               and [flag for flag in summary["scope"]["compilerFlags"]
                    if flag.startswith("-std=")][-1:] == ["-std=c99"]):

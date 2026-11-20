@@ -32,7 +32,7 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 | R8.5 | Required | 外部对象／函数声明的头文件 owner | satisfied | 主文69／PDF77 只约束非定义声明。逐程序按物理文件／行合并头重入和同一实体；第八批删除 Backend.h 的 vApplicationTickHook 重复原型，复用 task.h。Os_BackendStackFault 的声明移入既有 Windows provider 头，与唯一 Windows 定义和 Stack 消费一致；其他公共数组、CDS、配置和服务均由一个物理 owner 声明，未将定义当成第二个原型。 |
 | R8.6 | Required | 每个程序的外部定义唯一性 | satisfied | 主文69–70、AMD4.42 的交叉引用。HostBatch／probe 分别按实际链接 TU 合并外部对象和函数，tentative 与最终定义按同一 TU 结算；移除 Linux 上不存在定义的 Os_BackendStackFault 声明，Windows 保持同一回调。Os_PortTaskLoop／Os_PortRestartAddress 的两个 C 入口由所选 provider 的汇编 .global／标签唯一定义，实际链接及原生重启消费者核查。当前定义无重复／缺失，未以链接成功替代未引用声明检查。 |
 | R8.7 | Advisory | 外部链接实体的跨 TU 真实引用 | not_assessed | 主文70、TC2.15；当前范围内68个物理报告及 CTU 漏报候选仍须按 TU 去重。取址、ARTI 工具视图、公开 BSW／生成包装和实际应用调用需逐实体关联，定义与引用同 TU 的候选保留真实 Advisory。#443 的 #547 接续完整引用集合和必要签名／可见性的逐项处置，历史私有化和原精确表仅覆盖各自实体。 |
-| R8.9 | Advisory | 只在单个函数出现的对象标识符 | not_assessed | 主文71–72、AMD4.43–46 约束声明。ecu_can_driver 只在 Ecu_StackBootstrap 使用，按 SWS_MemMap_00003／00018／00023 的原页及本批批准加入[精确表](../storage.md#生成-can-配置的有界处置)，保留真实 Advisory；ecu_comm_users 在函数外被 comm_config 初始化引用，单函数条件未成立。#443 的 #547 接续其余 Init 配置、单函数对象及既有22项记录的全部声明／段／消费者结算。 |
+| R8.9 | Advisory | 只在单个函数出现的对象标识符 | not_assessed | 主文71–72、AMD4.43–46 约束声明。ecu_can_driver 只在 Ecu_StackBootstrap 使用，按 SWS_MemMap_00003／00018／00023 保留[精确处置](../storage.md#生成-can-配置的有界处置)。ecu_comm_users 和 [resource_owner](../storage.md#r89-资源所有者数组误报) 均有文件作用域初始化引用。#443 的 #547 接续其余 Init 配置、ARTI 对象和既有精确记录的声明／段／消费者核对。 |
 | R8.10 | Required | inline 函数的存储类 | satisfied | 主文 72；AMD2.27 追加 C11，其他修订未改变 static 义务。同号入口检查 isInlineKeyword／isStatic；独立检查实际全部展开中的 inline／__inline／__inline__，自有／生成／patch 均显式 static，包括 Os.h 服务、Os_StackIndex、Ecu_StatusName、Os_Counter.h 换算和 Rte_Os.h 桥；实际调用分别回接 Os_Stack.c、Ecu 入口及 Rte_OsService.c。SDK 原头内部沿原采用责任。 |
 | R8.11 | Advisory | 外部链接数组声明的显式大小 | satisfied | 主文 72 只约束非定义声明，AMD2.27 追加 C11；同号入口的 extern [] 检查另由完整实际展开补齐。全部外部数组为 Arti_Events[4096]、Os_ArtiTasks／Stacks／Contexts[16]、Os_InterruptVectorTable[32]，头与定义使用同一容量；Arti.c 发布、Backend 观测和中断分派直接消费。Rte_Type 的 Dcm 数组 typedef、Ecu_MailboxInput 及 Can_TxSinkType 数组形参已另查，无额外外部数组别名声明。 |
 | R8.12 | Required | 枚举列表的隐式值唯一性 | satisfied | 主文 73，AMD2.27 追加 C11；同号入口依赖 values／valueType，另按实际全部枚举体独立求值。CanTp 状态、ComM、Dcm 发布、PduR、Ecu_Status 和 OS hook／host 枚举均全显式或初始零后单调递增，隐式项无重复；ARTI／OS 宽度及对齐 sizeof 断言枚举全显式，允许相同值。消费者为相应状态比较／switch，生成 Ecu_Config 值与配置消费一致；无项目 patch 新增隐式冲突。 |
@@ -141,49 +141,49 @@ GCC／Cppcheck 输入。Windows 以实际检出的换行重算，原始 summary 
 {
   "id": "checker-obligations-547-r59",
   "evidence": {
-    "head": "3ea235ddc0819aa9a9db6b0ba2ac452b6c4fdffa",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44647976436/attempts/1"
+    "head": "4290542118626cbd111bf81b5e5e1ea51e290ccf",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44672571288/attempts/1"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "575023ce0cc9183a91eb0cb923d6ff8cbc284e428036536402a772ee9a0cdbef"
+      "inputIdentity": "28aacf218d5c8fcdcd95739eacb5d63d3c4d394765a9d4942c7e240aea95b56b"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "84f498c212b94ac0d99ee85c022bf71938af20b8d022ef5112412992ac132dc0"
+      "inputIdentity": "e10d762429475b47de5f268a7b1e0566499549e9580e4c32aa789ebac4760324"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "ccb1097a35d13f3a4c7fbc45cd095d38c9e710d0db17627f330f141d30869f69"
+      "inputIdentity": "6e84d02d4905a42fc0ba0ccd6d89741b19f98a0852285bf494a61294df98a01d"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "439753be359ba9f2e0e23590703f288aac341a27222b9583a7b3c62a00ea6572"
+      "inputIdentity": "0c5cd04b88b2324b7f3fb94e7e863fb7c78c75a6aada4c82468fc516b881ed48"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "46a7b84016aa7c5a41cf2a837e77e48187a2292cb21e967dece661fcbec167de"
+      "inputIdentity": "ddbf28cf19e372831211f5a3031641ecf208e0168bdd71a6efe34fb1e22b2d8f"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "45a246c3c130ae62b7af4b8a6a23f933b1f06b408490e6b40c31397a84841efe"
+      "inputIdentity": "2fa690b837709ad5508c2295b32db2bdacfb030c4a2c5b4dfb4e72a2f57e998f"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "3fd93c418a1ac2ad15401f39ac6625209ab7fcf33b175fa97e533a09feb5b344"
+      "inputIdentity": "417d931acb1f83daff3946f50bb43c59f9385447ffd0a11ab1aee25d44947682"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "aa5bd9618c7414e3af5c9a8c94ea7b80082625d45404c9c4b5e9bddd11e6a0d8"
+      "inputIdentity": "201cfe2db52c6d0238c47359ec45103c829e758a77c5c5c71db18d18dcfb4187"
     }
   ],
   "records": {
