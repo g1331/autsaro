@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import gzip
 import hashlib
 import json
@@ -10,7 +11,7 @@ import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from autosar_tooling import c_sdk
 from link_fixtures import make_link
@@ -1097,7 +1098,7 @@ class SdkSourceTests(unittest.TestCase):
                 self.assertEqual(inventory["links"], {
                     "include/linked": {"kind": "dir", "target": "elsewhere"}})
 
-    def test_an_unusable_link_is_dangling_and_a_real_failure_is_not_hidden(self):
+    def test_an_unusable_link_is_dangling(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             (root / "include").mkdir()
@@ -1119,16 +1120,27 @@ class SdkSourceTests(unittest.TestCase):
             # Collection completes; links to nothing are no provider's concern.
             self.assertEqual(inventory["links"], {})
             self.assertEqual(inventory["files"], {})
-        # An error on a plain entry is not a dangling link.
-        class Broken:
-            path = "x"
-
-            def is_dir(self):
-                raise OSError("unreadable")
-
-        with self.assertRaises(OSError):
-            c_sdk.entry_kind(Broken(), False)
-        self.assertIsNone(c_sdk.entry_kind(Broken(), True))
+    def test_link_stat_swallows_only_unresolvable_target_errors(self):
+        invalid_name = OSError(errno.EINVAL, "invalid name")
+        invalid_name.winerror = 123
+        windows_loop = OSError(errno.EINVAL, "cannot resolve filename")
+        windows_loop.winerror = 1921
+        windows_denied = OSError(errno.EACCES, "access denied")
+        windows_denied.winerror = 5
+        unresolvable = (OSError(errno.ELOOP, "link loop"), invalid_name, windows_loop)
+        failures = (OSError(errno.EACCES, "access denied"), OSError(errno.EIO, "I/O error"),
+                    OSError(errno.EINVAL, "invalid argument"), windows_denied)
+        for error in (*unresolvable, *failures):
+            for link in (False, True):
+                with self.subTest(error=error, link=link):
+                    entry = Mock()
+                    entry.is_dir.side_effect = error
+                    if link and error in unresolvable:
+                        self.assertIsNone(c_sdk.entry_kind(entry, link))
+                    else:
+                        with self.assertRaises(OSError) as raised:
+                            c_sdk.entry_kind(entry, link)
+                        self.assertIs(raised.exception, error)
 
     def test_only_links_that_lead_to_provider_files_count(self):
         files = {"usr/include/stdio.h": {"header": "usr/include/stdio.h"},

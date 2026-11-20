@@ -52,8 +52,8 @@ ADDON_HASHES = {
     "misra_9.py": "2116c59e403c49c662590d4d83a9d220256c0e396fa13c20a475e43d87970c70",
 }
 TIMEOUT = 600
-HEADER_PROBE_TRAPS = tuple(f"{name}(header)=AUTSARO_UNTRACKED_HEADER_PROBE("
-                           for name in ("__has_include", "__has_include_next"))
+HEADER_PROBE_OPERATORS = ("__has_include", "__has_include_next")
+EMBED_SUPPORT_MARKER = "AUTSARO_COMPILER_HAS_EMBED"
 
 
 def run(argv: list[str], directory: Path, stage: str, timeout: int = TIMEOUT, *,
@@ -212,6 +212,30 @@ def probe_predefines(compiler: str, flags: list[str], project: Path, includes: l
     return macros
 
 
+def verify_project_include_search(compiler: str, flags: list[str], includes: list[str],
+                                  directory: Path, windows: bool, search: dict, *,
+                                  cwd: Path | None = None) -> bool:
+    """Verify that sealed project includes add only their declared search directories."""
+    probe = directory / "project-headers.c"
+    probe.write_text(f"#ifdef __has_embed\n{EMBED_SUPPORT_MARKER}\n#endif\n", encoding="utf-8")
+    _, stdout, stderr = run([compiler, *flags, *("-I" + path for path in includes),
+                             "-E", "-v", "-x", "c", str(probe)], directory,
+                            "compiler-project-headers", 30, cwd=cwd,
+                            context="Cannot verify compiler include search with project flags")
+    root = c_sdk.provider_root(compiler, windows)
+    actual = c_sdk.include_search(stderr, cwd or directory, root, os.environ)
+    project_paths = dict.fromkeys(
+        c_sdk.relative_name(Path(path).resolve(strict=True), root) for path in includes)
+    # If a declared -I already occurs in the ambient search, GCC may deduplicate it.
+    # Keep its original position in the comparison instead of masking a move.
+    ambient = set(search["system"]) | set(search["quote"])
+    project_only = [path for path in project_paths if path not in ambient]
+    expected = {**search, "system": [*project_only, *search["system"]]}
+    if actual != expected:
+        raise ValueError("Unexpected compiler search order with project include flags")
+    return EMBED_SUPPORT_MARKER in stdout.splitlines()
+
+
 def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str], list[dict], dict]:
     names, target = sealed_sources(project)
     if target["target"] != target_id:
@@ -291,6 +315,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     predefines = sorted(macros.splitlines())
     (output / "compiler-predefines.h").write_text(macros, encoding="utf-8")
     includes = [tool_argument(root / name) for name in includes]
+    has_embed = verify_project_include_search(
+        compiler, flags, includes, output, target_id.startswith("windows"), search)
     builtins = ["-D" + line[8:].replace(" ", "=", 1) for line in macros.splitlines()
                 if line.startswith("#define ") and line[8:].split(" ", 1)[0] in {
                     "__GNUC__", "__GNUC_MINOR__", "__GNUC_PATCHLEVEL__", "__x86_64__",
@@ -327,7 +353,9 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     function_macro_names = standard_constants & external_names
     candidate_names = external_names | mode_names
     unit_flags = [*flags, *("-I" + path for path in includes)]
-    trap_definitions = {"#define " + trap.replace("=", " ", 1) for trap in HEADER_PROBE_TRAPS}
+    operators = (*HEADER_PROBE_OPERATORS, "__has_embed") if has_embed else HEADER_PROBE_OPERATORS
+    probe_traps = [f"{name}(operand)=AUTSARO_UNTRACKED_HEADER_PROBE(" for name in operators]
+    trap_definitions = {"#define " + trap.replace("=", " ", 1) for trap in probe_traps}
 
     def compiler_unit(item):
         index, name = item
@@ -338,11 +366,11 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         _, definitions, _ = run([compiler, *unit_flags, "-dM", "-E", str(root / name)],
                                 output, f"compiler-defines-{index}", 60,
                                 context=f"Compiler preprocessing failed for {name}")
-        # GCC's dependency list omits files tested for existence without an include.
-        # Keep defined(__has_include) true but make evaluating the operator fail.
+        # GCC's dependency list omits paths tested without opening them.
+        # Keep defined(operator) true but make evaluating the operator fail.
         # GCC warns when replacing these built-ins, even with -Wno-builtin-macro-redefined.
         _, trapped, _ = run([compiler, *unit_flags, "-Wno-error",
-                            *("-D" + trap for trap in HEADER_PROBE_TRAPS), "-dM", "-E", str(root / name)],
+                            *("-D" + trap for trap in probe_traps), "-dM", "-E", str(root / name)],
                             output, f"compiler-header-probes-{index}", 60,
                             context=f"Cannot verify absence of untracked header existence probes in {name}")
         trapped_definitions = set(trapped.splitlines())
@@ -734,6 +762,9 @@ def recheck_compiler_inputs(scope: dict, project: Path) -> None:
             compiler, flags, Path(temporary), scope["target"].startswith("windows"), cwd=directory)
         if search != scope["compilerSemanticInputs"]["includeSearch"]:
             raise ValueError("Actual include search order or variables changed since analysis")
+        verify_project_include_search(
+            compiler, flags, [tool_argument(project / name) for name in scope["includePaths"]],
+            Path(temporary), scope["target"].startswith("windows"), search, cwd=directory)
         macros = probe_predefines(compiler, flags, project, scope["includePaths"],
                                  Path(temporary), cwd=directory)
         if sorted(macros.splitlines()) != scope["compilerSemanticInputs"]["predefines"]:

@@ -124,6 +124,9 @@ jobs:
       - run: uv sync --locked
       - run: uv run --locked ruff check tools tests/python scripts
       - run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python
+      - name: Show link and junction test outcomes
+        if: runner.os == 'Windows'
+        run: uv run --locked python -B -m unittest discover -v -s tests/python -k link
       # Managed process tests once per platform, without a runner of their own.
       - name: Managed process tests
         if: matrix.python == '3.12' || runner.os == 'Windows'

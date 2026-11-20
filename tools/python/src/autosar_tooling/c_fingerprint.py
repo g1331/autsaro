@@ -18,6 +18,13 @@ FORMAT = "c-diagnostic-fingerprints-v4"
 SARIF_KEY = "autsaroDiagnostic/v4"
 RECEIPT = "diagnostic-fingerprints.json"
 SHA256 = re.compile(r"[0-9a-f]{64}")
+# #568 adds rejection checks before diagnostic production. Successful scans use
+# the same inputs and commands. Keep the identity of this exact driver revision
+# for dispositions; full analysis receipts still bind its actual source hash.
+REJECTION_ONLY_DRIVER_REVISIONS = {
+    "a21ca7b8e8dcf5ad15247dcd11789d15a522dc0cf2c45a6660a5d54a6ffc9785":
+        "0f933b3b794d240d3a97c674bec20c50dbe0634f9753b831fdbae942d437ebba",
+}
 # The pinned MISRA addon's analyse_ctu_info can report these using facts
 # from units that do not contain any location in the diagnostic.
 CTU_KINDS = {
@@ -237,6 +244,7 @@ def canonical_config(summary: dict, compiler_identity: dict) -> dict:
     scope = summary["scope"]
     semantic = summary["semanticIdentity"]
     tool = summary["tool"]
+    driver = semantic["analysisCode"]["c_check.py"]
     return {
         "target": scope["target"],
         "options": scope["compilerFlags"],
@@ -251,8 +259,8 @@ def canonical_config(summary: dict, compiler_identity: dict) -> dict:
         "models": semantic["models"],
         "libraries": semantic["libraries"],
         "addonRuntime": semantic["addonRuntime"],
-        "projectChecks": {name: semantic["analysisCode"][name]
-                          for name in ("c_addon.py", "c_check.py")},
+        "projectChecks": {"c_addon.py": semantic["analysisCode"]["c_addon.py"],
+                          "c_check.py": REJECTION_ONLY_DRIVER_REVISIONS.get(driver, driver)},
         "implicitConfig": (scope.get("cppcheckConfig") or {}).get("sha256"),
     }
 
