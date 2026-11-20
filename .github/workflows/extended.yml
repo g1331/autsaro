@@ -1,16 +1,14 @@
 name: Extended checks
 # Checks outside the required pull request layer (checks.yml), selected by the
 # changed paths: the rest of the Python and UI matrices, manual Desktop acceptance and
-# the official archive comparison, the full offline receiver matrix and bounded fuzzing. Runs after every push to
-# master via checks.yml after CI required; a pull request selects official comparison and fuzzing,
-# and the remaining extended checks once it carries full-ci. Desktop is manual here.
+# the official archive comparison, the full offline receiver matrix and bounded fuzzing.
+# checks.yml calls it on every master push. Desktop is manual here.
 on:
   workflow_call:
   workflow_dispatch:
 concurrency:
   # A reusable workflow inherits github.workflow; use a distinct group from its caller.
-  group: extended-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: extended-${{ github.sha }}-${{ github.run_id }}
 permissions:
   contents: read
 env:
@@ -19,7 +17,6 @@ env:
 jobs:
   changes:
     name: Select extended checks
-    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -38,10 +35,8 @@ jobs:
       - id: select
         shell: python
         env:
-          # A pull request compares its merge commit with the first parent, the base it merges onto;
-          # pull_request.base.sha can predate newer master commits that the merge ref already holds.
-          BASE: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event.before }}
-          FULL: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          BASE: ${{ github.event.before }}
+          FULL: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           import os, subprocess
           event = os.environ['GITHUB_EVENT_NAME']
@@ -54,33 +49,31 @@ jobs:
               print('\n'.join(files))
           def touched(*prefixes):
               return any(path.startswith(prefixes) for path in files)
-          # A manual run, the full-ci label, an unknown baseline or a change to this workflow selects everything.
+          # A manual run, an unknown baseline or a change to this workflow selects everything.
           if files is None or '.github/workflows/extended.yml' in files:
               selected = dict.fromkeys(['python', 'ui', 'desktop', 'official', 'receiver', 'fuzz'], True)
           else:
-              # Pull requests already run Linux and Windows; the other interpreters and macOS differ only in these sources.
-              push = event != 'pull_request'
+              # Development checks already cover the primary Linux and Windows matrices.
               selected = {
-                  'python': push and touched('tools/', 'tests/python/', 'scripts/', 'pyproject.toml', 'uv.lock', '.python-version', '.github/workflows/checks.yml'),
-                  'receiver': push and touched('core/', 'runtime/', 'tools/', 'tests/python/', 'Cargo.toml', 'Cargo.lock',
+                  'python': touched('tools/', 'tests/python/', 'scripts/', 'pyproject.toml', 'uv.lock', '.python-version', '.github/workflows/checks.yml'),
+                  'receiver': touched('core/', 'runtime/', 'tools/', 'tests/python/', 'Cargo.toml', 'Cargo.lock',
                       'rust-toolchain.toml', 'pyproject.toml', 'uv.lock', '.python-version', '.github/actions/', '.github/workflows/checks.yml'),
-                  'ui': push and touched('ui/', '.node-version', '.github/workflows/checks.yml'),
+                  'ui': touched('ui/', '.node-version', '.github/workflows/checks.yml'),
                   'desktop': False,
                   'official': touched('core/src/definitions.rs', 'core/src/definitions/', 'core/src/schema.rs', 'core/src/rules.rs',
                       'core/src/rules/', 'core/resources/official.json', 'core/resources/requirements/', 'core/tests/official/',
                       'tools/python/src/autosar_tooling/official.py', 'tools/python/src/autosar_tooling/requirements.py',
                       'docs/standards/', '.github/workflows/acceptance.yml'),
                   # The fuzz targets' inputs and build: ARXML parsing, import and validation, definitions, CanTp, Dcm
-                  # and their host areas. Pull requests fuzz only the harness, parsers and receive paths themselves;
-                  # the generator, templates and shared headers the targets build on are fuzzed after merging.
+                  # and their host areas, including the generated sources and their build inputs.
                   'fuzz': touched('fuzz/', 'core/src/arxml', 'core/src/definitions', 'core/src/xml_paths.rs',
                       'core/src/project_model.rs', 'runtime/bsw/src/CanTp', 'runtime/bsw/src/Dcm',
                       'runtime/host/src/SchM_Diagnostic_Host.c', 'runtime/host/src/SchM_CanIf_Host.c',
-                      'runtime/host/src/Can_HostLock.c') or push and touched('core/src/integration/', 'core/src/rules',
+                      'runtime/host/src/Can_HostLock.c', 'core/src/integration/', 'core/src/rules',
                       'core/resources/', 'core/Cargo.toml', 'core/build.rs', 'runtime/bsw/include/', 'runtime/host/',
                       'core/tests/fixtures/bsw-contracts/', '.github/actions/core-build-dependencies/'),
               }
-          # Automatic desktop coverage belongs to CI required; manual Extended remains available.
+          # Development checks runs automatic desktop coverage on master.
           selected['desktop'] = event == 'workflow_dispatch'
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               for name, value in selected.items():
@@ -224,7 +217,7 @@ jobs:
     env:
       TARGET: ${{ matrix.target }}
       # Bounded runs: a few minutes per target on pull requests, longer after merging.
-      FUZZ_SECONDS: ${{ github.event_name == 'pull_request' && 180 || 900 }}
+      FUZZ_SECONDS: '900'
       # The prebuilt cargo-fuzz defaults to the musl triple it was built for; ASan needs the glibc target.
       FUZZ_TARGET_TRIPLE: x86_64-unknown-linux-gnu
     steps:
@@ -275,7 +268,7 @@ jobs:
   result:
     name: Extended checks result
     needs: [changes, python, ui, desktop, official, receiver, fuzz]
-    if: ${{ always() && needs.changes.result != 'skipped' }}
+    if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -285,8 +278,14 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           import json, os, sys
-          results = {name: need['result'] for name, need in json.loads(os.environ['RESULTS']).items()}
+          needs = json.loads(os.environ['RESULTS'])
+          results = {name: need['result'] for name, need in needs.items()}
+          selected = needs['changes']['outputs'] if results['changes'] == 'success' else {}
           print(results)
-          # Skipped means the changed paths did not select the check.
-          failed = {name: result for name, result in results.items() if result not in ('success', 'skipped') or name == 'changes' and result != 'success'}
+          failed = {
+              name: result for name, result in results.items()
+              if result != 'success' and not (
+                  name != 'changes' and selected.get(name) == 'false' and result == 'skipped'
+              )
+          }
           sys.exit('Extended checks did not pass: ' + str(failed) if failed else 0)

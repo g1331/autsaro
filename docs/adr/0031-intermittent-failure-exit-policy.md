@@ -3,6 +3,8 @@
 ## 状态与背景
 
 已接受（2026-11-14），执行项目负责人的决定，跟踪见 [#524](https://github.com/g1331/autsaro/issues/524)。
+[ADR 0032](0032-pr-checks-and-master-validation.md) 调整了部分作业的触发位置。下文提及必需 CI 的
+自动取证和测试保留要求，同样适用于迁往 master 的作业，连续运行仍按实际执行的作业计数。
 
 Epic 9 出口清单（[#30](https://github.com/g1331/autsaro/issues/30)）里有几项只在正常 CI 中偶发、没有稳定复现的失败：
 [#311](https://github.com/g1331/autsaro/issues/311)、[#412](https://github.com/g1331/autsaro/issues/412)、

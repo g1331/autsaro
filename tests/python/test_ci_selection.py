@@ -228,7 +228,6 @@ class CiSelectionTests(unittest.TestCase):
         self.assertTrue(extended_groups.isdisjoint(running))
 
         arrive("PR-A", event("d" * 40, pull_request=99))
-        states["PR-A"] = "extended-running"
         arrive("PR-B", event("e" * 40, pull_request=99))
         arrive("PR-C", event("f" * 40, pull_request=99))
         self.assertEqual([states[name] for name in ("PR-A", "PR-B", "PR-C")],
@@ -395,7 +394,7 @@ class CiSelectionTests(unittest.TestCase):
             self.assertFalse(names & {"ROOT", "BASELINE", "MANUAL_ASSESSMENT_SOURCES"}, name)
             pending.extend(names & functions.keys() - checked)
 
-    def test_extended_is_called_once_after_required_at_the_same_revision(self):
+    def test_extended_is_called_once_on_master_at_the_same_revision(self):
         required = yaml.safe_load(WORKFLOW.read_text())
         extended = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text())
         events = extended.get("on", extended.get(True))
@@ -404,10 +403,16 @@ class CiSelectionTests(unittest.TestCase):
                  if job.get("uses") == "./.github/workflows/extended.yml"]
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]["needs"], "required")
-        self.assertIn("needs.required.result == 'success'", calls[0]["if"])
-        # Required can succeed after deliberately skipped ancestors (docs/UI/analysis).
-        # A status function overrides Actions' implicit success() for that graph.
-        self.assertIn("!cancelled()", calls[0]["if"])
+        # A failed fast check must not hide an independent Extended failure.
+        for event, ref, cancelled, expected in (
+            ("push", "refs/heads/master", False, True),
+            ("push", "refs/heads/master", True, False),
+            ("push", "refs/heads/main", False, False),
+            ("pull_request", "refs/pull/1/merge", False, False),
+        ):
+            self.assertEqual(expression_value(calls[0]["if"], {
+                "!cancelled()": not cancelled, "github.event_name": event, "github.ref": ref,
+            }), expected)
         self.assertNotIn("extended", required["jobs"]["required"]["needs"])
         self.assertEqual(extended["permissions"], {"contents": "read"})
         self.assertTrue(extended["concurrency"]["group"].startswith("extended-"))
@@ -418,6 +423,38 @@ class CiSelectionTests(unittest.TestCase):
                     self.assertFalse(step["with"]["persist-credentials"])
         self.assertNotIn("workflow_run", events)
         self.assertNotIn("pull_request_target", events)
+
+    def test_extended_gate_requires_every_selected_job(self):
+        jobs = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text())["jobs"]
+        gate = jobs["result"]
+        self.assertEqual(gate["if"], "${{ always() }}")
+        for selected, status, expected in (
+            ("true", "success", 0),
+            ("false", "skipped", 0),
+            ("true", "skipped", "python"),
+            (None, "skipped", "python"),
+            ("true", "failure", "python"),
+            ("true", "cancelled", "python"),
+        ):
+            needs = {name: {"result": "success"} for name in gate["needs"]}
+            needs["changes"]["outputs"] = {} if selected is None else {"python": selected}
+            needs["python"]["result"] = status
+            with (
+                self.subTest(selected=selected, status=status),
+                mock.patch.dict(os.environ, {"RESULTS": json.dumps(needs)}),
+                self.assertRaises(SystemExit) as exit_result,
+            ):
+                run_script(gate["steps"][0]["run"])
+            if expected == 0:
+                self.assertEqual(exit_result.exception.code, 0)
+            else:
+                self.assertIn(expected, exit_result.exception.code)
+        needs["changes"] = {"result": "skipped"}
+        with (
+            mock.patch.dict(os.environ, {"RESULTS": json.dumps(needs)}),
+            self.assertRaisesRegex(SystemExit, "changes.*skipped"),
+        ):
+            run_script(gate["steps"][0]["run"])
 
     def test_label_events_do_not_cancel_or_replace_required_for_unrelated_labels(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())
@@ -657,11 +694,13 @@ class CiSelectionTests(unittest.TestCase):
                  "integration::protocol::refusal", "integration::sealed_projects::build",
                  "integration::single_component::build", "integration::os::time",
                  "integration::release_contracts::headers", "integration::future::test"]
-        for platform in ("ubuntu-24.04", "windows-2025-vs2026"):
+        windows = workflow["jobs"]["native-windows"]
+        self.assertEqual(native["steps"], windows["steps"])
+        for job, platform in ((native, "ubuntu-24.04"), (windows, "windows-2025-vs2026")):
             observed = []
-            for entry in native["strategy"]["matrix"]["include"]:
-                if entry["os"] != platform:
-                    continue
+            entries = job["strategy"]["matrix"]["include"]
+            self.assertEqual({entry["os"] for entry in entries}, {platform})
+            for entry in entries:
                 with tempfile.TemporaryDirectory() as directory:
                     source = Path(directory) / "native.py"
                     source.write_text(step["run"], encoding="utf-8")
@@ -987,11 +1026,9 @@ class CiSelectionTests(unittest.TestCase):
                 self.assertEqual(command[command.index("--output-directory") + 1],
                                  str(Path("build") / results / "standard-ecu"))
 
-    def test_desktop_gate_selection_and_failure_propagation(self):
+    def test_legacy_desktop_path_selection(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         detect = workflow["jobs"]["changes"]["steps"][1]["run"]
-        gate = workflow["jobs"]["required"]["steps"][0]["run"]
-        self.assertIn("desktop-scenarios", workflow["jobs"]["required"]["needs"])
         self.assertEqual(workflow["jobs"]["desktop-scenarios"]["uses"], "./.github/workflows/desktop.yml")
         for event in ("pull_request", "push"):
             for path, expected in (("docs/guide.md", False), ("ui/src/main.tsx", True),
@@ -1023,21 +1060,23 @@ class CiSelectionTests(unittest.TestCase):
                     run.return_value = subprocess.CompletedProcess([], status, listing)
                     runpy.run_path(str(source))
                 self.assertIn("desktop=true\n", output.read_text())
-        for selected in ("true", "false", None):
-            for result in ("success", "failure", "cancelled", "skipped"):
-                with self.subTest(selected=selected, result=result), tempfile.TemporaryDirectory() as directory:
-                    source = Path(directory) / "gate.py"
-                    source.write_text(gate, encoding="utf-8")
-                    outputs = {"code": "false", "native": "false"}
-                    if selected is not None:
-                        outputs["desktop"] = selected
-                    needs = {"changes": {"result": "success", "outputs": outputs},
-                             "desktop-scenarios": {"result": result}}
-                    with mock.patch.dict(os.environ, {"RESULTS": json.dumps(needs)}):
-                        try:
-                            runpy.run_path(str(source))
-                        except SystemExit as error:
-                            self.assertEqual(error.code == 0, result == "success" or selected == "false" and result == "skipped")
+    def test_post_merge_suites_are_scheduled_and_reported_for_every_master_push(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+        reporter = jobs["master-result"]
+        moved = {"native-windows", "native-os", "native-sanitizers", "desktop-scenarios"}
+        self.assertEqual(set(reporter["needs"]), moved | {"required", "extended"})
+        self.assertFalse(set(jobs["required"]["needs"]) & moved)
+        self.assertEqual(reporter["permissions"], {"issues": "write"})
+        for event, ref, expected in (
+            ("push", "refs/heads/master", True),
+            ("pull_request", "refs/pull/1/merge", False),
+        ):
+            inputs = {"github.event_name": event, "github.ref": ref, "always()": True,
+                      "needs.changes.outputs.native": "true",
+                      "needs.changes.outputs.desktop": "false"}
+            for name in moved | {"master-result"}:
+                with self.subTest(event=event, job=name):
+                    self.assertEqual(expression_value(jobs[name]["if"], inputs), expected)
 
     def test_push_rename_out_of_gui_inputs_still_selects_desktop(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
@@ -1072,8 +1111,7 @@ class CiSelectionTests(unittest.TestCase):
     def test_extended_does_not_duplicate_automatic_desktop(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text(encoding="utf-8"))
         script = workflow["jobs"]["changes"]["steps"][1]["run"]
-        for event, full in (("push", "false"), ("pull_request", "false"),
-                            ("pull_request", "true"), ("workflow_dispatch", "true")):
+        for event, full in (("push", "false"), ("workflow_dispatch", "true")):
             with self.subTest(event=event, full=full), tempfile.TemporaryDirectory() as directory:
                 output = Path(directory) / "output"
                 source = Path(directory) / "select.py"
@@ -1085,33 +1123,32 @@ class CiSelectionTests(unittest.TestCase):
                     runpy.run_path(str(source))
                 self.assertIn("desktop=" + str(event == "workflow_dispatch").lower() + "\n", output.read_text())
 
-    def test_pull_requests_fuzz_direct_inputs_and_pushes_fuzz_every_input(self):
+    def test_master_pushes_fuzz_direct_and_indirect_inputs(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text(encoding="utf-8"))
         script = workflow["jobs"]["changes"]["steps"][1]["run"]
-        for path, pull_request, push in (
-            ("fuzz/fuzz_targets/dcm_request.rs", True, True),
-            ("core/src/arxml/projection.rs", True, True),
-            ("core/src/definitions/extension.rs", True, True),
-            ("runtime/bsw/src/Dcm.c", True, True),
-            ("runtime/host/src/SchM_Diagnostic_Host.c", True, True),
-            ("core/src/integration/rte.rs", False, True),
-            ("core/resources/templates/standard-ecu.arxml", False, True),
-            ("runtime/bsw/include/ComStack_Types.h", False, True),
-            ("runtime/host/src/Os_Host.c", False, True),
-            ("core/src/generator.rs", False, False),
-            ("docs/guide.md", False, False),
+        for path, expected in (
+            ("fuzz/fuzz_targets/dcm_request.rs", True),
+            ("core/src/arxml/projection.rs", True),
+            ("core/src/definitions/extension.rs", True),
+            ("runtime/bsw/src/Dcm.c", True),
+            ("runtime/host/src/SchM_Diagnostic_Host.c", True),
+            ("core/src/integration/rte.rs", True),
+            ("core/resources/templates/standard-ecu.arxml", True),
+            ("runtime/bsw/include/ComStack_Types.h", True),
+            ("runtime/host/src/Os_Host.c", True),
+            ("core/src/generator.rs", False),
+            ("docs/guide.md", False),
         ):
-            for event, expected in (("pull_request", pull_request), ("push", push)):
-                with self.subTest(path=path, event=event), tempfile.TemporaryDirectory() as directory:
-                    output = Path(directory) / "output"
-                    source = Path(directory) / "select.py"
-                    source.write_text(script, encoding="utf-8")
-                    env = {"GITHUB_EVENT_NAME": event, "BASE": "base", "FULL": "false",
-                           "GITHUB_SHA": "head", "GITHUB_OUTPUT": str(output)}
-                    with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run") as run:
-                        run.return_value = subprocess.CompletedProcess([], 0, path + "\n")
-                        runpy.run_path(str(source))
-                    self.assertIn("fuzz=" + str(expected).lower() + "\n", output.read_text())
+            with self.subTest(path=path), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "output"
+                source = Path(directory) / "select.py"
+                source.write_text(script, encoding="utf-8")
+                env = {"GITHUB_EVENT_NAME": "push", "BASE": "base", "FULL": "false",
+                       "GITHUB_SHA": "head", "GITHUB_OUTPUT": str(output)}
+                with mock.patch.dict(os.environ, env), mock.patch.object(subprocess, "run") as run:
+                    run.return_value = subprocess.CompletedProcess([], 0, path + "\n")
+                    runpy.run_path(str(source))
+                self.assertIn("fuzz=" + str(expected).lower() + "\n", output.read_text())
 
     def test_split_jobs_run_every_step_once_per_platform_or_sanitizer(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
@@ -1231,10 +1268,9 @@ class CiSelectionTests(unittest.TestCase):
     def test_selected_jobs_and_required_gate_agree(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]
         script = workflow["required"]["steps"][0]["run"]
-        native_jobs = {"core", "native", "native-os", "native-sanitizers",
-                       "native-delivery", "native-delivery-windows"}
+        native_jobs = {"core", "native", "native-delivery", "native-delivery-windows"}
         self.assertEqual(set(workflow["required"]["needs"]), native_jobs | {
-            "changes", "desktop-scenarios", "python", "desktop", "quality", "c-analysis",
+            "changes", "python", "desktop", "quality", "c-analysis",
         })
         for mode, selected in (
             ("full", {"code": True, "native": True, "desktop": True,
@@ -1247,8 +1283,7 @@ class CiSelectionTests(unittest.TestCase):
                 ("code", "native", "desktop", "analysis", "application"), False)),
         ):
             for name in workflow["required"]["needs"]:
-                selection = ("desktop" if name == "desktop-scenarios" else
-                             "application" if name == "desktop" else
+                selection = ("application" if name == "desktop" else
                              "analysis" if name == "c-analysis" else
                              "native" if name in native_jobs else "code")
                 for status in ("success", "failure", "cancelled", "skipped"):
