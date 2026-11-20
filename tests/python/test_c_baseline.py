@@ -1,6 +1,7 @@
 """Master artifacts accelerate raw scanning only after complete input matching."""
 
 import copy
+import hashlib
 import json
 import os
 import shutil
@@ -188,12 +189,12 @@ class BaselineReuseTests(unittest.TestCase):
                 ".github/actions/core-build-dependencies",
                 ".agents/skills/misra-c2012/references/baseline-index.json",
             }, set(c_baseline.INPUTS))
-            fields = [*original["identity"], "missing", "producer_attempt"]
+            fields = [*original["identity"], "missing", "producer_attempt", "producer_run"]
             for field in fields:
                 with self.subTest(field=field):
                     manifest = copy.deepcopy(original)
-                    if field == "producer_attempt":
-                        manifest["attempt"] = 2
+                    if field in {"producer_attempt", "producer_run"}:
+                        manifest[field.removeprefix("producer_")] = 2
                     elif field != "missing":
                         manifest["identity"][field] = "different"
                     (candidate / "analysis-identity.json").write_text(json.dumps(manifest))
@@ -225,25 +226,25 @@ class BaselineReuseTests(unittest.TestCase):
                     self.assertEqual(source["tree"], "parent")
                     if field == "missing":
                         self.assertEqual(source["reason"], "artifact_missing")
-                    elif field == "producer_attempt":
+                    elif field in {"producer_attempt", "producer_run"}:
                         self.assertIn("different run attempt", source["reason"])
                     else:
                         self.assertIn("identity differs: " + field, source["reason"])
 
     def test_legacy_wrapper_matches_only_exact_transition_and_other_inputs(self):
-        wrapper_bytes = Path(c_baseline.__file__).read_bytes().replace(b"\r\n", b"\n")
-        revisions = {
-            b"\n": "86d510532958d716a7e9d821e726c535793b93c14ee9434f5166fcaa7916c969",
-            b"\r\n": "6a0d29b1154f687be2cef02355fbf8a2a94e737ee652ddf1ce6fa268a180205a",
-        }
-        for eol, preceding_hash in revisions.items():
+        for eol in (b"\n", b"\r\n"):
             with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
                 root = Path(temporary).resolve()
                 summary, project, candidate, compiler = self.fixture(root)
                 semantic, acceptance = self.patches(stack, root, summary, compiler)
                 wrapper = root / c_baseline.WRAPPER
                 selector = root / c_baseline.JOB_SELECTOR
-                current = wrapper_bytes.replace(b"\n", eol)
+                current = b"wrapper after the selector split" + eol
+                previous = b"wrapper before the selector split" + eol
+                preceding_hash = hashlib.sha256(previous).hexdigest()
+                transition = {hashlib.sha256(current).hexdigest(): preceding_hash}
+                stack.enter_context(patch.dict(
+                    "autosar_tooling.c_baseline_jobs._PREVIOUS_WRAPPERS", transition, clear=True))
                 wrapper.write_bytes(current)
                 selector.write_bytes(b"Updated job labels")
                 tracked = ("driver.py", "sample.arxml", c_baseline.WRAPPER, c_baseline.JOB_SELECTOR)
