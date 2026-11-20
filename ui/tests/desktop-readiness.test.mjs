@@ -6,8 +6,48 @@ import {
   sampleDomQuery,
   standardInspectionReady,
 } from '../../tests/desktop/support/readiness.mjs';
+import { sampleProjection } from '../../tests/desktop/support/workbench.mjs';
 
 afterEach(() => document.body.replaceChildren());
+
+test('a stale projection leaves the transition pending until the next sample', async () => {
+  const stale = Object.assign(new Error('Workspace changed during the read'), {
+    ipc: { key: 'backend.workbench.stale_delivery', params: {} },
+  });
+  const published = { projectPath: '/new/workbench-project.json' };
+  let fingerprint = 'before';
+  const requests = [];
+  const projection = async () => {
+    const requested = fingerprint;
+    requests.push(requested);
+    if (requested === 'before') {
+      fingerprint = 'after';
+      throw stale;
+    }
+    return published;
+  };
+
+  expect(await sampleProjection(projection)).toBeNull();
+  expect(requests).toEqual(['before']);
+  expect(await sampleProjection(projection)).toBe(published);
+  expect(requests).toEqual(['before', 'after']);
+});
+
+test.each([
+  [
+    'unexpected IPC error',
+    Object.assign(new Error('Workspace is unavailable'), {
+      ipc: { key: 'backend.workbench.workspace_required', params: {} },
+    }),
+  ],
+  ['transport error mentioning the stale key', new Error('backend.workbench.stale_delivery')],
+])('a projection sample propagates the original %s', async (_kind, error) => {
+  await expect(
+    sampleProjection(async () => {
+      throw error;
+    }),
+  ).rejects.toBe(error);
+});
 
 test.each([
   ['start page before a workspace is published', '<div class="start-page"></div>', false],
