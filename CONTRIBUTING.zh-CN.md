@@ -29,7 +29,7 @@ cargo test --locked -p autosar-config-core
 cargo clippy --locked -p autosar-config-core --all-targets --all-features -- -D warnings
 uv run --locked python -B -m unittest discover -s tests/python
 uv run --locked ruff check tools tests/python scripts
-uv run --locked python -m autosar_tooling quality --merge-base origin/master
+uv run --locked python -m autosar_tooling quality --scope all --merge-base origin/master
 ```
 
 按实际改动选择常规本地检查：
@@ -62,7 +62,7 @@ git push origin HEAD:refs/heads/<topic-branch>
 
 IPC 声明从 Rust 命令签名及实际序列化 DTO 生成。修改后运行 `npm run ipc:generate --prefix ui`，提交 `ui/src/ipc/` 下两份生成绑定；`npm run ipc:check --prefix ui` 重新生成并逐字比较，不修改已跟踪文件。命令使用锁定的 Cargo 生成器和项目 Prettier，先执行 `npm ci --prefix ui`。默认与 `native-webdriver` 签名分别检查；正常 TypeScript 构建还验证错误命令名、payload 和返回值假设会被拒绝。类型导出须保持 Serde 属性及原生 transport 不变。
 
-默认 Cargo 测试不要求官方资源或受控原生工具。真实进程、官方对照和桌面验收见[测试说明](docs/development/testing/README.md)。格式检查针对修改行，不整体重排历史代码。运行时 C 已整体符合 `.clang-format`；执行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，`git blame` 即跳过那次全量重排。生成的 C 由 emitter 直接写成同一排版，必需检查核对生成样本。
+默认 Cargo 测试不要求官方资源或受控原生工具。真实进程、官方对照和桌面验收见[测试说明](docs/development/testing/README.md)，进入调查、行为证伪、变异确认和独立审查见[工程验证、调查与独立审查](docs/development/testing/verification-and-review.md)。行为改动须从正常入口实测成功、失败与关键状态变化（不放宽期限、弱化断言、重试、固定延时或扩大排除），并沿用附带 stdout／stderr 的共用子进程执行入口。格式检查按配置工具检查全部改动行（含夹具与 Rust 测试），不整体重排历史代码。运行时 C 已整体符合 `.clang-format`；执行一次 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，`git blame` 即跳过那次全量重排。生成的 C 由 emitter 直接写成同一排版，必需检查核对生成样本。
 
 解析、生成和运行行为的修改应有独立预期及关键拒绝路径。生成代码每个输出只渲染一次，计划不能保证的前提报告为诊断；Clippy 在这些模块拒绝 panic 和文本修补，见测试说明。修改 C 或生成 C 模板时遵守 [C 编码规范](docs/development/c-coding-standard.md)，并按仓库 MISRA 指导执行；公开 C 接口说明输入、输出和错误契约。
 
@@ -78,13 +78,19 @@ IPC 声明从 Rust 命令签名及实际序列化 DTO 生成。修改后运行 `
 
 修改交付资源后运行 `uv run --locked python -m autosar_tooling assets check`。运行时摘要由构建计算；`assets update` 只更新独立 seal guard 清单。BSW ABI 与第三方身份单独审阅；资产测试核对固定检出换行，见[资源维护](docs/maintainers/assets.md)。
 
-提交前检查整个 diff，包括新增文件与生成内容。提交信息采用 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/v1.0.0/)：`<type>(<scope>): <description>`，type 为 `feat`、`fix`、`docs`、`test`、`refactor`、`perf`、`build`、`ci` 或 `chore`，scope 写受影响的模块或区域（如 `dcm`），破坏性变更加 `!` 并附 `BREAKING CHANGE:` 脚注。提交说明引用 Issue 时不用 close、fix、resolve 等关闭关键字加编号，GitHub 会在提交进入 master 时据此关闭 Issue；关闭关系只写在 PR 正文的 `Closes #N`。按可独立验证的阶段提交，仓库规则与流程文档的修改单独提交。标题说明实际改动；PR 说明问题、改动、验证和未运行范围，并把 Issue 的每条验收标准及移交事项对应到证据位置（测试、样本或文档），未完成的写原因和承接的 Issue；完整证据放在 PR，Issue 只写结论与链接。合并前自审整个 diff；涉及 AUTOSAR 规范的结论按条目原文复核，不凭记忆或现有代码判断，高风险改动另做一次与 CI 并行的独立审查。必需检查失败时立即查看处理，不等其余作业结束。必需检查通过即可合并：自审后用 `gh pr merge --auto --merge` 开启自动合并，`CI required` 通过后自动合并并删除分支；master 每次 push 跑完整 Development 矩阵，按输入选择 Extended 检查。`Post-merge checks result` 汇总失败并开 `area:quality-ci` Issue。开 PR 或合并前查看最近完成的 master 汇总。无关失败已有 Issue 跟踪时照常推进，相关或归属未明的先查清。确认回归后由引入它的 PR 作者修复，影响交付或关键主线行为时维护者及时回滚。界面改动附实际截图。不要提交官方下载、个人配置或临时测试产物。主机测试的结论限定为主机能力。
+提交前检查整个 diff，包括新增文件与生成内容。提交信息采用 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/v1.0.0/)：`<type>(<scope>): <description>`，type 为 `feat`、`fix`、`docs`、`test`、`refactor`、`perf`、`build`、`ci` 或 `chore`，scope 写受影响的模块或区域（如 `dcm`），破坏性变更加 `!` 并附 `BREAKING CHANGE:` 脚注；描述用英文写实际能力或修复，不用内部任务编号代替改动含义。提交说明引用 Issue 时不用 close、fix、resolve 等关闭关键字加编号，GitHub 会在提交进入 master 时据此关闭 Issue；关闭关系只写在 PR 正文：全部完成用 `Closes #N`，部分交付用 `Refs #N`（合并前核对 `closingIssuesReferences` 并解除中间交付的整项关闭关联）。按可独立验证的阶段及时提交（模块整改通常分为定义与配置校验、运行时与生成器、规范处置与清单）；仓库规则与流程文档（AGENTS、CONTRIBUTING、编码规范）的修改单独提交并在 PR 正文列出。标题说明实际改动；PR 说明问题、改动、验证和未运行范围，并把 Issue 的每条验收标准及移交事项对应到证据位置（测试、样本或文档），未完成的写原因和承接的 Issue；完整证据放在 PR（正文与最终评论），Issue 与相关跨模块 Issue 只写结论、链接及与其相关的部分，同一份证据不在多处复述。
+
+合并前不设人工批准或等待门槛，先自审完整 diff；涉及 AUTOSAR 规范的结论按条目原文复核编号、签名、返回／错误语义、状态转换与处置标记，不凭记忆或现有代码判断；模块整改、交付布局／ABI、并发或独占区等高风险改动另做一轮与 CI 并行的独立审查（详见[工程验证、调查与独立审查](docs/development/testing/verification-and-review.md)）。完整工程推进覆盖分支、实现、验证、提交、PR、审查、必需 CI、合并及目标分支核对。必需检查失败时立即查看处理，不等其余作业结束。必需检查通过即可合并：自审后用 `gh pr merge --auto --merge` 开启自动合并，`CI required` 通过后自动合并并删除分支；与 master 冲突时先同步；仅在合并后套件是 Issue 出口证据时等待它并回写结果；确认 PR 已合并再删除工作树、勾选总览（未获合并授权时交付止于 PR 最终评论，由合并者勾选总览）。master 每次 push 跑完整 Development 矩阵，按输入选择 Extended 检查。`Post-merge checks result` 汇总失败并开 `area:quality-ci` Issue。开 PR 或合并前查看最近完成的 master 汇总。无关失败已有 Issue 跟踪时照常推进，相关或归属未明的先查清。确认回归后由引入它的 PR 作者修复，影响交付或关键主线行为时维护者及时回滚。界面改动附实际截图。不要提交官方下载、个人配置或临时测试产物。主机测试的结论限定为主机能力。
 
 对使用者或集成者可见的改动在 `CHANGELOG.md` 的 `Unreleased` 下加一条：交付的 C 接口与 ABI、配置接受或拒绝、生成物、工具与界面行为；重构、测试、CI 和文档不记。每项一行，写清效果，末尾附 PR 号（如 `(#166)`），细节放 PR。条目按 `Breaking`、`Added`、`Changed`、`Fixed` 分组，破坏性或契约变化写明集成者要做的修改。发版时把 `Unreleased` 改为带日期的版本标题。CHANGELOG 只维护英文。
 
-每个 Issue 使用独立分支，开工时用 `gh issue develop <N> --base master --name <分支>` 创建并关联到 Issue，让他人看到它正在推进。主目录可用时可直接在其中推进，独立工作树是可选方式；并行推进的 Issue 使用独立工作树隔离。
+做任何流程、工具或设计决策，先查同类成熟项目的通行做法，再选其中高效且可靠的方案；偏离通行做法要写明具体理由。范围内的设计、ABI、交付与第三方身份按当前明确委托和规范决定，重大合同、路线、发布、法律承诺、保护绕过及范围外操作需保留授权（详见[工程验证、调查与独立审查](docs/development/testing/verification-and-review.md)）。
 
-真实 GUI 验收使用隔离环境，不占用开发者正在使用的桌面。原生 GUI／IPC 全量场景在 master 运行，Extended 仅在手动触发时运行这些场景。选中 C 分析的 PR 继续产出 Linux／Windows 八份回执及用于[重绑源码验收记录](docs/development/testing/source-acceptance.md)的输入。任务与进度用 GitHub Issues 和 Milestones 跟踪；新建 Issue 或开始实现前先搜索已有 Issue（含已关闭）和进行中的 PR，已有覆盖的在原处补充，避免重复工作；顺带完成了其他 Issue 的内容时，在该 Issue 留言并注明 PR，全部完成的用 `Closes #N` 关闭；方向见 [docs/roadmap/](docs/roadmap/README.md)，设计约束见 [docs/architecture/](docs/architecture/README.md)。
+任务与进度用 GitHub Issues 和 Milestones 跟踪（只为已承诺的阶段建 Milestone；2026-10 之前 `planning-archive-2026-10` 规划归档只作追溯；状态查询只读，不新增代理专用编排、报告、矩阵或台账）。一个 Issue 应能由一个 PR 关闭：预计需要多个 PR 的工作开工前拆成 GitHub 子 Issue，每个 PR 写 `Closes <子 Issue>`，`Refs` 只用于父 Issue；范围在创建时写成可数清单；父 Issue 正文顶部放一张状态表，原地更新；评论只记录决定、阻塞和范围变化，发现新工作就新建子 Issue，不悄悄扩大已有 Issue。新建 Issue、开始实现或补充规则前先搜索已有 Issue（含已关闭）、进行中的 PR 和分支，已有覆盖的在原处补充或接续，相关但不同的互相引用并保持单一信息来源。开工时读范围、依赖、进入条件、验收标准、评论、关联 PR 及 Milestone `tracking` 总览规则，对照当前代码不重做已完成部分；关键模块 Issue 等依赖全部合并后开工，不与前置工作并行开预调查。进入条件未满足时先调查，把证据写回 Issue 评论再实现（见[工程验证、调查与独立审查](docs/development/testing/verification-and-review.md)）。
+
+每个 Issue 使用独立分支，开工时用 `gh issue develop <N> --base master --name <分支>` 创建并关联到子 Issue（本地已建好同名分支时同样执行，推送即快进），合并时直接关闭该子 Issue 而无需手动解除整项关闭关联。分支在关联前按实际功能或修复命名，改名或拆分时为新分支重新关联并删除旧远端分支；并行推进的 Issue 使用独立工作树隔离。顺带完成了其他 Issue 的内容时，在该 Issue 留言写明完成了什么及所在 PR 并勾选清单，全部完成的用 `Closes #N` 或核实后附理由关闭。超出本次范围的差距（含只因当前配置收窄才成立的实现捷径，如静态交付文件写死生成器决定的名字）按依据、影响与退出条件新建 `known-gap`／`tech-debt`／`question` Issue，归入承接 Milestone 或留在未排期。改变路线顺序、产品契约或支持边界时先写 ADR 并更新 [docs/roadmap/](docs/roadmap/README.md) 与 [docs/architecture/](docs/architecture/README.md)，被取代的 ADR 只改状态。
+
+真实 GUI 验收使用隔离环境，不占用开发者正在使用的桌面。原生 GUI／IPC 全量场景在 master 运行，Extended 仅在手动触发时运行这些场景。选中 C 分析的 PR 继续产出 Linux／Windows 八份回执及用于[重绑源码验收记录](docs/development/testing/source-acceptance.md)的输入。
 
 每个开着的 Issue 至少有一个性质标签和一个模块标签；跨模块的 `tracking` 总览只需性质标签。性质标签为 `bug`、`known-gap`（能力、标准或验证差距）、`tech-debt`、`enhancement`、`question`、`story` 或 `tracking`（阶段总览）。模块标签可以有多个：
 
@@ -112,6 +118,10 @@ Windows MSI 分别构建 `zh-CN` 与 `en-US` 安装界面。英文 WiX 资源 `s
 ## 文档组织
 
 一篇文档只讲一个主题。单篇超过约 20 KB（中文约 7000 字），或包含多个可独立阅读的主题时，拆成同名目录，目录下的 `README.md` 作为索引，每个子文档一行说明用途；原位置保留指向索引的链接。按版本追加的 CHANGELOG、单项决定 ADR 与只作追溯的归档不受此限；`quality` 对其余 Markdown 按 20 KiB（换行按 LF 计）检查。新增内容先放进已有的合适文档或目录，不另起平行文件。
+
+README 向新读者介绍能力、使用／开发入口、限制及真实截图，不放进度、代理叙述、设计解释或修复流水；证据归 PR，阶段结论归 Issue/Milestone，路线变化归 `docs/roadmap/`。用法或支持变化时同步指南，核查冗余、层级和双语一致性。开发文档面向常规贡献者，特定环境或协作要求注明条件，不作默认门槛。从用户背景材料提炼通用需求；未经明确要求，不把个人经历、组织或项目来源写入文档、文件名、提交或 PR。
+
+流程约定调整或调试／验收暴露重复性、高代价错误后，主动把已确认、可复用且尚未覆盖的规则写入仓库，不留在会话记忆：[AGENTS.md](AGENTS.md) 保持 8 KB 以内，仅放跨任务目录与核心原则；流程与专题细节写入本指南或专题文档（`<= 20 KiB`），新增或改名专题文档时同步“按任务先读”表。删除或改名功能、链路、工具或文件时清理或改写旧条目，新增教训先查已有规则合并或替换，不为方便执行而放宽验收、数据保护或授权边界。
 
 ## 许可与安全报告
 
