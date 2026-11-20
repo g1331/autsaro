@@ -424,6 +424,38 @@ class CiSelectionTests(unittest.TestCase):
         self.assertNotIn("workflow_run", events)
         self.assertNotIn("pull_request_target", events)
 
+    def test_extended_gate_requires_every_selected_job(self):
+        jobs = yaml.safe_load((ROOT / ".github/workflows/extended.yml").read_text())["jobs"]
+        gate = jobs["result"]
+        self.assertEqual(gate["if"], "${{ always() }}")
+        for selected, status, expected in (
+            ("true", "success", 0),
+            ("false", "skipped", 0),
+            ("true", "skipped", "python"),
+            (None, "skipped", "python"),
+            ("true", "failure", "python"),
+            ("true", "cancelled", "python"),
+        ):
+            needs = {name: {"result": "success"} for name in gate["needs"]}
+            needs["changes"]["outputs"] = {} if selected is None else {"python": selected}
+            needs["python"]["result"] = status
+            with (
+                self.subTest(selected=selected, status=status),
+                mock.patch.dict(os.environ, {"RESULTS": json.dumps(needs)}),
+                self.assertRaises(SystemExit) as exit_result,
+            ):
+                run_script(gate["steps"][0]["run"])
+            if expected == 0:
+                self.assertEqual(exit_result.exception.code, 0)
+            else:
+                self.assertIn(expected, exit_result.exception.code)
+        needs["changes"] = {"result": "skipped"}
+        with (
+            mock.patch.dict(os.environ, {"RESULTS": json.dumps(needs)}),
+            self.assertRaisesRegex(SystemExit, "changes.*skipped"),
+        ):
+            run_script(gate["steps"][0]["run"])
+
     def test_label_events_do_not_cancel_or_replace_required_for_unrelated_labels(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())
         for action, label in (("synchronize", ""), ("labeled", "full-ci"), ("labeled", "area:ci")):

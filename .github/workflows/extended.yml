@@ -268,7 +268,7 @@ jobs:
   result:
     name: Extended checks result
     needs: [changes, python, ui, desktop, official, receiver, fuzz]
-    if: ${{ always() && needs.changes.result != 'skipped' }}
+    if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -278,8 +278,14 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           import json, os, sys
-          results = {name: need['result'] for name, need in json.loads(os.environ['RESULTS']).items()}
+          needs = json.loads(os.environ['RESULTS'])
+          results = {name: need['result'] for name, need in needs.items()}
+          selected = needs['changes']['outputs'] if results['changes'] == 'success' else {}
           print(results)
-          # Skipped means the changed paths did not select the check.
-          failed = {name: result for name, result in results.items() if result not in ('success', 'skipped') or name == 'changes' and result != 'success'}
+          failed = {
+              name: result for name, result in results.items()
+              if result != 'success' and not (
+                  name != 'changes' and selected.get(name) == 'false' and result == 'skipped'
+              )
+          }
           sys.exit('Extended checks did not pass: ' + str(failed) if failed else 0)
