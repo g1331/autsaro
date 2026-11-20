@@ -75,7 +75,10 @@ jobs:
 
   desktop-scenarios:
     needs: changes
-    if: needs.changes.outputs.desktop == 'true'
+    if: >-
+      github.event_name != 'pull_request' &&
+      (github.event_name == 'push' && github.ref == 'refs/heads/master' ||
+       needs.changes.outputs.desktop == 'true')
     uses: ./.github/workflows/desktop.yml
   python:
     # Short checks follow preparation so long native jobs can claim the first runners.
@@ -274,22 +277,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows separates measured long modules; Linux keeps one job.
         include:
           - os: ubuntu-24.04
             shard: all
-          - os: windows-2025-vs2026
-            shard: protocol
-          - os: windows-2025-vs2026
-            shard: projects
-          - os: windows-2025-vs2026
-            shard: integration
-          - os: windows-2025-vs2026
-            shard: rest
     name: native (${{ matrix.os }}, ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    steps:
+    steps: &native-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -444,9 +438,28 @@ jobs:
           path: ${{ runner.temp }}/native-crash-dumps
           if-no-files-found: ignore
           retention-days: 14
+  native-windows:
+    needs: changes
+    if: &post-pr-native github.event_name != 'pull_request' && needs.changes.outputs.native == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025-vs2026
+            shard: protocol
+          - os: windows-2025-vs2026
+            shard: projects
+          - os: windows-2025-vs2026
+            shard: integration
+          - os: windows-2025-vs2026
+            shard: rest
+    name: native (${{ matrix.os }}, ${{ matrix.shard }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps: *native-steps
   native-os:
     needs: changes
-    if: needs.changes.outputs.native == 'true'
+    if: *post-pr-native
     strategy:
       fail-fast: false
       matrix:
@@ -509,7 +522,7 @@ jobs:
   native-sanitizers:
     # GCC sanitizers over native programs, OS suites and sealed ECU closures.
     needs: changes
-    if: needs.changes.outputs.native == 'true'
+    if: *post-pr-native
     strategy:
       fail-fast: false
       matrix:
@@ -1531,7 +1544,7 @@ jobs:
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.
     name: ${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && 'Unselected PR label' || 'CI required' }}
-    needs: [changes, desktop-scenarios, python, core, desktop, native, native-os, native-sanitizers, native-delivery, native-delivery-windows, quality, c-analysis]
+    needs: [changes, python, core, desktop, native, native-delivery, native-delivery-windows, quality, c-analysis]
     if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'full-ci') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -1548,12 +1561,11 @@ jobs:
           needs = json.loads(os.environ['RESULTS'])
           outputs = needs['changes']['outputs'] if needs['changes']['result'] == 'success' else {}
           code = outputs.get('code') != 'false'
-          NATIVE_JOBS = {'core', 'native', 'native-os', 'native-sanitizers', 'native-delivery', 'native-delivery-windows'}
+          NATIVE_JOBS = {'core', 'native', 'native-delivery', 'native-delivery-windows'}
           def accepted(name):
               if name in {'changes', 'quality'}:
                   return {'success'}
-              selection = ('desktop' if name == 'desktop-scenarios' else
-                  'application' if name == 'desktop' else
+              selection = ('application' if name == 'desktop' else
                   'analysis' if name == 'c-analysis' else 'native' if name in NATIVE_JOBS else 'code')
               return {'success', 'skipped'} if outputs.get(selection) == 'false' else {'success'}
           failed = {name: need['result'] for name, need in needs.items() if need['result'] not in accepted(name)}
@@ -1561,7 +1573,44 @@ jobs:
           sys.exit('Blocking jobs did not pass: ' + str(failed) if failed else 0)
 
   extended:
-    # Same run, revision and fork token; never feeds back into CI required.
+    # Keep the same revision, and still collect Extended results if a fast check failed.
     needs: required
-    if: ${{ !cancelled() && needs.required.result == 'success' && (github.event_name == 'pull_request' || github.event_name == 'push' && github.ref == 'refs/heads/master') }}
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
     uses: ./.github/workflows/extended.yml
+
+  master-result:
+    name: Post-merge checks result
+    needs: [required, native-windows, native-os, native-sanitizers, desktop-scenarios, extended]
+    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Summarize results and report unsuccessful runs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          title="Master CI failed (run $GITHUB_RUN_ID)"
+          {
+            printf 'Master commit %s · [run %s, attempt %s](%s/attempts/%s)\n\n' \
+              "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$run_url" "$GITHUB_RUN_ATTEMPT"
+            jq -r 'to_entries[] | "- \(.key): \(.value.result)"' <<< "$RESULTS"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if jq -e 'all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
+            exit 0
+          fi
+          existing=$(gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/issues?state=all&labels=area%3Aquality-ci&per_page=100" |
+            jq -rs --arg title "$title" \
+              '[.[][] | select(.pull_request == null and .title == $title) | .number][0] // empty')
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file "$GITHUB_STEP_SUMMARY"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label area:quality-ci \
+              --body-file "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 1
