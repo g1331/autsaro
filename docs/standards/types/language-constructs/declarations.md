@@ -141,8 +141,8 @@ GCC／Cppcheck 输入。Windows 以实际检出的换行重算，原始 summary 
 {
   "id": "checker-obligations-547-r59",
   "evidence": {
-    "head": "dc1ce02b9d5148303a1ef648a64b397ef4102a76",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44814255256/attempts/1"
+    "head": "4290542118626cbd111bf81b5e5e1ea51e290ccf",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44672571288/attempts/1"
   },
   "cases": [
     {
