@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from autosar_tooling import c_check, c_fingerprint, c_gate, ci_reporting
+from autosar_tooling import c_check, c_disposition, c_fingerprint, c_gate, ci_reporting
 
 HEADER = "#define VALUE 1\ntypedef unsigned int Count;\n"
 SOURCE = (
@@ -240,17 +240,125 @@ class FingerprintTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Ambiguous registered fingerprint path"):
                 self.inventory(summary, root)
 
-    def test_ctu_checker_includes_other_program_units(self):
+    def test_ctu_disposition_survives_two_independent_module_merges(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            previous, current = root / "previous", root / "current"
-            before = self.scan(previous, rule="misra-c2012-8.7")
-            after = self.scan(current, rule="misra-c2012-8.7",
-                              other="int other(void) { return 12; }\n")
-            result = c_fingerprint.verdict(self.inventory(after, current),
-                                           self.inventory(before, previous), set())
-            self.assertEqual(result["status"], "blocked")
-            self.assertEqual(len(result["new"]), 2)
+            compiler = os.environ.get("AUTOSAR_CC") or shutil.which("gcc")
+            if compiler is None:
+                self.skipTest("target GCC unavailable")
+            try:
+                executable, addons, tool = c_check.tool_identity(root)
+            except (OSError, RuntimeError, ValueError) as error:
+                if os.environ.get("CPPCHECK"):
+                    self.fail(f"Configured CPPCHECK is unusable: {error}")
+                self.skipTest(f"Pinned Cppcheck unavailable: {error}")
+
+            repository = root / "source"
+            repository.mkdir()
+
+            def git(*args):
+                return subprocess.check_output(
+                    ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", *args],
+                    cwd=repository, stderr=subprocess.STDOUT, encoding="utf-8", timeout=30,
+                ).strip()
+
+            def write(name, value):
+                (repository / name).write_text(value, encoding="utf-8", newline="\n")
+
+            def scan(label):
+                output = root / label
+                project = output / "project"
+                project.mkdir(parents=True)
+                units = ["entry.c", "first.c", "second.c"]
+                scope_inputs = {name: [name, "shared.h"] for name in units}
+                for name in [*units, "shared.h"]:
+                    shutil.copy2(repository / name, project / name)
+                commands = [{"directory": str(project), "file": str(project / name),
+                             "arguments": [compiler, "-std=c99", "-c", str(project / name)]}
+                            for name in units]
+                program = output / "host-batch"
+                program.mkdir()
+                (program / "compile_commands.json").write_text(json.dumps(commands), encoding="utf-8")
+                (program / "misra.json").write_text(
+                    json.dumps({"script": str(addons / "misra.py"), "ctu": True}), encoding="utf-8",
+                )
+                (program / "cache").mkdir()
+                analysis = subprocess.run([
+                    str(executable), "--std=c99", "--enable=style", "--xml", "--xml-version=2",
+                    "--project=compile_commands.json", "--cppcheck-build-dir=cache", "--addon=misra.json",
+                ], cwd=program, encoding="utf-8", capture_output=True, check=True, timeout=60)
+                diagnostics = [row for row in c_check.parse_diagnostics(analysis.stderr, project)
+                               if row["id"] != "checkersReport"]
+                for row in diagnostics:
+                    row["programs"] = ["host-batch"]
+                for index, name in enumerate(units):
+                    preprocessed = subprocess.check_output(
+                        [compiler, "-std=c99", "-E", "-dD", str(project / name)],
+                        encoding="utf-8", timeout=30,
+                    )
+                    (output / f"compiler-origins-{index}.stdout.log").write_text(
+                        preprocessed, encoding="utf-8",
+                    )
+                summary = {
+                    "scope": {
+                        "translationUnits": units, "target": "test-target",
+                        "projectTranslationUnits": scope_inputs,
+                        "cppcheckInputs": {unit: {"project": names, "sdk": []}
+                                           for unit, names in scope_inputs.items()},
+                        "sdkTranslationUnits": {name: [] for name in units}, "sdkHeaders": [],
+                        "compilerFlags": ["-std=c99"], "includePaths": [],
+                    },
+                    "tool": tool,
+                    "semanticIdentity": {
+                        "compiler": {"machine": "test", "release": "test", "predefines": [], "builtins": []},
+                        "models": {}, "libraries": {}, "addonRuntime": {},
+                        "analysisCode": {"c_addon.py": "test", "c_check.py": "test"},
+                        "defines": {name: [] for name in units},
+                    },
+                    "programs": [{"name": "host-batch", "translationUnits": units}],
+                    "diagnostics": diagnostics,
+                }
+                return diagnostics, self.inventory(summary, output)
+
+            shared = "#define UNUSED 7\nint first(void);\nint second(void);\n"
+            first = '#include "shared.h"\nint first(void) { return 1; }\n'
+            second = '#include "shared.h"\nint second(void) { return 2; }\n'
+            entry = '#include "shared.h"\nint main(void) { return first() + second(); }\n'
+            git("init", "-b", "main")
+            for name, source in (("shared.h", shared), ("first.c", first),
+                                 ("second.c", second), ("entry.c", entry)):
+                write(name, source)
+            git("add", ".")
+            git("commit", "-m", "base")
+            initial = git("rev-parse", "HEAD")
+            raw, base = scan("base")
+            self.assertEqual([row["id"] for row in raw], ["misra-c2012-2.5"])
+            approved = {base[0]["fingerprint"]}
+            self.assertNotIn(None, approved)
+            branches = {}
+            for name, source in (("first", first.replace("return 1", "return 11")),
+                                 ("second", second.replace("return 2", "return 22"))):
+                git("switch", "-c", name, initial)
+                write(name + ".c", source)
+                git("commit", "-am", f"change {name}")
+                _, branches[name] = scan(name)
+                self.assertEqual(c_fingerprint.verdict(branches[name], base, approved)["status"], "passed")
+            git("switch", "main")
+            git("merge", "--no-ff", "first", "-m", "merge first")
+            git("merge", "--no-ff", "second", "-m", "merge second")
+            _, merged = scan("merged")
+            self.assertEqual(c_fingerprint.verdict(merged, branches["first"], approved)["status"], "passed")
+            self.assertEqual(merged, base)
+
+            write("shared.h", shared.replace("UNUSED 7", "UNUSED 8"))
+            _, changed_definition = scan("changed-definition")
+            self.assertEqual(c_fingerprint.verdict(changed_definition, merged, approved)["staleDispositions"],
+                             sorted(approved))
+            write("shared.h", shared)
+            write("second.c", second.replace("return 2", "return UNUSED"))
+            _, used_in_other_unit = scan("used-in-other-unit")
+            self.assertEqual(c_fingerprint.verdict(used_in_other_unit, merged, approved)["staleDispositions"],
+                             sorted(approved))
 
     def test_duplicate_occurrences_never_inherit_a_disposition(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -312,6 +420,54 @@ class FingerprintTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         self.assertEqual(result["staleDispositions"], sorted(approval))
         self.assertEqual(c_fingerprint.verdict([], [row], set())["status"], "passed")
+
+    def test_disposition_fingerprint_requires_current_technical_and_formal_proof(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory).resolve()
+            summary = self.scan(output)
+            rows = self.inventory(summary, output)
+        summary["coverage"]["rules"] = [{"id": "R10.3", "category": "Required"}]
+        occurrence = {
+            "diagnostic": 0, "locationIndex": 0, "location": summary["diagnostics"][0]["locations"][0],
+            "programs": ["host-batch", "probe"], "rule": "misra-c2012-10.3",
+            "entity": "count", "record": {"file": "types.md", "text": "conversion"},
+            "assessment": "accepted", "status": "owned_record_matched", "reason": "owned_source_approved",
+            "contextId": "owned", "formalContextId": "formal",
+        }
+        authorities = {
+            key: {"id": key, "source": "types.md", "evidence": {}, "records": {}, "formalStatus": "approved"}
+            for key in ("owned", "formal")
+        }
+        proof = c_disposition.proof(occurrence, authorities, set())
+        self.assertIsNotNone(proof)
+        bindings = {row["fingerprint"]: proof for row in rows}
+
+        def compare(current):
+            result = {
+                "occurrences": [dict(current)], "objects": [],
+                "checkerObligations": {"retainedRules": {"R10.3": {"approval": "formal"}},
+                                       "statusCounts": {"retained": 1},
+                                       "conformanceAssessment": "compliant_with_deviations"},
+            }
+            c_disposition.apply(summary, result, rows, bindings, authorities)
+            return result
+
+        self.assertEqual(compare(occurrence)["occurrences"], [occurrence])
+        for change in ("entity", "approval", "category"):
+            with self.subTest(change=change):
+                current = occurrence
+                if change == "entity":
+                    current = {**occurrence, "entity": "another_count"}
+                if change == "approval":
+                    authorities["formal"]["formalStatus"] = "pending"
+                if change == "category":
+                    authorities["formal"]["formalStatus"] = "approved"
+                    summary["coverage"]["rules"][0]["category"] = "Mandatory"
+                result = compare(current)
+                self.assertEqual(result["occurrences"][0]["assessment"], "blocked")
+                self.assertEqual(result["fingerprintDispositions"]["stale"], sorted(bindings))
+                self.assertEqual(result["checkerObligations"]["retainedRules"], {})
+                self.assertEqual(result["checkerObligations"]["statusCounts"], {"not_assessed": 1})
 
     def test_preview_uses_scope_and_excludes_mandatory_retention(self):
         summary = {

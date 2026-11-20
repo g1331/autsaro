@@ -14,15 +14,25 @@ from ecu_tools.build import digest
 
 from autosar_tooling import c_preprocessor
 
-FORMAT = "c-diagnostic-fingerprints-v2"
-SARIF_KEY = "autsaroDiagnostic/v2"
+FORMAT = "c-diagnostic-fingerprints-v3"
+SARIF_KEY = "autsaroDiagnostic/v3"
 RECEIPT = "diagnostic-fingerprints.json"
 SHA256 = re.compile(r"[0-9a-f]{64}")
 # The pinned MISRA addon's analyse_ctu_info can report these using facts
 # from units that do not contain any location in the diagnostic.
-CTU = frozenset(f"misra-c2012-{rule}" for rule in (
-    "2.3", "2.4", "2.5", "5.6", "5.7", "5.8", "5.9", "8.5", "8.6", "8.7",
-))
+CTU_KINDS = {
+    "misra-c2012-2.3": ("MisraTypedefInfo",),
+    "misra-c2012-2.4": ("MisraTagName",),
+    "misra-c2012-2.5": ("MisraMacro",),
+    "misra-c2012-5.6": ("MisraTypedefInfo",),
+    "misra-c2012-5.7": ("MisraTagName",),
+    "misra-c2012-5.8": ("MisraExternalIdentifiers", "MisraInternalIdentifiers", "MisraLocalIdentifiers"),
+    "misra-c2012-5.9": ("MisraInternalIdentifiers",),
+    "misra-c2012-8.5": ("MisraExternalIdentifiers",),
+    "misra-c2012-8.6": ("MisraExternalIdentifiers",),
+    "misra-c2012-8.7": ("MisraExternalIdentifiers", "MisraUsage"),
+}
+CTU = frozenset(CTU_KINDS)
 TOKEN = re.compile(
     rf"(?:L|u8|u|U)?(?:{c_preprocessor.LITERAL})|"
     r"(?:\d|\.\d)(?:[\w.]|(?<=[eEpP])[+-])*|[A-Za-z_]\w*|"
@@ -72,7 +82,8 @@ def tokens(text: str) -> list[str]:
 
 def compiler_context(text: str, unit: str, sdk: dict[str, str],
                      wanted: dict[str, set[int]], *, windows: bool = False,
-                     project_paths: dict[str, str] | None = None) -> tuple[str, dict]:
+                     project_paths: dict[str, str] | None = None,
+                     file_tokens: dict | None = None, primary_prefix: list | None = None) -> tuple[str, dict]:
     """Hash the ordered expanded TU and collect expanded tokens at diagnostic anchors."""
     lines = text.splitlines()
     root = source_root(lines, unit, windows)
@@ -85,6 +96,7 @@ def compiler_context(text: str, unit: str, sdk: dict[str, str],
     expanded = defaultdict(list)
     filename, number = unit, 0
     last_file = None
+    prefix_size = 0
     for line in lines:
         marker = c_preprocessor.LINE.fullmatch(line)
         if marker:
@@ -92,6 +104,8 @@ def compiler_context(text: str, unit: str, sdk: dict[str, str],
             path = path_key(marker[2].replace("\\\\", "\\"), windows)
             relative = path.removeprefix(root_key + "/")
             filename = sdk.get(path, project_paths.get(relative, relative))
+            if primary_prefix is not None and filename != unit and not filename.startswith("<"):
+                prefix_size = len(file_tokens.get(unit, ()))
         elif line.strip():
             line = checkout.sub("<project>/", line)
             words = tokens(line)
@@ -99,6 +113,8 @@ def compiler_context(text: str, unit: str, sdk: dict[str, str],
                 words.insert(3, "<function-macro>")
             if number in wanted.get(filename, ()):
                 expanded[filename, number].append(words)
+            if file_tokens is not None:
+                file_tokens[filename].append(words)
             if filename != last_file:
                 digest.update(b"\nfile " + json.dumps(filename, ensure_ascii=False).encode("utf-8"))
                 digest.update(b"\n")
@@ -109,6 +125,8 @@ def compiler_context(text: str, unit: str, sdk: dict[str, str],
             if line.startswith("#"):
                 digest.update(b"directive-end\n")
         number += not marker
+    if primary_prefix is not None:
+        primary_prefix.extend(file_tokens.get(unit, ())[:prefix_size])
     return digest.hexdigest(), expanded
 
 
@@ -131,6 +149,64 @@ class SourceContext:
         # cannot shift across it without changing the identity.
         return (index, [token[0] for token in self.tokens[max(0, index - 8):index]],
                 self.tokens[index][0], [token[0] for token in self.tokens[index + 1:index + 9]])
+
+
+def ctu_facts(output: Path, program: dict, compiler_roots: dict[str, str],
+              sdk: dict[str, str], project_paths: dict[str, str], windows: bool) -> tuple[dict, dict]:
+    """Index the actual pinned addon's per-program facts by location and by name."""
+    cache = output / program["name"] / "cache"
+    if not cache.is_dir() and program["name"] == "target":
+        cache = output / "cache"
+    by_location, by_name = defaultdict(set), defaultdict(list)
+    units = program["translationUnits"]
+    roots = {path_key(compiler_roots[unit], windows) for unit in units}
+    root, = roots
+    seen = set()
+    for item in (cache / "files.txt").read_text(encoding="utf-8").splitlines():
+        carrier, source = item.split(":::", 1)
+        unit = project_paths.get(path_key(source, windows).removeprefix(root + "/"))
+        if unit not in units or unit in seen or Path(carrier).name != carrier:
+            raise ValueError("Invalid CTU translation-unit inventory")
+        seen.add(unit)
+        for text in (cache / (carrier + ".ctu-info")).read_text(encoding="utf-8").splitlines():
+            record = json.loads(text)
+            kind = record["summary"]
+            for fact in record["data"]:
+                key = path_key(fact["file"], windows)
+                file = sdk.get(key, project_paths.get(key.removeprefix(root + "/"), key))
+                position = (file, int(fact["line"]), int(fact["column"])) if "line" in fact else (file,)
+                attributes = {key: value for key, value in fact.items()
+                              if key not in {"name", "file", "line", "column"}}
+                name = fact["name"]
+                by_name[kind, name].append((unit, position, attributes))
+                if len(position) == 3:
+                    by_location[kind, position].add(name)
+    if seen != set(units):
+        raise ValueError("Incomplete CTU translation-unit inventory")
+    return by_location, by_name
+
+
+def ctu_dependencies(rule: str, locations: list[tuple], facts: tuple[dict, dict],
+                     sources: dict, expanded: dict, unit_hashes: dict, headers: dict) -> list | None:
+    by_location, by_name = facts
+    kinds = CTU_KINDS[rule]
+    names = {name for position in locations for kind in kinds
+             for name in by_location.get((kind, position), ())}
+    if not names:
+        return None
+    result = []
+    for kind in kinds:
+        for name in sorted(names):
+            for unit, position, attributes in by_name.get((kind, name), ()):
+                file = position[0]
+                source = unit_hashes[unit] if unit == file else expanded[unit].get(file)
+                anchor = None
+                if len(position) == 3 and file in sources:
+                    anchor = sources[file].anchor(*position[1:])
+                if source is None and anchor is None:
+                    return None
+                result.append((kind, name, unit, file, anchor, source, headers[unit], attributes))
+    return result
 
 
 def canonical_config(summary: dict, compiler_identity: dict) -> dict:
@@ -183,10 +259,12 @@ def inventory(summary: dict, output: Path, compiler_identity: dict) -> list[dict
     consumers = defaultdict(set)
     expanded = defaultdict(dict)
     unit_hashes = {}
+    compiler_roots, ctu_expanded, ctu_headers = {}, {}, {}
     unresolved = set()
     config = sha(canonical_config(summary, compiler_identity))
     compiler_settings = [*scope["compilerFlags"], *summary["semanticIdentity"]["compiler"]["builtins"]]
     line_sensitive_options = LINE_SENSITIVE.search("\n".join(compiler_settings))
+    has_ctu = any(row["id"] in CTU for row in summary["diagnostics"])
     for index, unit in enumerate(scope["translationUnits"]):
         analyzer = scope["cppcheckInputs"][unit]
         if analyzer.get("unbound"):
@@ -205,9 +283,15 @@ def inventory(summary: dict, output: Path, compiler_identity: dict) -> list[dict
                 if LINE_SENSITIVE.search(text):
                     line_sensitive.add(name)
         compiler = (output / f"compiler-origins-{index}.stdout.log").read_text(encoding="utf-8")
+        emissions = defaultdict(list) if has_ctu else None
+        prefix = [] if has_ctu else None
         expanded_digest, anchors = compiler_context(
             compiler, unit, sdk, diagnostic_paths, windows=windows, project_paths=project_paths,
+            file_tokens=emissions, primary_prefix=prefix,
         )
+        if has_ctu:
+            compiler_roots[unit] = source_root(compiler.splitlines(), unit, windows)
+            ctu_expanded[unit] = {name: sha(words) for name, words in emissions.items()}
         defines = summary["semanticIdentity"]["defines"][unit]
         # Preserve the physical lines when a checker input may expand a line number
         # or splice a newline. Raw spelling covers branches only Cppcheck opens.
@@ -220,10 +304,24 @@ def inventory(summary: dict, output: Path, compiler_identity: dict) -> list[dict
                                 for name in analyzer["project"]},
             "sdk": sorted(sdk[path_key(name, windows)] for name in sdk_paths),
         })
+        if has_ctu:
+            # A fact in a header can depend on other declarations in its
+            # consumer. Keep header spelling and expansions, excluding the
+            # primary source body when it contributes no same-name fact.
+            ctu_headers[unit] = sha({
+                "expanded": {name: value for name, value in ctu_expanded[unit].items() if name != unit},
+                "defines": defines,
+                "primaryBeforeHeaders": sha(prefix),
+                "analyzerHeaders": {name: raw_hashes[name][0 if exact_lines else 1]
+                                    for name in analyzer["project"] if name != unit},
+                "sdk": sorted(sdk[path_key(name, windows)] for name in sdk_paths),
+            })
         for key, lines in anchors.items():
             expanded[key][unit] = lines
 
     programs = {row["name"]: set(row["translationUnits"]) for row in summary["programs"]}
+    facts = {row["name"]: ctu_facts(output, row, compiler_roots, sdk, project_paths, windows)
+             for row in summary["programs"]} if has_ctu else {}
     for header in scope["sdkHeaders"]:
         path = Path(header["path"])
         key = logical_path(header["path"])
@@ -235,6 +333,7 @@ def inventory(summary: dict, output: Path, compiler_identity: dict) -> list[dict
         if rule == "checkersReport":
             continue
         sites = []
+        locations = []
         for place in diagnostic["locations"]:
             name = logical_path(place["file"])
             line = int(place["line"] or 0)
@@ -242,9 +341,10 @@ def inventory(summary: dict, output: Path, compiler_identity: dict) -> list[dict
             context = raw_context.get(name)
             anchor = context.anchor(line, column) if context else None
             sites.append((name, line, anchor))
+            locations.append((name, line, column))
         for program in diagnostic["programs"]:
             units = programs[program]
-            related = units if rule in CTU else units.intersection(
+            related = units.intersection(
                 unit for name, _, _ in sites for unit in consumers[name]
             )
             complete = bool(related and sites) and not related.intersection(unresolved) and all(
@@ -255,12 +355,20 @@ def inventory(summary: dict, output: Path, compiler_identity: dict) -> list[dict
                 (unit, tokens_at_site)
                 for unit, tokens_at_site in expanded[name, line].items() if unit in units
             )) for name, line, anchor in sites]
+            dependencies = None
+            if complete and rule in CTU:
+                dependencies = ctu_dependencies(
+                    rule, locations, facts[program], raw_context, ctu_expanded, unit_hashes, ctu_headers,
+                )
+                complete = dependencies is not None and not units.intersection(unresolved)
             for position in range(len(sites) or 1):
                 fingerprint = sha({
                     "version": FORMAT, "configuration": config, "rule": rule,
                     "severity": diagnostic["severity"], "program": program, "sites": evidence,
                     "position": position,
-                    "translationUnits": {unit: unit_hashes[unit] for unit in related},
+                    **({"ctu": dependencies} if rule in CTU else {
+                        "translationUnits": {unit: unit_hashes[unit] for unit in related},
+                    }),
                 }) if complete else None
                 rows.append({"diagnostic": index, "locationIndex": position,
                              "program": program, "fingerprint": fingerprint})
