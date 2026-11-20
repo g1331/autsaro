@@ -300,8 +300,8 @@ OS_MEMMAP const AppModeType *const Os_ArtiAppMode =
 #include "Os_MemMap.h"
 #define OS_START_SEC_VAR_CLEARED_32
 #include "Os_MemMap.h"
-/* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
- */
+/* Os_BackendResource owns the mutable state. The file-scope ARTI view below
+ * also references this array. */
 OS_MEMMAP static uint32
     resource_owner[OS_MAX_RESOURCES]; /**< Resource owners; OS port lock; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_32

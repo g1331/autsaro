@@ -2297,6 +2297,45 @@ class AcceptanceTests(unittest.TestCase):
                                  "accepted" if status == "owned_false_positive" else "blocked")
                 self.assertEqual(self.summary, raw)
 
+    def test_r89_resource_owner_false_positive_requires_the_file_scope_reference(self):
+        self.owned_inputs()
+        source = "runtime/os/src/Os_Backend.c"
+        delivered = source.removeprefix("runtime/")
+        path = self.root / source
+        original = path.read_bytes()
+        record = self.root / "docs/standards/types/storage.md"
+        record_text = record.read_text(encoding="utf-8")
+        self.summary["scope"]["translationUnits"].append(delivered)
+        for program in self.summary["programs"]:
+            program["translationUnits"].append(delivered)
+
+        for body, heading, column, expected in (
+            (original, "## R8.9 资源所有者数组误报", 5, "owned_false_positive"),
+            (original.replace(b"    resource_owner;", b"    NULL;"),
+             "## R8.9 资源所有者数组误报", 5, "unmatched"),
+            (original, "## Historical report", 5, "unmatched"),
+            (original, "## R8.9 资源所有者数组误报", 6, "unmatched"),
+        ):
+            with self.subTest(heading=heading, column=column, unchanged=body == original):
+                path.write_bytes(body)
+                record.write_text(record_text.replace("## R8.9 资源所有者数组误报", heading),
+                                  encoding="utf-8")
+                self.select_owned(source, "8.9", "resource_owner[OS_MAX_RESOURCES]")
+                report = self.summary["diagnostics"][0]
+                report["locations"][0]["column"] = column
+                report.update(severity="style",
+                              message="misra violation (use --rule-texts=<file> to get proper output)")
+                self.bind_groups()
+                self.bind(self.context(group="owned-source", status="approved"))
+                raw = copy.deepcopy(self.summary)
+                result = self.evaluate()
+                self.assertNotEqual(result["status"], "error", result["objects"])
+                occurrence = result["occurrences"][0]
+                self.assertEqual(occurrence["status"], expected)
+                self.assertEqual(occurrence["assessment"],
+                                 "accepted" if expected == "owned_false_positive" else "blocked")
+                self.assertEqual(self.summary, raw)
+
     def test_r82_formal_approval_binds_reports_and_rejects_invalid_shape(self):
         self.owned_inputs()
         path = "generated/include/Rte_EchoApplication.h"

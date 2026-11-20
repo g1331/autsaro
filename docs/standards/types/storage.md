@@ -36,7 +36,6 @@ Can／Com／host 消费者承担验证，实际执行及源码身份集中 PR。
 | MISRA C:2012 Rule 8.9 | `runtime/bsw/src/Com.c` 中 `publishing` | VAR_CLEARED_UNSPECIFIED；Com_Publish 的在途通知边界，Init 不清除。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/host/src/Det_Host.c` 中 `reporting_development` | VAR_CLEARED_8／TLS；Det_HostEnterDevelopmentReport 的每线程递归状态。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/host/src/Ecu_HostBusSM.c` 中 `bussm_publication` | VAR_CLEARED_UNSPECIFIED；Ecu_HostBusSM_Publish 的待发布／在途状态，BUSSM 区保护。 | 维护者 原用户决定，ADR 0023 |
-| MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `resource_owner` | VAR_CLEARED_32；Os_BackendResource 在 port 锁下维护；ARTI view 也指向该数组。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `trace_length` | VAR_CLEARED_32；Os_TargetTrace 的调用方串行化长度，配合既有 trace 缓冲。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `rebase_entries` | VAR_CLEARED_PTR；rebase_orders 的有界重排暂存，元素类型和容量保持。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `saved_priorities` | VAR_CLEARED_64；Os_BackendResource 按 actor／资源保存 Task 优先级。 | 维护者 原用户决定，ADR 0023 |
@@ -60,6 +59,15 @@ Can／Com／host 消费者承担验证，实际执行及源码身份集中 PR。
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/windows/Os_Stack.c` 中 `fatal_prefix` | CONST_8；Os_StackFatalExit 的不可变报告前缀；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/windows/Os_Stack.c` 中 `fatal_middle` | CONST_8；Os_StackFatalExit 的不可变异常字段分隔；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/host/windows/Os_Stack.c` 中 `fatal_suffix` | CONST_8；Os_StackFatalExit 的不可变报告尾部；仅 Windows x64，保留独立于消费函数 CODE 的完整映射。 | 维护者 原用户决定，ADR 0023 |
+
+## R8.9 资源所有者数组误报
+
+双目标四个 profile 的 HostBatch／probe 均在 `os/src/Os_Backend.c:306:5` 报告
+`resource_owner`。`Os_BackendResource` 在 port 锁下修改该数组，文件作用域的
+`Os_ArtiResourceOwners` 初始化时也引用它。原始 GCC 展开保留两处引用，
+主文 71–72 页及 AMD4.43–46 的单函数条件未成立。原始诊断仍保留。
+源码验收核对这条原始报告、实际参与构建的 TU 及已评估源码身份。数组仍映射到
+VAR_CLEARED_32，ARTI 的只读视图仍映射到 CONST_PTR。
 
 ## 历史源码与收据边界
 
