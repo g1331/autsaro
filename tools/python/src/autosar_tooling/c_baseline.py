@@ -186,10 +186,13 @@ def download(repository: str, tree: str, target: str, sample: str,
         windows = target.startswith("windows")
         job = "c-analysis-samples" + ("-windows" if windows else "")
         system = "windows-2025-vs2026" if windows else "ubuntu-24.04"
-        expected = f"{job} ({system}, {target}, {sample}, {sample})"
+        legacy = f"{job} ({system}, {target}, {sample}, {sample})"
+        paired = {f"{job} ({target}, {first} + {second})" for first, second in
+                  (("standard-ecu", "user-application"), ("component-pipeline", "no-diagnostic"))
+                  if sample in (first, second)}
         jobs = pages(repository, f"actions/runs/{run['id']}/jobs", "jobs")
-        producers = [row for row in jobs if row["name"] == expected or
-                     row["name"].endswith("...") and expected.startswith(row["name"][:-3])]
+        producers = [row for row in jobs if row["name"] in paired or row["name"] == legacy or
+                     row["name"].endswith("...") and legacy.startswith(row["name"][:-3])]
         if len(producers) != 1 or producers[0]["conclusion"] != "success":
             continue
         result = gh(["api", f"repos/{repository}/actions/artifacts/{artifact['id']}/zip"],

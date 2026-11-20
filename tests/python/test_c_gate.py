@@ -439,11 +439,17 @@ class SourceGateTests(unittest.TestCase):
             self.assertNotIn("Generate complete analysis samples",
                              [step.get("name") for step in jobs[prepare]["steps"]])
             self.assertEqual(current["steps"], baseline["steps"])
-            artifact = next(step["with"] for step in current["steps"]
+            for job in (current, baseline):
+                groups = job["strategy"]["matrix"]["include"]
+                self.assertCountEqual([row[key] for row in groups for key in ("first", "second")],
+                                      ["standard-ecu", "user-application", "component-pipeline", "no-diagnostic"])
+            action = ROOT / ".github/actions/retain-analysis-sample/action.yml"
+            uploads = yaml.safe_load(action.read_text())["runs"]["steps"]
+            artifact = next(step["with"] for step in uploads
                             if step.get("with", {}).get("name", "").startswith(
                                 "c-analysis-raw-"))
-            self.assertIn("${{ strategy.job-index }}", artifact["name"])
-            self.assertIn("${{ env.ANALYSIS_SIDE }}", artifact["name"])
+            self.assertIn("${{ inputs.index }}", artifact["name"])
+            self.assertIn("${{ inputs.side }}", artifact["name"])
             self.assertEqual([path.rsplit("/", 1)[1] for path in artifact["path"].splitlines()],
                              ["summary.json", "project", "analysis-identity.json", "identifier-evidence",
                               "baseline-source.json", "platform-model.h", "platform-library.cfg"])

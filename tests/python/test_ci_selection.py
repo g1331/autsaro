@@ -1,6 +1,7 @@
 """Keep required CI input selection, coverage and failure propagation safe."""
 
 import ast
+import contextlib
 import hashlib
 import json
 import os
@@ -10,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import threading
 import unittest
 from importlib.util import resolve_name
 from itertools import product
@@ -601,14 +603,14 @@ class CiSelectionTests(unittest.TestCase):
                             if name == "summary.json" or name.startswith("project/")}
                 self.assertEqual(selected, expected)
             producer = workflow[job.replace("gates", "samples")]
-            full = [step for step in producer["steps"]
-                    if step.get("uses", "").startswith("actions/upload-artifact@")
-                    and step.get("with", {}).get("name", "").startswith(
-                        "c-analysis-${{ env.ANALYSIS_SIDE == 'baseline'")]
-            self.assertEqual(len(full), 1)
-            self.assertEqual(full[0]["with"]["path"],
-                             "build/${{ env.ANALYSIS_SIDE == 'baseline' && "
-                             "'c-analysis-baseline' || 'c-analysis-results' }}")
+            publish = "./.github/actions/retain-analysis-sample"
+            calls = [step for step in producer["steps"] if step.get("uses") == publish]
+            self.assertEqual([step["with"]["sample"] for step in calls],
+                             ["${{ matrix.first }}", "${{ matrix.second }}"])
+            self.assertTrue(all(step["if"] == "always()" for step in calls))
+            steps = yaml.safe_load((ROOT / publish / "action.yml").read_text())["runs"]["steps"]
+            self.assertEqual(steps[-1]["with"]["path"], "build/analysis-output/${{ inputs.sample }}")
+            self.assertTrue(steps[-1]["with"]["include-hidden-files"])
 
     def test_cargo_source_digest_uses_tracked_bytes_despite_generated_files_and_timestamps(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
@@ -686,7 +688,7 @@ class CiSelectionTests(unittest.TestCase):
                         self.assertIn("--exact", filters)
                         self.assertEqual(outlier in positive, entry["shard"] == "rest")
                         self.assertEqual("integration::release_contracts::headers" in positive,
-                                         entry["shard"] == "projects")
+                                         entry["shard"] == "protocol")
                     observed.extend(
                         name for name in names
                         if (not positive or any(
@@ -856,6 +858,35 @@ class CiSelectionTests(unittest.TestCase):
                     run_script(script)
                 tool.assert_not_called()
 
+    def test_paired_baseline_finishes_both_samples_and_propagates_either_failure(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+        script = next(step["run"] for step in jobs["c-analysis-baseline"]["steps"]
+                      if step.get("name") == "Verify complete generated-project analysis")
+        names = ["standard-ecu", "user-application"]
+        for failed in [None, *names]:
+            with self.subTest(failed=failed), tempfile.TemporaryDirectory() as directory:
+                pair = threading.Barrier(2, timeout=5)
+
+                def scan(command, failed=failed, pair=pair):
+                    pair.wait()
+                    sample = command[command.index("--sample") + 1]
+                    output = Path(command[command.index("--output-directory") + 1])
+                    self.assertEqual(output, Path("build/analysis-output") / sample / sample)
+                    output.mkdir(parents=True)
+                    (output / "summary.json").write_text(json.dumps({
+                        "error": None, "passed": False, "projectAcceptance": {"status": "blocked"},
+                    }))
+                    return subprocess.CompletedProcess(command, int(sample == failed))
+
+                with (contextlib.chdir(directory), mock.patch.dict(os.environ, {
+                        "ANALYSIS_SIDE": "baseline", "ANALYSIS_TARGET": "linux-x64-controlled-v1",
+                        "ANALYSIS_SAMPLES": ",".join(names),
+                }), mock.patch.object(subprocess, "run", side_effect=scan) as invoked,
+                      self.assertRaises(SystemExit) as exit_):
+                    run_script(script)
+                self.assertEqual(exit_.exception.code, int(failed is not None))
+                self.assertEqual(invoked.call_count, 2)
+
     def test_each_scan_requires_the_exact_generated_tree_side_and_target(self):
         jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
         script = next(step["run"] for step in jobs["c-analysis-samples"]["steps"]
@@ -917,7 +948,7 @@ class CiSelectionTests(unittest.TestCase):
             with self.subTest(side=side, status=status, code=code, trace=trace), \
                     tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
-                results = "c-analysis-baseline" if side == "baseline" else "c-analysis-results"
+                results = "analysis-output/standard-ecu"
                 inputs = "c-analysis-base-samples" if side == "baseline" else "c-analysis-samples"
                 output = root / "build" / results / "standard-ecu/summary.json"
                 output.parent.mkdir(parents=True)
