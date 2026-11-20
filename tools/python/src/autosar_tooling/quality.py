@@ -15,6 +15,7 @@ import sys
 import tempfile
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
+from itertools import pairwise
 from pathlib import Path
 
 from ecu_tools.process import ProcessSpec, run_bounded
@@ -58,6 +59,65 @@ GIT_REVERT = re.compile(
     r'^Revert "[^\n]+"\n\nThis reverts commit [0-9a-f]{40}'
     r'(?:\.|, reversing\nchanges made to [0-9a-f]{40}\.)(?:\n|$)'
 )
+AGENT_BRANCH_PREFIX = re.compile(
+    r"^(?:t3code|t3-code|claude|codex|cursor|antigravity|copilot|gemini|windsurf)(?=$|[/_.-])",
+    re.IGNORECASE,
+)
+PR_ISSUE_REFERENCE = re.compile(r"(?:Closes|Refs)[ \t]+#[1-9][0-9]*[ \t]*", re.IGNORECASE)
+
+
+def branch_name_errors(branch: str) -> list[str]:
+    if AGENT_BRANCH_PREFIX.match(branch):
+        message = (
+            f"Branch {branch!r} starts with an agent tool name. "
+            "Rename it to describe the change, for example: git branch -m feat/describe-change"
+        )
+        return [message]
+    return []
+
+
+def pull_request_body_errors(body: str) -> list[str]:
+    from markdown_it import MarkdownIt
+
+    tokens = MarkdownIt().enable("table").parse(body)
+    for block, inline in pairwise(tokens):
+        if block.type != "paragraph_open" or block.level != 0:
+            continue
+        # A dedicated plain-text paragraph keeps code, comments and quoted examples out.
+        if any(child.type not in {"text", "softbreak", "hardbreak"} for child in inline.children):
+            continue
+        if any(PR_ISSUE_REFERENCE.fullmatch(line) for line in inline.content.split("\n")):
+            return []
+    message = (
+        "PR body is missing an issue reference. Add a plain-text paragraph with "
+        "'Closes #123' for a completed issue or 'Refs #123' for a partial change. "
+        "Replace 123 with the issue number and save the PR body to rerun CI."
+    )
+    return [message]
+
+
+def contribution_errors() -> list[str]:
+    event_name = os.environ.get("GITHUB_EVENT_NAME")
+    if event_name == "pull_request":
+        try:
+            event_path = Path(os.environ["GITHUB_EVENT_PATH"])
+            pull_request = json.loads(event_path.read_text(encoding="utf-8"))["pull_request"]
+            branch = pull_request["head"]["ref"]
+            body = pull_request["body"]
+        except (KeyError, TypeError, ValueError) as error:
+            raise RuntimeError(f"Invalid GitHub pull_request event payload: {error}") from error
+        if not isinstance(branch, str) or not branch or (body is not None and not isinstance(body, str)):
+            raise RuntimeError("Invalid head.ref or body in the GitHub pull_request event payload")
+        return branch_name_errors(branch) + pull_request_body_errors(body or "")
+    if event_name is not None:
+        return []
+
+    head = run(["git", "symbolic-ref", "--quiet", "HEAD"])
+    if head.returncode == 1:  # Detached HEAD has no local branch name.
+        return []
+    if head.returncode:
+        raise RuntimeError(head.stderr.strip())
+    return branch_name_errors(head.stdout.strip().removeprefix("refs/heads/"))
 
 
 def commit_message_errors(message: str, identity: str, *, merge: bool = False) -> list[str]:
@@ -614,7 +674,8 @@ def check(
     base: str, *, all_format: bool = False, scope: str = "all", c_samples: Path | None = None,
     commit_head: str = "HEAD",
 ) -> list[str]:
-    errors = commit_range_errors(base, commit_head)
+    errors = contribution_errors()
+    errors.extend(commit_range_errors(base, commit_head))
     untracked = set(source_paths(untracked_only=True))
     renamed = {} if all_format else renamed_sources(base)
     changed_c = False
