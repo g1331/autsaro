@@ -46,8 +46,8 @@ R11.4只限Os_ArtiAlarmBaseReturn的native_address初始化。GetAlarmBase的真
 {
   "id": "generated-retention-547-r59",
   "evidence": {
-    "head": "5bb0a49df3f622621c6b25366de1d2babd800072",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44625907914/attempts/1"
+    "head": "3ea235ddc0819aa9a9db6b0ba2ac452b6c4fdffa",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44647976436/attempts/1"
   },
   "cases": [
     {

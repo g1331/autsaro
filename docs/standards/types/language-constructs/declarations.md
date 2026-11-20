@@ -39,49 +39,26 @@ SDK 原头保持供应方责任，自有调用及已登记宏沿 sdk-integration
 | R8.13 | Advisory | 指针所指对象的可修改性 | not_assessed | 主文73–74 同时约束指针和数组元素；写入或复制到可写指针的允许条件按实际值流核定。#443 的 #547 从 Det／Dcm／Can 和 OS 接缝的全部指针、数组，经别名、赋值、内存复制、callback 和成功／失败输出追到最终写方或可修改接口；标准 ABI 和 SDK 输出保持，局部 constPointer 零报告未替代系统证明。 |
 | R8.14 | Required | 原声明及实际宏展开的 restrict | satisfied | 主文 75，AMD2.27 追加 C11；同号入口只查 raw restrict。物理自有文件及实际全部展开另查 restrict／__restrict／__restrict__、宏及 typedef，无项目或 patch 限定用途；Os_LinuxNative.c 的 memcpy 和 pthread／SDK 声明接缝保持原头，ISO 库内部按 §6.7，非 ISO 原头沿采用责任。未以别名安全或包装创造规则例外。 |
 | R9.1 | Mandatory | 双目标四 profile 的 C99 自动对象及逐成员／元素 | satisfied | [首次读取核查](#r91-首次读取核查)覆盖 Dcm 取消与重入、OS 部分输出、BSW 传输和实际生成消费者。Windows 整体复制已修；主文75–76 与 AMD4.56–57 适用边界见下。 |
-| R9.2 | Required | aggregate／union 初始值的层级 | not_assessed | 主文77–78 的 {0}、字符串、兼容结构表达式及指定子对象例外，AMD4.58 的 R9.6 交叉引用已合成。已定位208种去重 initializer-list 及3种 compound literal，含 Os_ErrorParametersType union、Ecu_OsConfig 与 Can payload；完整 typedef 数组／aggregate 的类型化子对象映射未齐。#443 的 #547 逐对象连接类型、层级与直接消费者后结算。 |
-| R9.3 | Required | 数组的显式元素初始化与例外 | not_assessed | 主文78–79；{0}、全指定及字符串例外分别核查。Can payload[8] 八项、CanIf errors[2] 两项、increments 的 {0} 和 priorities[30u] 已有局部映射；全部数组／数组子对象的容量—元素集合尚未齐。#443 的 #547 补齐当前生成、应用和 patch 的类型化容量及消费者，普通尾部隐式填零未作为通用例外。 |
+| R9.2 | Required | aggregate／union 初始值的层级 | satisfied | 主文 77–78、AMD4.58；[类型化初始化核查](#r92r93-类型化初始化核查)覆盖嵌套结构、union、typedef 数组及 compound literal，逐项核对四类例外。 |
+| R9.3 | Required | 数组的显式元素初始化与例外 | satisfied | 主文 78–79；[类型化初始化核查](#r92r93-类型化初始化核查)覆盖容量—元素映射及 {0}、全指定和字符串例外。 |
 | R9.4 | Required | 每个子对象的重复初始化 | satisfied | 主文 79–80＋AMD2.49／AMD4.47–50；固定 misra_9 的 904／numInits 模型之外，逐个检查当前展开指定体及子列表。Os_Config 的 tasks／counters 各结构、hooks／time_config／Ecu_OsConfig、Os_ErrorParametersType 的单个 union 成员、Linux timespec／pollfd／process_handle 均无同一子对象重复指定，也无指定回退后的位置覆盖；priorities 仅 [30u]=1u。其余全位置／零初值各消费一次，无 patch 新增重复目标。 |
 | R9.5 | Required | 有 designated initializer 数组的显式大小 | satisfied | 主文 80–81＋AMD2.50 仅移除固定节号；固定 misra_9 的 905 模型另核实际指定目标。唯一数组元素 designator 为 interrupts.priorities[OS_INPUT_INTERRUPT]，实际 [30u]，Os_IsrConfigType.priorities[OS_INTERRUPT_VECTOR_COUNT] 显式容量 32；Backend 中断优先级直接消费。tasks[]／counters[] 的 designator 位于各结构元素内部，数组本身用位置式列表；无其他项目／patch 数组元素指定或 flexible-array 初始化。 |
 <!-- misra-checker-obligations-end -->
 
 ## 第八批的当前结算
 
-调查基线为 master `47d14ed0`，早期材料取
-[run 43978366447](https://github.com/g1331/autsaro/actions/runs/43978366447)。其 `cf8ddc4f`
-已含 #538 Windows 栈修复；后续 #545 原生探针和 #546 CanTp 运算前类型扩展均回到
-当前源码核对。#550 只改 Python 缓存夹具，已同步。
+早期调查基线为 master `47d14ed0` 和 [run 43978366447](https://github.com/g1331/autsaro/actions/runs/43978366447)。
+[PR #552](https://github.com/g1331/autsaro/pull/552) 的实际检出 `ddd59c52` 与
+扫描 head `22aebb40` 同树，[run 44029684376](https://github.com/g1331/autsaro/actions/runs/44029684376)
+覆盖双目标四 profile 的 888 个 TU 实例、452 份 GCC 展开。按 GCC 行标记回查物理
+owner，分别统计声明、定义、引用及来源。878 种定义的 975 个命名形参均有引用。
+235／239 种整数拼写及 Windows 24 次 INFINITE 按各自类型和 SDK 处置核对。
 
-本批当前重评取 [PR #552 run 44029684376](https://github.com/g1331/autsaro/actions/runs/44029684376)
-的双目标四 profile 完整输入：888 个 C99 TU 实例、452 份实际 GCC origins。实际检出
-`ddd59c52` 的父提交为 `0f8cd603` 和扫描 head `22aebb40`，tree 与该 PR head 相同；
-逐份核对 seal、最终 kernel、92 个 producer、解析器与评估正文后重算身份。
-878 种函数定义的975个命名形参均有引用；235／239种整数拼写及条件传递闭包重核，
-无额外自有缺 U，Windows 24 次 INFINITE 仍沿已批准 SDK 处置。最终 head 的同输入
-gate、物理行对应与独立复核归本批 PR。
-
-物理扫描先拼接续行、逐字符保留原行号，去注释保留换行，并用块注释＋续行的组合
-反例验证；展开按 GCC 行标记回查原文件和原行，范围内无语法 ERROR。声明、定义、
-typedef、tag、enum、成员和参数分别收齐；R8.4 保留 TU 中的先后次序，R8.5 按物理
-owner 合并重复包含，R8.6 按两个独立程序核算。SDK／采用声明也参与类型和链接
-接缝核对，其原件责任仍沿 ADR 0025；项目 patch 只计 patchedLines。
-
-已修36个重用名：35个私有定义加所属模块前缀；栈记录成员改为 committed_bytes，
-两个 provider 同步。应用输入快照与逻辑模式计划保持；SchM 在存储渲染处生成私有
-前缀，RTE 存储描述同步，ECU 配置改在实际 producer；公开形参名字保持。
-原对象类型、容量、存储期、状态所有权、锁和控制流保持。Os_Closing／ARTI 指针
-声明统一类型名字；tick hook 复用 FreeRTOS 头；Windows 栈回调只由所选 provider
-头发布。此处不变更公开 C 类型、布局或链接符号。
-第八批留下的 8 个 R5.9 私有名由 #547 改了 7 个。OS 激活队列的名字和恢复条件见
-[逐实例记录](lexical.md#r59-私有对象改名)。
-#551 提供的等价证明用于判定新增，严格比较继续记录旧诊断位置。
-
-本批25条结算7条 satisfied：R2.7、R5.8、R7.2、R7.4、R8.4、R8.5、R8.6；
-18条转 [#547](https://github.com/g1331/autsaro/issues/547)，逐条原因及恢复条件见表。
-完整144条为85 satisfied、3 not_applicable、56 not_assessed。R8.9 的 driver 真实
-违反按[编排者批准的有界处置](../storage.md#生成-can-配置的有界处置)保留，其余未齐
-责任继续阻塞。原始 passed／error、退出码、诊断、221项 assessment 和 completeCompliance
-保持原义；完整验证、严格比较的逐行对应及独立复核归本批 PR。
+本批 25 项中 7 项满足，18 项移交 [#547](https://github.com/g1331/autsaro/issues/547)。
+#552 改 36 个重用名并统一 Os_Closing／ARTI 声明，保持对象类型、存储期、段及外部 ABI。
+其中生成名称由原 emitter 修复。R8.9 driver 真实违反由[批准的有界处置](../storage.md#生成-can-配置的有界处置)覆盖。
+后续 #547 又改 7 个名称，[剩余 R5.9 证据](lexical.md#r59-私有对象改名)保留实际范围。
+原始诊断与严格比较保留。
 
 ## R9.1 首次读取核查
 
@@ -120,6 +97,34 @@ AMD4.56–57 将 `_Atomic` 交 R9.7；其余修订未改变这里的 C99 义务�
   记录、票据和长度；文本及平台读取缓冲只消费写入的前缀。SDK 内部与采用原行
   沿 ADR 0025，主机路径核查沿 ADR 0030 记录。
 
+## R9.2／R9.3 类型化初始化核查
+
+主文印刷 77–79／PDF 85–87、AMD2.27 与 AMD4.58 按 C99 合成。初值按实际
+子对象类型判定。R9.2 检查显式初始化的 aggregate／union 层级，逐项核对
+`{0}`、字符串、自动结构／union 的兼容类型表达式及部分指定子对象例外。
+R9.3 对数组的部分显式初始化只接受 `{0}`、全指定初始化或字符串。
+
+[双平台取证](https://github.com/g1331/autsaro/actions/runs/44625907914/attempts/1)
+覆盖 452 份 GCC 展开、888 个 HostBatch／probe TU 实例。Clang 按 GCC 行标记同时
+核对显式括号和类型化子对象，数组容量由展开后的类型取得，含 typedef 和函数指针数组。
+Linux 228 份完整解析。Windows 224 份中有 120 份在 GCC SDK 的 intrinsic
+实现中触发 Clang 恢复，项目文件没有解析错误或损坏的初始化节点。按物理位置、
+类型和展开形式去重，记录 210 项，其中 38 个数组列表显式覆盖全部元素。
+补丁归属取 `patchedLines`，SDK、采用原行及主机实现沿 ADR 0025／0030。固定
+Cppcheck 的两条原始诊断均为零。单独置于调用实参中的 compound literal，省略
+typedef 数组的内层括号或只初始化其三项中的两项，固定 addon 均漏报。等价的变量
+声明分别触发 R9.2 与 R9.3。类型化核查检出两个实参反例。
+
+- `Os_ErrorParametersType` 按服务选择同一 union 成员，成员结构有内层括号，
+  由错误记录传给 ErrorHook。三处 compound literal 分别清空错误上下文、建立
+  计数器工作栈的根项和子项。ARTI 的兼容结构表达式交给自动对象。
+- `Ecu_OsConfig` 的任务、计数器及告警数组由 OS 启动和计时服务消费，位置列表
+  与推导容量一致。`priorities[32]` 通过 `[30u] = 1u` 指定输入中断，全部采用
+  指定式。`task_name` 使用字符串并随任务配置交付。
+- `Os_TimeValidate` 的 `increments[8][8]` 整体 `{0}`，内层省括号与隐式填零
+  同时满足两条例外。`Os_InterruptVectorTable[32]` 和调度访问数组也以 `{0}`
+  初始化。Can payload 八项与 CanIf errors 两项按各自数组容量逐元素初始化。
+
 ## 当前输入重评
 
 第二批的 run 43411175434／实际测试合并树73caf622，以及第七批的
@@ -136,49 +141,49 @@ GCC／Cppcheck 输入。Windows 以实际检出的换行重算，原始 summary 
 {
   "id": "checker-obligations-547-r59",
   "evidence": {
-    "head": "5bb0a49df3f622621c6b25366de1d2babd800072",
-    "receipt": "https://github.com/g1331/autsaro/actions/runs/44625907914/attempts/1"
+    "head": "3ea235ddc0819aa9a9db6b0ba2ac452b6c4fdffa",
+    "receipt": "https://github.com/g1331/autsaro/actions/runs/44647976436/attempts/1"
   },
   "cases": [
     {
       "caseId": "component-pipeline",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "105ecf679379b4216b032588f82057a7ec8136a2a92646187d1abb7fcc1c7993"
+      "inputIdentity": "575023ce0cc9183a91eb0cb923d6ff8cbc284e428036536402a772ee9a0cdbef"
     },
     {
       "caseId": "no-diagnostic",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "c74db500abbbffb0c331954c23625ea3179d053a1b9d5c397e47a6acded0db59"
+      "inputIdentity": "84f498c212b94ac0d99ee85c022bf71938af20b8d022ef5112412992ac132dc0"
     },
     {
       "caseId": "standard-ecu",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "79b5c857b4d98e4df20d0a057446a59c4dfeb2d95722c170b6da08cd4c43d45e"
+      "inputIdentity": "ccb1097a35d13f3a4c7fbc45cd095d38c9e710d0db17627f330f141d30869f69"
     },
     {
       "caseId": "user-application",
       "target": "linux-x64-controlled-v1",
-      "inputIdentity": "9479f480fbeba5ec0ea54a8dafc648d74206f0e637ba0b718f9b7c96f7546552"
+      "inputIdentity": "439753be359ba9f2e0e23590703f288aac341a27222b9583a7b3c62a00ea6572"
     },
     {
       "caseId": "component-pipeline",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "9182cdfd33aeb8dfa402b4235bb76c05110f317856a0244a5a049937068759b1"
+      "inputIdentity": "46a7b84016aa7c5a41cf2a837e77e48187a2292cb21e967dece661fcbec167de"
     },
     {
       "caseId": "no-diagnostic",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "ecbfe1624ad96c335f54d8375b9083d866207e87f0311aed61e29de4fb9efec4"
+      "inputIdentity": "45a246c3c130ae62b7af4b8a6a23f933b1f06b408490e6b40c31397a84841efe"
     },
     {
       "caseId": "standard-ecu",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "05569ea861ad91d2ef27f1aa011e5ed8d634cb3b291a26097b688bc87b4ef399"
+      "inputIdentity": "3fd93c418a1ac2ad15401f39ac6625209ab7fcf33b175fa97e533a09feb5b344"
     },
     {
       "caseId": "user-application",
       "target": "windows-x64-controlled-v1",
-      "inputIdentity": "1e5959e5987b2a5a205559e8da731ba7a803d63c9d95b7c8ca46f4d253827bd6"
+      "inputIdentity": "aa5bd9618c7414e3af5c9a8c94ea7b80082625d45404c9c4b5e9bddd11e6a0d8"
     }
   ],
   "records": {
