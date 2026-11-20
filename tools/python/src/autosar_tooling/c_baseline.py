@@ -26,9 +26,12 @@ from ecu_tools.build import (
 from ecu_tools.process import ProcessResult, ProcessSpec, run_bounded
 
 from autosar_tooling import c_acceptance, c_check, c_comparison, c_gate, c_rename
+from autosar_tooling.c_baseline_jobs import previous_wrapper, producer_matches
 from autosar_tooling.config import ROOT
 
 FORMAT = "c-analysis-raw-baseline-v1"
+JOB_SELECTOR = "tools/python/src/autosar_tooling/c_baseline_jobs.py"
+WRAPPER = "tools/python/src/autosar_tooling/c_baseline.py"
 INPUTS = ("tools/python/src", "core/tests", "core/resources", "Cargo.toml", "Cargo.lock",
           "pyproject.toml", "uv.lock", ".python-version",
           "core/Cargo.toml", "src-tauri/Cargo.toml", "rust-toolchain.toml", ".cargo",
@@ -80,11 +83,16 @@ def compiler_identity(compiler: Path) -> dict:
 
 
 def identity(project: Path, tree: str, target: str, sample: str, tool: dict,
-             compiler: dict, sdk: str) -> dict:
+             compiler: dict, sdk: str, *, previous: str | None = None) -> dict:
     """Bind the generated tree and every PR-controlled analysis/sample input."""
     plan = read(project / "meta/integration.json")["plan"]
     paths = git("ls-files", "-z", "--", *INPUTS).split("\0")
-    inputs = {name: digest(ROOT / name) for name in sorted(paths) if name}
+    # Job labels select a protected artifact. The scan and validation driver
+    # itself still participates in the byte-for-byte input identity.
+    inputs = {name: digest(ROOT / name) for name in sorted(paths)
+              if name and name != JOB_SELECTOR}
+    if previous is not None:
+        inputs[WRAPPER] = previous
     encoded = json.dumps(inputs, sort_keys=True, separators=(",", ":")).encode()
     return {
         "tree": tree, "target": target, "sample": sample,
@@ -183,16 +191,8 @@ def download(repository: str, tree: str, target: str, sample: str,
         artifact = found[0]
         if not re.fullmatch(r"sha256:[0-9a-f]{64}", artifact.get("digest") or ""):
             continue
-        windows = target.startswith("windows")
-        job = "c-analysis-samples" + ("-windows" if windows else "")
-        system = "windows-2025-vs2026" if windows else "ubuntu-24.04"
-        legacy = f"{job} ({system}, {target}, {sample}, {sample})"
-        paired = {f"{job} ({target}, {first} + {second})" for first, second in
-                  (("standard-ecu", "user-application"), ("component-pipeline", "no-diagnostic"))
-                  if sample in (first, second)}
         jobs = pages(repository, f"actions/runs/{run['id']}/jobs", "jobs")
-        producers = [row for row in jobs if row["name"] in paired or row["name"] == legacy or
-                     row["name"].endswith("...") and legacy.startswith(row["name"][:-3])]
+        producers = [row for row in jobs if producer_matches(row["name"], target, sample)]
         if len(producers) != 1 or producers[0]["conclusion"] != "success":
             continue
         result = gh(["api", f"repos/{repository}/actions/artifacts/{artifact['id']}/zip"],
@@ -223,8 +223,20 @@ def restore(candidate: Path, project: Path, output: Path, tree: str,
         expected = identity(project, tree, target, sample, tool[2],
                             compiler_identity(Path(compiler)),
                             summary["semanticIdentity"]["sdk"])
-        if manifest["identity"] != expected:
-            raise ValueError("Cached baseline input identity differs")
+        recorded = manifest["identity"]
+        if not isinstance(recorded, dict):
+            raise TypeError("Cached baseline input identity is not an object")
+        fields = sorted(key for key in recorded.keys() | expected.keys()
+                        if key not in recorded or key not in expected or recorded[key] != expected[key])
+        if fields == ["inputs"]:
+            previous = previous_wrapper(digest(ROOT / WRAPPER))
+            if previous is not None:
+                legacy = identity(project, tree, target, sample, tool[2], expected["compiler"],
+                                  expected["sdk"], previous=previous)
+                if recorded == legacy:
+                    fields.clear()
+        if fields:
+            raise ValueError("Cached baseline input identity differs: " + ", ".join(fields))
         if summary["tool"]["binarySha256"] != tool[2]["binarySha256"]:
             raise ValueError("Cached analyzer binary differs")
         if summary["coverage"] != c_check.coverage(tool[1]):
@@ -275,7 +287,9 @@ def analyze(side: str, target: str, sample: str, project: Path, output: Path) ->
             # these bindings. Collect them during the normal baseline scan.
             reason = "identifier_candidates_require_evidence"
         elif repository:
-            with tempfile.TemporaryDirectory(prefix="c-baseline-raw-") as temporary:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            # MinGW resolves rooted include paths on the working directory's drive.
+            with tempfile.TemporaryDirectory(prefix="c-baseline-raw-", dir=output.parent) as temporary:
                 directory = Path(temporary)
                 try:
                     cached = download(repository, tree, target, sample, directory)
