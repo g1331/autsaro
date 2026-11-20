@@ -67,6 +67,23 @@ refusal保持；分析驱动或patch链变化仍按原比较器身份拒绝旧�
 [ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md) 分类，
 其原始诊断继续输出。0025 回退后，配置关闭的接口可在头中声明，交付内核仍没有对应定义。
 
+### R2.4 内核 tag
+
+双目标四 profile 的 HostBatch 和 probe 中，`QueueDefinition` 与 `tskTaskControlBlock`
+分别由句柄和静态对象 typedef 引用。0015 引入的 `QueuePointers` 与 `SemaphoreData`
+只在各自定义出现，`QueueDefinition.u` 的字段通过两个 typedef 取得实际类型。
+候选补丁只删 tag。Linux standard-ecu 的 C99 对照保留各成员、typedef 和静态对象布局，
+直接使用这两个完整 `struct` 名的交付头客户端须改用 typedef。该样本的实扫工件复放还
+发现 60 个既有处置的程序级诊断指纹随之变化。当前保留两处真实 Advisory 违反。
+优先验证分开定义 struct 与 typedef 的方案，保留交付源码接口，并用双目标实际前后扫描
+核对受影响的绑定，涵盖两种已登记 Windows 分析器。R2.4 保持 `not_assessed`。
+
+采用原件只报告。实际定义中未见独立引用的 tag 为 `xSTATIC_LIST`、`HeapRegion`、
+`xHeapStats`、`xTIME_OUT`、`xMEMORY_REGION`、`xTASK_STATUS` 和
+`xTASK_STATUS_ARRAY_WRITER_CONTEXT`。原始 R2.4 报告的四个位置分别是
+`StaticEventGroup_t`、`StaticStreamBuffer_t`、`TaskParameters_t` 和
+`eSleepModeStatus` 的匿名类型，报告位置归采用原行。
+
 ## 补丁诊断的具体处置
 
 Windows 的 `0027-port-diagnostic-types.patch` 和 Linux 的 `0003-port-diagnostic-types.patch` 位于各自端口链末尾。Windows等待返回值按DWORD比较，等待成功零下标用0U；

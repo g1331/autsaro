@@ -43,7 +43,7 @@ AMD2.47–49 和 TC2.7–8 的可变实参例外。其余修订未改变本表�
 | R2.1 | Required | 各程序的可达路径 | not_assessed | 主文39–41 排除预处理删除的代码。当前四 profile 两程序的 TU、定义和配置入口已定位，Dcm 收发、Bootstrap／SchM、OS 回调及 defensive 分支的完整可达证明未齐。#443 的 #547 逐入口结算活动代码的可达性，或整改／处置具体不可达语句。 |
 | R2.2 | Required | 可观察输出和持久状态的生产路径 | not_assessed | 主文41–42、TC1 初始化说明、TC2.3–4 的已用转换／void 例外及 AMD4.37。ARTI 发布、持久写入、空调用及表达式仍缺逐操作的输出／时序影响证明。#443 的 #547 连接实际读方和可观察效果，删除真实死操作或完成必要处置；不按 token 出现次数判定行为影响。 |
 | R2.3 | Advisory | 全程序 typedef 定义与使用 | not_assessed | 主文43；实际范围内原报告有28个物理位置，含标准公共类型、生成模式及 BswM 声明。既有公共类型15项与 generated-retention 只处理各自实体；#443 的 #547 接续完整 typedef 定义／使用／固定发布合同结算，标准保留仍保留真实 unused 及正式义务。 |
-| R2.4 | Advisory | 全程序 tag 定义与实际引用 | not_assessed | 主文43 的 tag 与 typedef 分开；LSduR／PduR 两处报告落在匿名 enum，为有界误报。0015 项目 patch 引入的 QueuePointers／SemaphoreData tag 未见独立引用，保留真实 Advisory 违反；CDS、Os_NativeStackType、QueueDefinition／tskTaskControlBlock 的实际 tag 引用另核。#503 保留 0015 的静态对象布局，两个 tag 仍在项目范围，#443 的 #547 继续补齐全体 tag。 |
+| R2.4 | Advisory | 双目标四 profile 的两个程序 | not_assessed | LSduR／PduR 匿名枚举误报按指纹处置。QueuePointers／SemaphoreData 是 0015 项目补丁中的真实未用 tag，尚待 #443 的 #547 完成安全清理。 |
 | R2.5 | Advisory | define／undef 历史与实际宏使用 | not_assessed | 主文44；TC1 将 undef 计为使用，TC2.5–6 更正为 macro definitions。当前跨组件同名宏有独立 owner，固定 addon 的同名合并及覆盖会遗漏定义实例。#443 的 #547 按每个程序复放 define／undef／实际展开，逐定义连接生成来源、消费者和原保留表；替换表含名字本身未当作实际使用。 |
 | R2.6 | Advisory | 函数内 label 与实际跳转 | satisfied | 主文 44 的对象是函数内标签。固定核心 CheckOtherImpl::checkUnusedLabel 跳过 expanded macro，故另检查全部当前原 token 和项目使用点实际展开：没有函数 label／goto；Dcm.c、Os_Backend.c、Os_Arti.c 等的 default 属 switch。项目补丁也无标签；当前双程序不存在需补跳转消费者的标签实体。 |
 | R2.7 | Advisory | 函数定义的形参与调用契约 | satisfied | 主文44–45，AMD4.38 更正标题；逐个检查878种去重的范围内函数定义展开、975个具名形参，函数体普通 identifier 均有真实引用，无未引用形参；成员名字单列。Ecu_OsHooks／Det_Callouts 的固定 callback 用显式 void 转换消费值，其他形参连接实际计算、输出或下层调用；编译器 -Wextra/-Werror 和实际调用验证保留，函数指针类型的形参不冒充函数定义。 |
@@ -126,6 +126,16 @@ Clang 18.1.3 对这 16 份 GCC 展开逐 TU 以 C99 成功检查语法，保留 
 Os_Backend.c:956 的 `Os_TargetTestPending` 只在 `OS_ACTIVATION_TESTS` 开启时编译。
 当前两目标的 HostBatch 和 probe 都未开启该开关，改名证明缺少此处的 GCC 展开与
 Cppcheck 绑定。保留 `activations`，待两侧证据覆盖该测试分支并通过现有证明后继续改名。
+
+## R2.4 枚举误报与 tag 引用
+
+主文印刷 43／PDF 51 将 tag 与 typedef 名分开。AMD2 增列 C11，当前按 C99 判定。
+固定 addon 的 `MisraTagName` 用 Cppcheck scope 的 `className` 和左花括号位置建表。
+在 `LSduR.h:14:14`（`LSduR_StateType`）和 `PduR.h:30:14`（`PduR_StateType`），
+实际声明均以 `typedef enum {` 开始，因此没有 tag 声明。该误报与类型别名的 R2.3
+记录分别裁决。验收按封存原件、诊断位置、程序实际头文件依赖和逐程序指纹归档，保留原报告。
+双目标四 profile 的 RTE CDS tag 均由独立 typedef 引用。`Os_NativeStackType` 由
+`Os_ArtiTaskStacks` 的声明和定义直接引用。队列及内核原件见[采用篇](../../os/adoption.md#r24-内核-tag)。
 
 ## R7.1 当前条件控制证据
 
