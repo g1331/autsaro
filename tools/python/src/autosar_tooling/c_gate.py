@@ -219,8 +219,56 @@ def load_scope_matrix(directory: Path, side: str) -> dict:
     return c_comparison.scope_matrix(receipts)
 
 
-def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict) -> dict:
-    """Report the prospective comparison while dispositions still use grouped approvals."""
+def validate_analysis_identity(manifest: dict, summary: dict, tree: str, target: str, sample: str) -> None:
+    from autosar_tooling.c_baseline import FORMAT as RAW_FORMAT
+
+    identity = manifest["identity"]
+    if (manifest["format"] != RAW_FORMAT
+            or (identity["tree"], identity["target"], identity["sample"]) != (tree, target, sample)
+            or identity["sourceSeal"] != summary["sourceSealSha256"]
+            or identity["sdk"] != summary["semanticIdentity"]["sdk"]
+            or identity["analyzer"] != {key: summary["tool"][key] for key in (
+                "version", "expectedSourceRevision", "binarySha256", "addons",
+            )}
+            or set(identity["compiler"]) != {"driver", "backend"}
+            or set(identity["runner"]) != {"ImageOS", "ImageVersion"}
+            or any(not value for value in identity["runner"].values())
+            or set(identity["configuration"]) != {"target", "sources"}
+            or not identity["configuration"]["sources"] or not identity["generator"] or not identity["rules"]
+            or not identity["python"]["implementation"] or not identity["python"]["version"]
+            or any(not c_fingerprint.SHA256.fullmatch(value) for value in (
+                identity["sourceSeal"], identity["inputs"], identity["analyzer"]["binarySha256"],
+                *identity["compiler"].values(), identity["python"]["binary"],
+                identity["configuration"]["target"], manifest["fingerprintSha256"],
+                manifest["summarySha256"],
+            ))):
+        raise ValueError(f"Raw analysis identity incomplete or differs: {target}/{sample}/{tree}")
+
+
+def validate_consumed_inputs(manifest: dict, project: Path, producer_digest: str) -> None:
+    from autosar_tooling.c_baseline import (
+        analysis_inputs_identity,
+        sealed_project_identity,
+    )
+
+    expected = {**sealed_project_identity(project), "inputs": analysis_inputs_identity()}
+    for field, actual in expected.items():
+        if manifest["identity"][field] != actual:
+            raise ValueError(f"Transferred analysis manifest differs from actual inputs: {field}")
+    if c_fingerprint.sha(manifest) != producer_digest:
+        raise ValueError("Transferred analysis manifest differs from producer receipt")
+
+
+def producer_receipt(directory: Path, side: str, target: str, sample: str) -> str:
+    receipts = list(directory.glob(f"c-analysis-scope-{side}-{target}-{sample}-*/{sample}/analysis-producer.sha256"))
+    if len(receipts) != 1:
+        raise ValueError(f"Missing or duplicated analysis producer receipt: {side}/{target}/{sample}")
+    return receipts[0].read_text(encoding="ascii").strip()
+
+
+def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict, *,
+                           mode: str | None = None) -> dict:
+    """Compare per-program fingerprints within both complete scope matrices."""
     inside = {}
     for side, summary in summaries.items():
         headers = c_comparison.matrix_headers(summary, matrices[side])
@@ -231,6 +279,15 @@ def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict) -
                                                headers=headers) == "in-scope")
         ]
     current = summaries["current"]
+    if mode is not None:
+        dispositions = current["projectAcceptance"]["fingerprintDispositions"]
+        approved = set(dispositions["accepted"])
+        comparison = c_fingerprint.verdict(inside["current"], inside["baseline"], approved)
+        comparison["staleDispositions"] = dispositions["stale"]
+        if comparison["status"] == "passed" and dispositions["stale"]:
+            comparison["status"] = "blocked"
+        return {"format": c_fingerprint.FORMAT, "mode": mode, **comparison,
+                "current": inventories["current"], "baseline": inventories["baseline"]}
     accepted = {(row["diagnostic"], row["locationIndex"])
                 for row in current["projectAcceptance"]["occurrences"]
                 if row["assessment"] == "accepted"}
@@ -250,13 +307,14 @@ def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict) -
 
 
 def scan(target: str, sample: str, scope_directory: Path | None = None, *,
-         fingerprints: bool = False) -> None:
+         fingerprints: bool = False, mode: str | None = None) -> None:
+    fingerprints = fingerprints or mode is not None
     if fingerprints and scope_directory is None:
         raise ValueError("Fingerprint comparison requires the complete scope matrix")
     outputs = {}
     evidence = {}
     evidence_errors = []
-    inventories = {}
+    inventories, manifests, producer_digests = {}, {}, {}
     parent = git("rev-parse", "HEAD^1")
     # Same-run c-check producers already validate actual target semantics before
     # and after scanning. Rebind transferred source bytes to those fresh inputs.
@@ -276,11 +334,20 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
         if fingerprints:
             manifest = read(output / "analysis-identity.json")
             inventories[side] = c_fingerprint.read_receipt(output, summary, manifest["fingerprintSha256"])
+            if mode is not None:
+                if manifest["summarySha256"] != sha(output / "summary.json"):
+                    raise ValueError(f"Raw analysis manifest differs from {side} scan: {sample}")
+                validate_analysis_identity(manifest, summary, parent if side == "baseline"
+                                           else git("rev-parse", "HEAD"), target, sample)
+                producer_digests[side] = producer_receipt(scope_directory, side, target, sample)
+                validate_consumed_inputs(manifest, output / "project", producer_digests[side])
+                manifests[side] = manifest
         outputs[side] = output
-        try:
-            evidence[side] = c_rename.evidence(output, sha(output / "summary.json"))
-        except c_rename.EvidenceError as error:
-            evidence_errors.append(f"{side}: {error}")
+        if mode is None:
+            try:
+                evidence[side] = c_rename.evidence(output, sha(output / "summary.json"))
+            except c_rename.EvidenceError as error:
+                evidence_errors.append(f"{side}: {error}")
     current, baseline = outputs["current"], outputs["baseline"]
     source = baseline_source(read(baseline / "baseline-source.json"), parent)
     matrices = {}
@@ -291,20 +358,39 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
         summary = read(current / "summary.json")
         c_comparison.annotate_scope(summary, set(matrices["current"]["targetHeaders"]))
         summary["projectAcceptance"] = c_acceptance.evaluate(
-            summary, current / "project", matrix_scope=matrices["current"])
+            summary, current / "project", matrix_scope=matrices["current"],
+            **({"fingerprints": inventories["current"], "sample": sample} if mode is not None else {}))
         (current / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     shutil.copy2(baseline / "summary.json", current / "baseline-summary.json")
-    result = verdict(read(current / "summary.json"), current, baseline,
-                     rename_paths(baseline / "project", current / "project"),
-                     identifier_evidence=evidence,
-                     identifier_evidence_error=" / ".join(evidence_errors) or None,
-                     **({"baseline_matrix": matrices["baseline"]} if matrices else {}))
+    summaries = {side: read(path / "summary.json") for side, path in outputs.items()}
+    renames = rename_paths(baseline / "project", current / "project")
+    if mode is None:
+        result = verdict(summaries["current"], current, baseline, renames, identifier_evidence=evidence,
+                         identifier_evidence_error=" / ".join(evidence_errors) or None,
+                         **({"baseline_matrix": matrices["baseline"]} if matrices else {}))
+    else:
+        summary = summaries["current"]
+        if summary["projectAcceptance"]["status"] not in {"accepted", "blocked"}:
+            raise ValueError(f"Project acceptance execution failed: {summary['projectAcceptance']['objects']}")
+        if any(manifests["baseline"]["identity"][key] != manifests["current"]["identity"][key]
+               for key in ("analyzer", "compiler")):
+            raise ValueError("Two-tree scans require the same analyzer and compiler identities")
+        comparison = c_comparison.compare(
+            summary, current / "project", current, baseline, source_tree=True, renames=renames,
+        )
+        result = {"comparison": comparison, "complianceScope": summary["complianceScope"],
+                  "projectAcceptance": summary["projectAcceptance"]["status"]}
+        if mode == "strict":
+            result["analysisInputs"] = manifests
+            result["analysisProducerSha256"] = producer_digests
     if matrices:
         result["baselineScopeMatrix"] = matrices["baseline"]
     if fingerprints:
         result["diagnosticFingerprints"] = fingerprint_comparison(
-            {side: read(path / "summary.json") for side, path in outputs.items()}, inventories, matrices,
+            summaries, inventories, matrices, mode=mode,
         )
+        if mode is not None:
+            result["status"] = result["diagnosticFingerprints"]["status"]
     result.update(format=FORMAT, target=target, sample=sample,
                   baselineSource=source,
                   commit=git("rev-parse", "HEAD"), baseline=git("rev-parse", "HEAD^1"),
@@ -316,14 +402,15 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
     print(json.dumps({key: value for key, value in result.items() if key != "diagnosticFingerprints"},
                      indent=2))
     if fingerprints:
-        preview = result["diagnosticFingerprints"]
-        print(f"Fingerprint preview: {preview['status']}; {len(preview['new'])} new; "
-              f"{len(preview['removed'])} removed; {preview['unavailable']} unavailable")
+        comparison = result["diagnosticFingerprints"]
+        print(f"Fingerprint gate: {comparison['status']}; {len(comparison['new'])} new; "
+              f"{len(comparison['removed'])} removed; {comparison['unavailable']} unavailable; "
+              f"{len(comparison.get('staleDispositions', []))} stale")
     if result["status"] != "passed":
         raise ValueError(f"New source diagnostics without current precise disposition: {sample}")
 
 
-def aggregate(directory: Path) -> None:
+def aggregate(directory: Path, mode: str | None = None) -> None:
     expected = {(target, sample) for target in TARGETS for sample in SAMPLES}
     found, identities = set(), set()
     matrix = []
@@ -336,6 +423,13 @@ def aggregate(directory: Path) -> None:
                 or gate["baseline"] != git("rev-parse", "HEAD^1")):
             raise ValueError(f"Source gate identity missing, duplicated or refused: {path}")
         baseline_source(gate["baselineSource"], gate["baseline"])
+        if mode is not None:
+            fingerprints = gate["diagnosticFingerprints"]
+            if fingerprints["mode"] != mode or fingerprints["status"] != "passed":
+                raise ValueError(f"Fingerprint gate mode or decision differs: {path}")
+            if mode == "strict" and set(gate["analysisInputs"]) != {"baseline", "current"}:
+                raise ValueError(f"Strict analysis input identity missing: {path}")
+        summaries = {}
         for side, summary_path in (("current", path.with_name("summary.json")),
                                    ("baseline", path.with_name("baseline-summary.json"))):
             summary = read(summary_path)
@@ -347,18 +441,26 @@ def aggregate(directory: Path) -> None:
                     or gate["summarySha256"][side] != sha(summary_path)
                     or summary["scope"]["target"] != gate["target"]):
                 raise ValueError(f"Source gate analysis identity invalid: {summary_path}")
+            if mode == "strict":
+                manifest = gate["analysisInputs"][side]
+                if c_fingerprint.sha(manifest) != gate["analysisProducerSha256"][side]:
+                    raise ValueError(f"Strict analysis producer receipt differs: {path}")
+                validate_analysis_identity(manifest, summary,
+                                           gate["commit" if side == "current" else "baseline"],
+                                           gate["target"], gate["sample"])
             identities.add((side, gate["target"], identity))
-        matrix.append((gate, read(path.with_name("summary.json"))))
+            summaries[side] = summary
+        matrix.append((gate, summaries))
         found.add(pair)
     if found != expected or len(list(directory.glob("*/*/summary.json"))) != len(expected):
         raise ValueError(f"Source gate matrix incomplete: {sorted(expected - found)}")
     current_matrix = c_comparison.scope_matrix([
-        c_comparison.scope_receipt(summary, gate["sample"]) for gate, summary in matrix])
+        c_comparison.scope_receipt(summaries["current"], gate["sample"]) for gate, summaries in matrix])
     baseline_matrix = c_comparison.scope_matrix([
-        c_comparison.scope_receipt(read(path.with_name("baseline-summary.json")), read(path)["sample"])
-        for path in directory.glob("*/*/gate.json")])
+        c_comparison.scope_receipt(summaries["baseline"], gate["sample"]) for gate, summaries in matrix])
     statistics = []
-    for gate, summary in matrix:
+    for gate, summaries in matrix:
+        summary = summaries["current"]
         acceptance = summary["projectAcceptance"]
         if (acceptance.get("scopeMatrix") != current_matrix
                 or gate.get("baselineScopeMatrix") != baseline_matrix
@@ -381,11 +483,29 @@ def aggregate(directory: Path) -> None:
             if outside != (occurrence["assessment"] == "out_of_scope"):
                 raise ValueError("Project acceptance occurrence differs from matrix scope")
 
+        if mode is not None:
+            comparison = gate["diagnosticFingerprints"]
+            inventories = {side: comparison[side] for side in summaries}
+            for side, value in summaries.items():
+                c_fingerprint.validate_occurrences(value, inventories[side])
+            if comparison != fingerprint_comparison(
+                    summaries, inventories, {"current": current_matrix, "baseline": baseline_matrix}, mode=mode):
+                raise ValueError("Fingerprint gate decision differs from the analyzed positions")
         statistics.append({"target": gate["target"], "sample": gate["sample"], **expected_scope})
     (directory / "compliance-scope.json").write_text(
         json.dumps({"targetHeaders": current_matrix["targetHeaders"], "analyses": statistics}, indent=2) + "\n",
         encoding="utf-8")
 
+
+
+def release_ready() -> None:
+    from autosar_tooling import c_disposition
+
+    for target in TARGETS:
+        binaries = c_disposition.WINDOWS_ANALYZERS.values() if target == c_disposition.WINDOWS else [None]
+        for binary in binaries:
+            for sample in SAMPLES:
+                c_disposition.load(ROOT, target, sample, binary)
 
 
 def main() -> None:
@@ -401,17 +521,22 @@ def main() -> None:
     scanning.add_argument("--sample", choices=SAMPLES, required=True)
     scanning.add_argument("--scope-directory", type=Path, default=ROOT / "build/c-analysis-scope")
     scanning.add_argument("--fingerprints", action="store_true")
+    scanning.add_argument("--mode", choices=("pr", "strict"))
     aggregation = commands.add_parser("aggregate")
     aggregation.add_argument("directory", type=Path)
+    aggregation.add_argument("--mode", choices=("pr", "strict"))
+    commands.add_parser("release-ready")
     args = parser.parse_args()
     if args.command == "prepare":
         prepare(args.baseline, args.output_directory)
     elif args.command == "stage":
         stage(args.baseline)
     elif args.command == "scan":
-        scan(args.target, args.sample, args.scope_directory, fingerprints=args.fingerprints)
+        scan(args.target, args.sample, args.scope_directory, fingerprints=args.fingerprints, mode=args.mode)
+    elif args.command == "aggregate":
+        aggregate(args.directory, args.mode)
     else:
-        aggregate(args.directory)
+        release_ready()
 
 
 if __name__ == "__main__":

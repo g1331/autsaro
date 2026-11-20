@@ -9,6 +9,12 @@ on:
       base:
         description: Incremental check baseline commit
         required: true
+  workflow_call:
+    inputs:
+      release-revision:
+        description: Exact commit selected for packaging
+        type: string
+        required: true
 # Keep the non-required tail from locking another master revision.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && github.run_id || github.event.pull_request.number || github.sha }}
@@ -38,12 +44,14 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          ref: ${{ inputs.release-revision || github.sha }}
       - id: detect
         shell: python
         env:
           PULL_REQUEST: ${{ github.event.pull_request.number }}
           DRAFT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
           BASE: ${{ github.event.before }}
+          RELEASE_REVISION: ${{ inputs.release-revision }}
         run: |
           import os, subprocess
           from autosar_tooling.ci_selection import git_diff_rows, select_changes
@@ -63,7 +71,10 @@ jobs:
                   print(row)
           values = select_changes(rows, pull_request=bool(os.environ['PULL_REQUEST']))
           # Keep every heavy consumer unselected until the PR is ready for review.
-          if os.environ.get('DRAFT') == 'true':
+          if os.environ.get('RELEASE_REVISION'):
+              values = dict.fromkeys(values, False)
+              values['analysis'] = True
+          elif os.environ.get('DRAFT') == 'true':
               values = dict.fromkeys(values, False)
           print(values)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
@@ -624,7 +635,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   quality:
-    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
+    if: inputs.release-revision == '' && (github.event.action != 'labeled' || github.event.label.name == 'full-ci')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -694,6 +705,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+          ref: ${{ inputs.release-revision || github.sha }}
       - name: Identify native build cache inputs
         shell: python
         run: *cargo-source-digest
@@ -747,6 +759,16 @@ jobs:
           shutil.copy2(binaries[0], bundle / binaries[0].name)
           for name in ('addons', 'cfg'):
               shutil.copytree(Path('build/cppcheck-source') / name, bundle / name)
+      - name: Verify Windows analyzer against the assessed image pool
+        if: runner.os == 'Windows'
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          from autosar_tooling.c_disposition import verify_windows_analyzer
+          image = os.environ['ImageVersion']
+          binary = verify_windows_analyzer(Path('build/c-analysis-tools/cppcheck.exe'), image)
+          print(f'Windows prepare image={image}; cppcheck.exe SHA-256={binary}')
       - name: Select analyzer
         shell: python
         run: |
@@ -811,13 +833,13 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
-          ref: ${{ env.ANALYSIS_SIDE == 'baseline' && needs.changes.outputs.source-parent || github.sha }}
+          ref: ${{ env.ANALYSIS_SIDE == 'baseline' && needs.changes.outputs.source-parent || inputs.release-revision || github.sha }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.ANALYSIS_SIDE == 'baseline'
         with:
           persist-credentials: false
           fetch-depth: 2
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.release-revision || github.sha }}
           path: build/c-analysis-current-inputs
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
@@ -1117,6 +1139,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+          ref: ${{ inputs.release-revision || github.sha }}
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - run: uv sync --locked
       - uses: ./.github/actions/native-analysis-compiler
@@ -1315,6 +1338,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+          ref: ${{ inputs.release-revision || github.sha }}
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - run: uv sync --locked
       - uses: ./.github/actions/native-analysis-compiler
@@ -1336,6 +1360,8 @@ jobs:
               output.write('CPPCHECK_ADDON_DIR=' + str(bundle / 'addons') + '\n')
       - name: Analyzer behavior tests
         run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_analysis.py
+      - name: Exercise diagnostic fingerprint invalidation with the pinned analyzer
+        run: python -m autosar_tooling.ci_reporting run -- uv run --locked python -B -m unittest discover -s tests/python -p test_c_fingerprint.py
 
   c-analysis-behavior-windows:
     needs: c-analysis-prepare-windows
@@ -1384,6 +1410,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+          ref: ${{ inputs.release-revision || github.sha }}
       - name: Match target checkout bytes
         if: matrix.target == 'windows-x64-controlled-v1'
         # Acceptance binds raw parser/document/producer bytes, including native CRLF.
@@ -1419,18 +1446,19 @@ jobs:
         env:
           ANALYSIS_TARGET: ${{ matrix.target }}
           ANALYSIS_SAMPLE: ${{ matrix.group }}
+          GATE_MODE: ${{ github.event_name == 'pull_request' && 'pr' || 'strict' }}
         shell: python
         run: |
           import os, subprocess, sys
           sys.exit(subprocess.run([sys.executable, '-m', 'autosar_tooling.c_gate', 'scan',
               '--target', os.environ['ANALYSIS_TARGET'],
               '--sample', os.environ['ANALYSIS_SAMPLE'],
-              '--scope-directory', 'build/c-analysis-scope', '--fingerprints']).returncode)
+              '--scope-directory', 'build/c-analysis-scope', '--mode', os.environ['GATE_MODE']]).returncode)
       - name: Summarize and convert Cppcheck diagnostics
         if: always()
         run: python -m autosar_tooling.ci_reporting sarif --cppcheck-directory build/c-analysis-results --baseline-directory build/c-analysis-baseline --output build/cppcheck.sarif
       - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
-        if: ${{ always() && hashFiles('build/cppcheck.sarif') != '' }}
+        if: ${{ always() && !inputs.release-revision && hashFiles('build/cppcheck.sarif') != '' }}
         with:
           sarif_file: build/cppcheck.sarif
           category: cppcheck-${{ matrix.target }}-${{ matrix.group }}
@@ -1505,6 +1533,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
+          ref: ${{ inputs.release-revision || github.sha }}
       - name: Require every platform and sample group
         shell: python
         env:
@@ -1539,14 +1568,16 @@ jobs:
               found.add(pair)
           if found != expected:
               raise RuntimeError('Expected all eight platform/sample results; missing=' + str(expected - found) + '; extra=' + str(found - expected))
-      - name: Require eight fresh no-regression gate receipts
-        run: python -m autosar_tooling.c_gate aggregate build/c-analysis-summaries
+      - name: Require eight fresh source gate receipts
+        env:
+          GATE_MODE: ${{ github.event_name == 'pull_request' && 'pr' || 'strict' }}
+        run: python -m autosar_tooling.c_gate aggregate build/c-analysis-summaries --mode "$GATE_MODE"
 
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.
     name: ${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && 'Unselected PR label' || 'CI required' }}
     needs: [changes, python, core, desktop, native, native-delivery, native-delivery-windows, quality, c-analysis]
-    if: ${{ always() && (github.event.action != 'labeled' || github.event.label.name == 'full-ci') }}
+    if: ${{ always() && inputs.release-revision == '' && (github.event.action != 'labeled' || github.event.label.name == 'full-ci') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:

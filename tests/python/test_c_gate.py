@@ -20,6 +20,36 @@ from autosar_tooling import c_gate, c_rename
 
 
 class SourceGateTests(unittest.TestCase):
+    def test_consumer_recomputes_input_digests_and_refuses_producer_tampering(self):
+        from autosar_tooling import c_baseline, c_fingerprint
+
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            (project / "meta").mkdir()
+            (project / "target.json").write_text('{"target":"verified"}', encoding="utf-8")
+            (project / c_baseline.FILE_HASHES).write_text("sealed\n", encoding="utf-8")
+            (project / "meta/integration.json").write_text(json.dumps({
+                "plan": {"ruleSetIdentity": {"rules": "original"}, "sources": ["source"],
+                         "runtimeSources": {"core/src/lib.rs": "original"}},
+            }), encoding="utf-8")
+            with patch.object(c_baseline, "analysis_inputs_identity", return_value="a" * 64):
+                identity = {**c_baseline.sealed_project_identity(project), "inputs": "a" * 64,
+                            "runner": {"ImageOS": "verified", "ImageVersion": "original"}}
+                manifest = {"identity": identity}
+                digest = c_fingerprint.sha(manifest)
+                c_gate.validate_consumed_inputs(manifest, project, digest)
+                for name, replacement in (
+                        ("inputs", "b" * 64),
+                        ("configuration", {"target": "b" * 64, "sources": ["other"]}),
+                        ("generator", {"core/src/lib.rs": "b" * 64}),
+                        ("rules", {"rules": "b" * 64})):
+                    with self.subTest(name=name), self.assertRaisesRegex(ValueError, name):
+                        changed = {"identity": {**identity, name: replacement}}
+                        c_gate.validate_consumed_inputs(changed, project, c_fingerprint.sha(changed))
+                changed = {"identity": {**identity, "runner": {"ImageOS": "verified", "ImageVersion": "fake"}}}
+                with self.assertRaisesRegex(ValueError, "producer receipt"):
+                    c_gate.validate_consumed_inputs(changed, project, digest)
+
     def fixture(self, root):
         helper = comparison_tests.CComparisonTests()
         current, _project, output, baseline = helper.fixture(root)
@@ -397,20 +427,21 @@ class SourceGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             script = Path(temporary) / "gate.py"
             script.write_text(step["run"], encoding="utf-8")
-            for code in (0, 1, 2):
-                with self.subTest(code=code), patch.dict(os.environ, {
-                    "ANALYSIS_TARGET": "linux-x64-controlled-v1",
-                    "ANALYSIS_SAMPLE": "standard-ecu",
-                }), patch.object(subprocess, "run", return_value=
-                                 subprocess.CompletedProcess([], code)) as run, \
-                        self.assertRaises(SystemExit) as exit_:
-                    runpy.run_path(str(script))
-                self.assertEqual(exit_.exception.code, code)
-                self.assertEqual(run.call_args.args[0], [
-                    sys.executable, "-m", "autosar_tooling.c_gate", "scan",
-                    "--target", "linux-x64-controlled-v1", "--sample", "standard-ecu",
-                    "--scope-directory", "build/c-analysis-scope", "--fingerprints",
-                ])
+            for mode in ("pr", "strict"):
+                for code in (0, 1, 2):
+                    with self.subTest(mode=mode, code=code), patch.dict(os.environ, {
+                        "ANALYSIS_TARGET": "linux-x64-controlled-v1",
+                        "ANALYSIS_SAMPLE": "standard-ecu", "GATE_MODE": mode,
+                    }), patch.object(subprocess, "run", return_value=
+                                     subprocess.CompletedProcess([], code)) as run, \
+                            self.assertRaises(SystemExit) as exit_:
+                        runpy.run_path(str(script))
+                    self.assertEqual(exit_.exception.code, code)
+                    self.assertEqual(run.call_args.args[0], [
+                        sys.executable, "-m", "autosar_tooling.c_gate", "scan",
+                        "--target", "linux-x64-controlled-v1", "--sample", "standard-ecu",
+                        "--scope-directory", "build/c-analysis-scope", "--mode", mode,
+                    ])
 
     def test_both_scan_sides_share_prepare_and_run_without_cross_dependency(self):
         import yaml

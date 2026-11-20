@@ -20,7 +20,7 @@ from ecu_tools.build import (
     safe_relative,
 )
 
-from autosar_tooling import c_comparison, c_retention, c_sdk, c_standard
+from autosar_tooling import c_comparison, c_disposition, c_retention, c_sdk, c_standard
 from autosar_tooling.config import ROOT
 
 BEGIN = "<!-- source-assessment-context-begin -->"
@@ -30,6 +30,8 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 INCOMPLETE = {"misra-config", "syntaxError", "preprocessorErrorDirective", "internalError",
               "cppcheckError", "addonError", "missingInclude", "missingIncludeSystem", "toomanyconfigs"}
 GROUPS = ("generated-retention", "manual-assessment", "checker-limitations", "checker-obligations")
+DIAGNOSTIC_GROUPS = {"generated-retention", "owned-source", "checker-obligations",
+                     "freertos-integration", "sdk-integration"}
 GUIDELINE_CATEGORIES_SHA256 = "ef484316b09af067e673521476fd7a70f5757646e9c7e3918cdacef75a34bf66"
 GRP = "docs/adr/0025-misra-layered-scope.md"
 ADOPTION = "docs/standards/os/adoption.md"
@@ -370,7 +372,8 @@ def _retained_checker_entities(summary: dict, occurrences: list[dict], rule: str
 
 
 def _checker_obligation_result(summary: dict, occurrences: list[dict], obligations: dict,
-                               selected: dict, group_reason: str | None) -> tuple[dict, dict]:
+                               selected: dict, group_reason: str | None, *,
+                               frozen_context_missing: bool = False) -> tuple[dict, dict]:
     context, case = selected.get("checker-obligations", (None, None))
     retained = obligations["retained"]
     approval = context["records"].get("retainedSha256") if context is not None else None
@@ -393,6 +396,8 @@ def _checker_obligation_result(summary: dict, occurrences: list[dict], obligatio
                 applied[rule] = {"approval": context["id"], "entities": entities}
             else:
                 status = "satisfied"
+        if not reason and status != "retained" and frozen_context_missing:
+            reason = "input_context_unbound_or_stale"
         if reason:
             reasons[rule] = reason
         counts["not_assessed" if reason else status] += 1
@@ -1093,7 +1098,8 @@ def _freertos_positions(
 
 
 def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
-             matrix_scope: dict | None = None, sdk_revision: str | None = None) -> dict:
+             matrix_scope: dict | None = None, sdk_revision: str | None = None,
+             fingerprints: list[dict] | None = None, sample: str | None = None) -> dict:
     """Assess independent frozen record groups, preserving raw analysis."""
     result = {"format": FORMAT, "status": "blocked", "target": summary.get("scope", {}).get("target"),
               "caseId": None, "inputIdentity": None, "contexts": [], "assessmentInputs": None,
@@ -1117,8 +1123,11 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
         result["assessmentInputs"] = _assessment_inputs(summary, root)
         candidates = {}
         local_identities = {}
-        for context in contexts(root):
+        registered = contexts(root)
+        for context in registered:
             group = context["records"]["kind"]
+            if fingerprints is not None and group in DIAGNOSTIC_GROUPS - {"checker-obligations"}:
+                continue
             if group in {"freertos-integration", "sdk-integration"} and context["source"] != {
                     "freertos-integration": ADOPTION, "sdk-integration": SDK}[group]:
                 continue
@@ -1138,6 +1147,22 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
         label = min(common) if common else None
         selected = {group: rows[label] if label is not None else next(iter(rows.values()))
                     for group, rows in candidates.items()}
+        frozen_checker = selected.get("checker-obligations")
+        if fingerprints is not None:
+            bindings = c_disposition.load(root, result["target"], sample, summary["tool"]["binarySha256"])
+            for context in registered:
+                group = context["records"]["kind"]
+                if group not in DIAGNOSTIC_GROUPS:
+                    continue
+                if group == "freertos-integration" and context["source"] != ADOPTION:
+                    continue
+                if group == "sdk-integration" and context["source"] != SDK:
+                    continue
+                for case in context["cases"]:
+                    if (case["target"], case["caseId"]) == (result["target"], sample):
+                        if group in selected and selected[group][0] != context:
+                            raise ValueError(f"Ambiguous disposition authority: {group}")
+                        selected[group] = context, case
         case_ids = {case["caseId"] for _, case in selected.values()}
         if len(case_ids) == 1:
             result["caseId"] = next(iter(case_ids))
@@ -1321,7 +1346,9 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
             result["occurrences"].append(occurrence)
         obligations = c_standard.checker_obligations(rules, root)
         result["checkerObligations"], checker_reasons = _checker_obligation_result(
-            summary, result["occurrences"], obligations, selected, group_reasons.get("checker-obligations"))
+            summary, result["occurrences"], obligations, selected, group_reasons.get("checker-obligations"),
+            frozen_context_missing=(fingerprints is not None
+                                    and frozen_checker != selected.get("checker-obligations")))
         retained = {"misra-c2012-" + rule[1:]: record["approval"]
                     for rule, record in result["checkerObligations"]["retainedRules"].items()}
         for occurrence in result["occurrences"]:
@@ -1339,6 +1366,10 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
             if reason := checker_reasons.get(row["id"]):
                 add("checker-obligation", row["id"], reason, source=row.get("source"),
                     owner="#443", conclusion=row["conclusion"])
+        if fingerprints is not None:
+            result["analysisSample"] = sample
+            c_disposition.apply(summary, result, fingerprints, bindings,
+                                {context["id"]: context for context in registered})
         result["status"] = "blocked" if result["objects"] else "accepted"
     except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError) as error:
         result["status"] = "error"
@@ -1377,7 +1408,19 @@ def require_accepted(analyses: list[tuple[dict, Path]], expected: list[tuple[str
                         (project / FILE_LIST).read_text(encoding="utf-8").splitlines())
                         and summary.get("projectAcceptance", {}).get("scopeMatrix") is None):
                     raise ValueError("Strict integration acceptance requires the complete matrix scope")
-                current = evaluate(summary, project, root=root)
+                sample = summary["projectAcceptance"].get("analysisSample")
+                evidence = {}
+                if sample is not None:
+                    from autosar_tooling import c_baseline, c_fingerprint
+
+                    if tool[2]["binarySha256"] != summary["tool"]["binarySha256"]:
+                        raise ValueError("Actual analysis binary differs")
+                    compiler = Path(summary["scope"]["diagnosticCompiler"]["path"])
+                    rows = c_fingerprint.inventory(
+                        summary, project.parent, c_baseline.compiler_identity(compiler),
+                    )
+                    evidence = {"sample": sample, "fingerprints": rows}
+                current = evaluate(summary, project, root=root, **evidence)
                 if current["status"] != "accepted":
                     reasons = "; ".join(dict.fromkeys(row["reason"] for row in current["objects"]))
                     raise ValueError(f"Project acceptance refused for actual analysis project and inputs: {reasons}")
