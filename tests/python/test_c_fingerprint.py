@@ -30,6 +30,20 @@ CHANGED_CHECKER_SOURCE = CHECKER_SOURCE.replace("ARG(x) (x)", "ARG (x) (x)")
 
 
 class FingerprintTests(unittest.TestCase):
+    def test_header_input_directives_follow_comment_removal_and_line_splicing(self):
+        visible = '/* leading */ # /* keyword */ inc\\\nlude "real.h"'
+        source = (
+            'const char *text = "/* comment */ #include";\n'
+            '// continued comment \\\n#include "ignored.h"\n'
+            'int value; /* spans\n */ #include "also-ignored.h"\n'
+            f'{visible}\n'
+            'int trailing;\n'
+        )
+        self.assertEqual(c_fingerprint.analyzer_header_inputs(source, True), {
+            "prefix": source[:source.index("\nint trailing;")],
+            "directives": [visible],
+        })
+
     def test_windows_analyzer_contract_refuses_tampering_and_cross_image_substitution(self):
         with tempfile.TemporaryDirectory() as directory:
             executable = Path(directory) / "cppcheck.exe"
@@ -403,10 +417,11 @@ class FingerprintTests(unittest.TestCase):
 
             write("entry.c", entry)
             write("shared.h", shared + "#ifndef TYPE\n#define TYPE unsigned int\n#endif\ntypedef TYPE Count;\n")
-            prelude = "#ifdef __CPPCHECK__\n#define TYPE unsigned int\n#endif\n"
-            write("second.c", prelude + second)
+            prelude = "#ifdef __CPPCHECK__\n/* checker only */ #define TYPE unsigned int\n#endif\n"
+            consumer = "/* shared types */ " + second
+            write("second.c", prelude + consumer)
             raw_before, rows_before = scan("cppcheck-type-before")
-            write("second.c", prelude.replace("unsigned int", "unsigned long") + second)
+            write("second.c", prelude.replace("unsigned int", "unsigned long") + consumer)
             raw_after, rows_after = scan("cppcheck-type-after")
             self.assertEqual(raw_before, raw_after)
             typedefs = {index for index, row in enumerate(raw_before) if row["id"] == "misra-c2012-2.3"}

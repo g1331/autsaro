@@ -6,13 +6,13 @@ import hashlib
 import json
 import posixpath
 import re
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
 from pathlib import Path
 
 from ecu_tools.build import digest
 
-from autosar_tooling import c_preprocessor, c_standard
+from autosar_tooling import c_preprocessor
 
 FORMAT = "c-diagnostic-fingerprints-v4"
 SARIF_KEY = "autsaroDiagnostic/v4"
@@ -41,6 +41,8 @@ TOKEN = re.compile(
 SOURCE_TOKEN = re.compile(r"/\*.*?\*/|//[^\n]*|" + TOKEN.pattern, re.DOTALL)
 FUNCTION_MACRO = re.compile(r"#define [A-Za-z_]\w*\(")
 LINE_SENSITIVE = re.compile(r"\b__LINE__\b|##|%:%:|(?:\\|\?\?/)[ \t]*(?:\n|$)")
+LINE_SPLICE = re.compile(r"(?:\\|\?\?/)\n")
+PREPROCESSING_LINE = re.compile(r"(?m)^[ \t\f\v]*(?:#|%:|\?\?=)[ \t\f\v]*(\w*)[^\n]*")
 ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 
 
@@ -153,12 +155,24 @@ class SourceContext:
 
 def analyzer_header_inputs(text: str, exact_lines: bool) -> dict:
     """Retain raw input Cppcheck can use before or while opening a header."""
-    directives = [token for token in c_standard.lex(text) if token.text.lstrip().startswith("#")]
-    includes = [token for token in directives if re.match(r"\s*#\s*include\b", token.text)]
-    prefix = text[:includes[-1].end] if includes else ""
+    removed, offsets = [], [0]
+    for splice in LINE_SPLICE.finditer(text):
+        removed.append(splice.start() - offsets[-1])
+        offsets.append(offsets[-1] + len(splice[0]))
+    logical = LINE_SPLICE.sub("", text)
+    # A block comment is whitespace even when it spans physical lines.
+    masked = c_preprocessor.COMMENT.sub(lambda match: match[1] or " " * len(match[0]), logical)
+    directives, include_end = [], 0
+    for directive in PREPROCESSING_LINE.finditer(masked):
+        start = directive.start() + offsets[bisect_left(removed, directive.start())]
+        end = directive.end() + offsets[bisect_right(removed, directive.end())]
+        directives.append(text[start:end])
+        if directive[1] == "include":
+            include_end = end
+    prefix = text[:include_end]
     if not exact_lines:
         prefix = "\n".join(line for line in prefix.split("\n") if line)
-    return {"prefix": prefix, "directives": [token.text for token in directives]}
+    return {"prefix": prefix, "directives": directives}
 
 
 def ctu_facts(output: Path, program: dict, compiler_roots: dict[str, str],
