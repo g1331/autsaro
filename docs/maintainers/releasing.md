@@ -20,6 +20,10 @@
 
 bundles 工作流由 workflow_dispatch 触发并接受明确的 revision，在 `ubuntu-24.04` 与 `windows-2025-vs2026` 上用 Tauri CLI 构建，安装包上传为 `bundles-<Linux|Windows>-<提交 SHA>` artifact，不执行公开发布。本地在已准备的平台执行 `npm run tauri --prefix ui -- build`，产物位于 target/release/bundle/。当前产物为 Windows MSI（en-US、zh-CN）和 Linux deb、AppImage；它们的安装、升级、签名和公开发布仍需分别验证；macOS 原生构建不在支持范围内。
 
+工作流先把 revision 解析为提交 SHA，为该提交运行双平台八样本的严格源码检查。检查通过后，
+两平台使用同一个 SHA 构建。每个样本的原始诊断、处置和双树完整输入身份随分析工件保留，
+详见[源码验收](../development/testing/source-acceptance.md)。
+
 ## 许可与分发
 
 项目原创代码与文档采用 [Apache-2.0](../../LICENSE)，分发时附带 [NOTICE](../../NOTICE)。生成源码工程和桌面包携带这些文件，Python 分发包在许可目录包含它们。发布前按 [许可说明](licensing.md) 核对实际打包的第三方素材、技能、依赖、内核及其原始声明。

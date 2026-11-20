@@ -6,12 +6,12 @@ DOCUMENTATION = (
 DRIVERS = {
     "tools/python/src/autosar_tooling/" + name + ".py"
     for name in ("c_check", "c_acceptance", "c_sdk", "c_comparison",
-                 "c_addon", "c_gate", "c_baseline", "c_rename")
+                 "c_addon", "c_gate", "c_baseline", "c_rename", "c_fingerprint", "c_disposition")
 }
 # These files run in the always-selected Python matrix for code changes.
 PYTHON_CHECK_INPUTS = {
     "tests/python/test_c_" + name + ".py"
-    for name in ("acceptance", "analysis", "baseline", "comparison", "gate", "preprocessor",
+    for name in ("acceptance", "analysis", "baseline", "comparison", "fingerprint", "gate", "preprocessor",
                  "rename", "retention", "sdk", "standard")
 } | {"scripts/rehearse_ecu_handoff.py", "tests/python/test_rehearse_ecu_handoff.py"}
 ANALYZER_BEHAVIOR_TEST = "tests/python/native/test_c_analysis.py"
@@ -44,7 +44,7 @@ def is_standard_page(path: str) -> bool:
     return (
         path.startswith("docs/standards/") and path.endswith(".md")
         and not path.startswith("docs/standards/rte/generated-retention/")
-    )
+    ) or (path.startswith("docs/standards/c-dispositions/") and path.endswith(".json"))
 
 
 def is_analysis(path: str) -> bool:

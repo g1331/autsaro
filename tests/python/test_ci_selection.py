@@ -49,6 +49,7 @@ def run_script(script):
 
 def expression_value(expression, event):
     expression = expression.removeprefix("${{").removesuffix("}}").strip()
+    event = {"inputs.release-revision": "", **event}
     for name in sorted(event, key=len, reverse=True):
         expression = expression.replace(name, repr(event[name]))
     expression = expression.replace("||", " or ").replace("&&", " and ")
@@ -138,6 +139,32 @@ class CiSelectionTests(unittest.TestCase):
         for name in ("Configure pinned open Cppcheck", "Build pinned open Cppcheck"):
             command = next(step["run"] for step in steps if step.get("name") == name)
             self.assertTrue(command.startswith("uv run --locked cmake "), command)
+
+    def test_release_uses_strict_analysis_and_packages_the_same_commit(self):
+        workflow = yaml.safe_load(WORKFLOW.read_text())
+        bundles = yaml.safe_load(WORKFLOW.with_name("bundles.yml").read_text())["jobs"]
+        release_sha = "b" * 40
+        self.assertEqual(bundles["source-analysis"]["uses"], "./.github/workflows/checks.yml")
+        revision = bundles["source-analysis"]["with"]["release-revision"]
+        self.assertEqual(revision, bundles["bundle"]["steps"][0]["with"]["ref"])
+        self.assertIn("source-analysis", bundles["bundle"]["needs"])
+        for job in ("c-analysis-gates", "c-analysis-gates-windows", "c-analysis"):
+            step = next(row for row in workflow["jobs"][job]["steps"] if "GATE_MODE" in row.get("env", {}))
+            self.assertEqual(expression_value(step["env"]["GATE_MODE"], {
+                "github.event_name": "workflow_dispatch",
+            }), "strict")
+        detect = workflow["jobs"]["changes"]["steps"][1]
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "output"
+            with mock.patch.dict(os.environ, {"PULL_REQUEST": "", "BASE": "",
+                                              "RELEASE_REVISION": release_sha, "GITHUB_OUTPUT": str(output)}), \
+                    mock.patch.object(subprocess, "check_output", return_value="parent\n"), \
+                    mock.patch("builtins.print"):
+                run_script(detect["run"])
+            self.assertEqual(dict(line.split("=", 1) for line in output.read_text().splitlines()), {
+                "analysis": "true", "code": "false", "native": "false", "desktop": "false",
+                "application": "false", "source-parent": "parent",
+            })
 
     def test_draft_and_ready_events_select_checks_and_required_result(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())

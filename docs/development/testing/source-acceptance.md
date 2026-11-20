@@ -37,7 +37,14 @@ PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并�
 checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
 分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
 
-PR、master push 和手动入口按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 执行不回退门。`c_gate scan` 保留原始逐程序差集，以范围内差集判定阻断，按精确位置重算处置。Git 改名回接原件／交付路径，整文件行映射限定批准的原位置。R10.3／R10.4 可用文件静态对象改名证明配对，条件为每个变化行均经 GCC 发射并验证，Cppcheck 绑定、映射后的列位置、程序和次数全部对应。证明缺损时执行严格判定，`gate.json.identifierEvidenceError` 记录原因。门先绑定双侧各八份 `scope-input.json` 的原始身份，再重算范围并集、occurrence、MR12／SDK 和验收身份；范围外位置及新增保留，矩阵汇总见 `compliance-scope.json`。整体 blocked 留作报告，执行 error 阻断，原始分析状态保持。
+PR 双树门按 [ADR 0033](../../adr/0033-c-diagnostic-fingerprints.md) 核对范围内指纹。
+逐位置验证原技术和批准记录，再消费 `docs/standards/c-dispositions/<target>/<sample>.json`。
+每个键是一份处置依据摘要，值是该依据覆盖的诊断指纹。修复诊断时删去失效指纹。
+`fingerprintDispositions.candidates` 给出待复核的指纹及依据摘要。新增绑定沿用
+[ADR 0025](../../adr/0025-misra-layered-scope.md) 的批准流程。
+master、手动分析及发行构建走严格模式，核验并保留双方完整输入清单。门先绑定双侧各八份
+`scope-input.json`，重算范围并集、MR12／SDK 和验收身份。整体 blocked 留作报告，执行
+error 阻断。范围外位置和原始分析状态照常记录。
 
 基准固定为测试提交第一父提交，保留其生成器与 runtime，使用 PR 的 harness、夹具、资源与锁文件。prepare 与双侧生成并行。基准原件与 SDK 原件记录取第一父提交并绑定身份，继续核对实际 SDK；评估仍用当前输入。拆分源按目标选择的同名 host provider 回接，允许对应平台 include 目录迁移。双树的 SDK 比较身份绑定 include 搜索序列、搜索目录可达的全部 provider 文件及实际打开的头／宏，见 [SDK 比较身份](sdk-comparison-identity.md)。头／宏使用集合可变，共有头字节与宏值仍比较；旧版（语义身份 2）工件拒绝，须重扫。双侧 raw 回执均拒绝验收 error；基准失败或不可比均拒绝。
 
