@@ -16,9 +16,19 @@ on:
         type: string
         required: true
 # Keep the non-required tail from locking another master revision.
+# Isolate title-only edits and unrelated labels from the active PR run.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && github.run_id || github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'full-ci') }}
+  group: >-
+    ${{ github.workflow }}-${{
+      ((github.event.action == 'labeled' && github.event.label.name != 'full-ci') ||
+       (github.event.action == 'edited' && github.event.changes.title &&
+        !github.event.changes.body && !github.event.changes.base))
+      && github.run_id || github.event.pull_request.number || github.sha }}
+  cancel-in-progress: >-
+    ${{ github.event_name == 'pull_request' &&
+        (github.event.action != 'labeled' || github.event.label.name == 'full-ci') &&
+        !(github.event.action == 'edited' && github.event.changes.title &&
+          !github.event.changes.body && !github.event.changes.base) }}
 permissions:
   contents: read
   pull-requests: read
@@ -28,7 +38,10 @@ env:
 jobs:
   changes:
     name: Detect changed areas
-    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
+    if: >-
+      (github.event.action != 'labeled' || github.event.label.name == 'full-ci') &&
+      !(github.event.action == 'edited' && github.event.changes.title &&
+        !github.event.changes.body && !github.event.changes.base)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -638,7 +651,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   quality:
-    if: inputs.release-revision == '' && (github.event.action != 'labeled' || github.event.label.name == 'full-ci')
+    # Body edits must run the issue-reference check again under CI required.
+    if: >-
+      inputs.release-revision == '' &&
+      (github.event.action != 'labeled' || github.event.label.name == 'full-ci') &&
+      !(github.event.action == 'edited' && github.event.changes.title &&
+        !github.event.changes.body && !github.event.changes.base)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -1578,9 +1596,18 @@ jobs:
 
   required:
     # The only status check branch rules require; the list of blocking jobs lives here.
-    name: ${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && 'Unselected PR label' || 'CI required' }}
+    name: >-
+      ${{ github.event.action == 'labeled' && github.event.label.name != 'full-ci' && 'Unselected PR label' ||
+          github.event.action == 'edited' && github.event.changes.title &&
+          !github.event.changes.body && !github.event.changes.base && 'PR title edit' || 'CI required' }}
     needs: [changes, python, core, desktop, native, native-delivery, native-delivery-windows, quality, c-analysis]
-    if: ${{ always() && inputs.release-revision == '' && (github.event.action != 'labeled' || github.event.label.name == 'full-ci') }}
+    # Evaluate failed and skipped dependencies, but let a superseded PR run cancel.
+    if: >-
+      ${{ always() && (github.event_name != 'pull_request' || !cancelled()) &&
+          inputs.release-revision == '' &&
+          (github.event.action != 'labeled' || github.event.label.name == 'full-ci') &&
+          !(github.event.action == 'edited' && github.event.changes.title &&
+            !github.event.changes.body && !github.event.changes.base) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:

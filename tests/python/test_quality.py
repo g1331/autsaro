@@ -123,6 +123,22 @@ class ContributionTests(unittest.TestCase):
             for step in workflow["jobs"]["quality"]["steps"]
         ))
 
+    def test_pr_body_edit_checks_current_text_instead_of_previous_reference(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            event = Path(temporary) / "event.json"
+            environment = {"GITHUB_EVENT_NAME": "pull_request", "GITHUB_EVENT_PATH": str(event)}
+            payload = {
+                "action": "edited",
+                "changes": {"body": {"from": "Closes #631"}},
+                "pull_request": {"head": {"ref": "fix/ci-cancelled-required-status"}, "body": ""},
+            }
+            with patch.dict(os.environ, environment):
+                event.write_text(json.dumps(payload), encoding="utf-8")
+                self.assertIn("PR body is missing an issue reference", quality.contribution_errors()[0])
+                payload["pull_request"]["body"] = "Refs #509"
+                event.write_text(json.dumps(payload), encoding="utf-8")
+                self.assertEqual(quality.contribution_errors(), [])
+
 
 class CommitMessageTests(unittest.TestCase):
     def test_source_quality_propagates_contribution_and_commit_failures(self):
