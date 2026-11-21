@@ -1161,6 +1161,25 @@ fn multi_component_save_reopen_and_relocation_keep_source_and_user_bytes() {
     .unwrap();
     let snapshot = reopened.generation_snapshot().unwrap();
     assert_eq!(snapshot.manifest_bytes, saved.manifest_bytes);
+    // Exercise a different spelling of the same directory on Unix. The project
+    // is opened through the real directory because the loader rejects symlinks.
+    #[cfg(unix)]
+    let moved = {
+        let alias = scratch.0.join("moved-alias");
+        std::os::unix::fs::symlink(&moved, &alias).unwrap();
+        alias
+    };
+    let moved = std::fs::canonicalize(&moved).unwrap();
+    let is_in_moved = |path: &Path| std::fs::canonicalize(path).unwrap().starts_with(&moved);
+
+    // Identical bytes at the old location must not count as a relocated member.
+    let original = &saved.inputs[0];
+    std::fs::create_dir_all(original.disk_path.parent().unwrap()).unwrap();
+    std::fs::write(&original.disk_path, &original.bytes).unwrap();
+    assert!(!is_in_moved(&original.disk_path));
+
+    assert_eq!(snapshot.inputs.len(), saved.inputs.len());
+    assert_eq!(snapshot.applications.len(), saved.applications.len());
     for (actual, expected) in snapshot
         .inputs
         .iter()
@@ -1169,7 +1188,12 @@ fn multi_component_save_reopen_and_relocation_keep_source_and_user_bytes() {
     {
         assert_eq!(actual.logical_path, expected.logical_path);
         assert_eq!(actual.bytes, expected.bytes);
-        assert!(actual.disk_path.starts_with(&moved));
+        assert!(
+            is_in_moved(&actual.disk_path),
+            "{} is not physically under {}",
+            actual.disk_path.display(),
+            moved.display()
+        );
     }
     assert_eq!(
         serde_json::to_vec(&reopened.inspect_integration()).unwrap(),
