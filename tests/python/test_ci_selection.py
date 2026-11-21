@@ -67,7 +67,7 @@ def expression_value(expression, event):
 
 def concurrency_group(expression, event):
     return re.sub(r"\$\{\{(.*?)\}\}",
-                  lambda match: str(expression_value(match[1].strip(), event)), expression, flags=re.S)
+                  lambda match: str(expression_value(match[1].strip(), event)), expression, flags=re.DOTALL)
 
 
 class CiSelectionTests(unittest.TestCase):
