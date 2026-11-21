@@ -1236,18 +1236,16 @@ class AcceptanceTests(unittest.TestCase):
             "R8.9", "R8.13", "R10.4", "R10.7",
             "R11.4", "R11.5",
             "R12.1", "R12.2", "R12.4", "R13.2", "R14.2", "R14.3",
-            "R17.2", "R17.7", "R18.1", "R18.2", "R18.3", "R18.4",
-            "R18.5", "R18.6", "R19.1", "R20.5",
+            "R17.2", "R17.7", "R18.1", "R18.4", "R18.6", "R19.1", "R20.5",
             "R20.10", "R21.1",
             "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 36)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 36)
+        self.assertEqual(len(objects), len(expected_gaps))
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 36)
+        self.assertEqual(len(located), len(expected_gaps))
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1272,13 +1270,14 @@ class AcceptanceTests(unittest.TestCase):
         control_flow = {"R14.1", "R15.1", "R15.2", "R15.3", "R17.1", "R17.6", "R18.7",
                         "R19.2", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7",
                         "R15.4", "R15.6", "R15.7", "R17.4", "R17.5", "R17.8", "R18.8"}
+        pointer_relationships = {"R18.2", "R18.3", "R18.5"}
         preprocessing = {"R20.2", "R20.3", "R20.4", "R20.6", "R20.11", "R20.12",
                          "R20.7", "R20.8", "R20.9", "R20.13", "R20.14"}
         library = {"R21." + str(n) for n in range(3, 22) if n != 8}
         library.update("R22." + str(n) for n in range(1, 11))
         self.assertEqual(set(satisfied),
                          lexical | declarations | expressions | pointer_conversions | control_flow
-                         | preprocessing | library
+                         | pointer_relationships | preprocessing | library
                          | {"R2.7", "R5.8", "R7.1", "R7.2", "R7.3",
                             "R7.4", "R12.3", "R15.5"})
         self.assertIn("Disapplied", satisfied["R15.5"]["conclusion"])
@@ -1488,19 +1487,16 @@ class AcceptanceTests(unittest.TestCase):
             "R17.7": ("Can_TxSinkType", "表达式父节点", "D4.7", "#556"),
             "R17.8": ("0023-preserve-parameter-values.patch", "Com_SendSignal", "signal_values"),
             "R18.1": ("0020-bounded-queue-front.patch", "one-past", "#556"),
-            "R18.2": ("record-stacks", "ptrdiff_t", "#556"),
-            "R18.3": ("AMD4.52", "同结构成员关系", "#556"),
             "R18.4": ("R18.2", "五个位置", "环形存储", "#556"),
-            "R18.5": ("连续 pointer declarator", "typedef", "#556"),
             "R18.6": ("AMD4.24", "Os_ErrorContextSave", "静态 ISR frame", "#556"),
             "R18.7": ("configured_alarms",),
             "R18.8": ("AMD4.25–30", "Arti_Types.h", "-Werror=vla"),
             "R19.1": ("memmove", "Os_TargetPostInput", "Mandatory", "#556"),
             "R19.2": ("0015-typed-port-state.patch",),
         }
-        self.assertEqual(len(control_evidence), 33)
+        self.assertEqual(len(control_evidence), 30)
         self.assertEqual({key for key in by_id if 14 <= int(key[1:].split(".")[0]) <= 19},
-                         set(control_evidence) | {"R15.5", "R17.3"})
+                         set(control_evidence) | pointer_relationships | {"R15.5", "R17.3"})
         for guideline, evidence in control_evidence.items():
             with self.subTest(control_flow=guideline):
                 record = by_id[guideline]
@@ -1515,6 +1511,27 @@ class AcceptanceTests(unittest.TestCase):
                     self.assertIn(phrase, record["conclusion"])
                 if guideline not in control_flow:
                     self.assertIn("#443", record["conclusion"])
+        relationship_path = "docs/standards/types/language-constructs/pointer-relationships.md"
+        relationship_text = (self.root / relationship_path).read_text(encoding="utf-8")
+        relationship_evidence = {
+            "R18.2": ("ptrdiff_t", "八个实际配置无指针与指针相减", "`pcTail - uxItemSize`"),
+            "R18.3": ("AMD4.52", "`kernel/tasks.c:1945–1946`", "509／0 和 509／511",
+                      "`kernel/queue.c:2382,2438`"),
+            "R18.5": ("数组形参调整", "`TaskHandle_t *const`", "`RPC_EP_INQ_HANDLE *`"),
+        }
+        self.assertEqual(set(relationship_evidence), pointer_relationships)
+        for guideline, evidence in relationship_evidence.items():
+            with self.subTest(pointer_relationship=guideline):
+                record = satisfied[guideline]
+                self.assertEqual(record["source"]["file"], relationship_path)
+                self.assertTrue(relationship_text.splitlines()[record["source"]["line"] - 1]
+                                .startswith("| " + guideline + " |"))
+                for detail in evidence:
+                    self.assertIn(detail, relationship_text)
+        for detail in ("44851605791", "888 个程序 TU", "452 份独立 GCC 展开",
+                       "`patchedLines`", "16 份原始 XML", "`passed=false`",
+                       "`completeCompliance=false`", "`blocked`"):
+            self.assertIn(detail, relationship_text)
         self.assertEqual(by_id["R17.6"]["category"], "Mandatory")
         self.assertEqual(by_id["R17.5"]["category"], "Required")
         backend = (ROOT / "runtime/os/src/Os_Backend.c").read_text(encoding="utf-8")
