@@ -1234,20 +1234,20 @@ class AcceptanceTests(unittest.TestCase):
             "R1.2", "R1.3", "R2.1", "R2.2", "R2.3", "R2.4", "R2.5", "R5.6",
             "R5.9", "R8.3", "R8.7",
             "R8.9", "R8.13", "R10.4", "R10.7",
-            "R11.1", "R11.2", "R11.3", "R11.4", "R11.5", "R11.8", "R11.9",
+            "R11.2", "R11.3", "R11.4", "R11.5", "R11.8",
             "R12.1", "R12.2", "R12.4", "R13.2", "R14.2", "R14.3",
             "R17.2", "R17.7", "R18.1", "R18.2", "R18.3", "R18.4",
             "R18.5", "R18.6", "R19.1", "R20.5",
             "R20.10", "R21.1",
             "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 41)
+        self.assertEqual(len(expected_gaps), 39)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 41)
+        self.assertEqual(len(objects), 39)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 41)
+        self.assertEqual(len(located), 39)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1268,6 +1268,7 @@ class AcceptanceTests(unittest.TestCase):
                         "R9.1", "R9.2", "R9.3", "R9.4", "R9.5"}
         expressions = {"R10.2", "R10.5", "R10.8", "R11.6", "R11.7", "R13.1",
                        "R13.3", "R13.4", "R13.6"}
+        pointer_conversions = {"R11.1", "R11.9"}
         control_flow = {"R14.1", "R15.1", "R15.2", "R15.3", "R17.1", "R17.6", "R18.7",
                         "R19.2", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7",
                         "R15.4", "R15.6", "R15.7", "R17.4", "R17.5", "R17.8", "R18.8"}
@@ -1276,7 +1277,7 @@ class AcceptanceTests(unittest.TestCase):
         library = {"R21." + str(n) for n in range(3, 22) if n != 8}
         library.update("R22." + str(n) for n in range(1, 11))
         self.assertEqual(set(satisfied),
-                         lexical | declarations | expressions | control_flow
+                         lexical | declarations | expressions | pointer_conversions | control_flow
                          | preprocessing | library
                          | {"R2.7", "R5.8", "R7.1", "R7.2", "R7.3",
                             "R7.4", "R12.3", "R15.5"})
@@ -1324,11 +1325,12 @@ class AcceptanceTests(unittest.TestCase):
             with self.subTest(expression=guideline):
                 record = by_id[guideline]
                 self.assertEqual(record["status"],
-                                 "satisfied" if guideline in expressions else "not_assessed")
+                                 "satisfied" if guideline in expressions | pointer_conversions else "not_assessed")
+                filename = "pointer-conversions.md" if guideline in pointer_conversions else "expressions.md"
                 self.assertEqual(record["source"]["file"],
-                                 "docs/standards/types/language-constructs/expressions.md")
+                                 "docs/standards/types/language-constructs/" + filename)
                 self.assertIn(evidence, record["conclusion"])
-                if guideline not in expressions:
+                if guideline not in expressions | pointer_conversions:
                     self.assertIn("#443", record["conclusion"])
         self.assertEqual(by_id["R13.6"]["category"], "Required")
         self.assertIn("Os_CounterWorkType", by_id["R13.1"]["conclusion"])
@@ -1612,7 +1614,7 @@ class AcceptanceTests(unittest.TestCase):
             "R10.5": ("satisfied", "AMD3.33", "result ? 1u : 0u"),
             "R10.7": ("not_assessed", "#544", "essential 宽度"),
             "R10.8": ("satisfied", "CanTp_DataLength", "(uint16)data[0] & 0x0fu"),
-            "R11.1": ("not_assessed", "#544", "兼容原型"),
+            "R11.1": ("satisfied", "兼容原型", "(void)sink", "Exception 2"),
             "R11.2": ("not_assessed", "#544", "完整化"),
             "R11.3": ("not_assessed", "#544", "AMD4.7–9"),
             "R11.4": ("not_assessed", "#544", "真实 Advisory 违反", "未批准新例外"),
@@ -1620,7 +1622,7 @@ class AcceptanceTests(unittest.TestCase):
             "R11.6": ("satisfied", "TC2.22", "(void *)0"),
             "R11.7": ("satisfied", "Boolean、character、enum", "完整 cast 清单"),
             "R11.8": ("not_assessed", "#544", "AMD4.10–14"),
-            "R11.9": ("not_assessed", "#544", "((void *)0)"),
+            "R11.9": ("satisfied", "((void *)0)", "Os_InterruptVectorTable", "TC1"),
             "R12.1": ("not_assessed", "#544", "#if／#elif"),
             "R12.2": ("not_assessed", "#544", "UTLR"),
             "R12.3": ("satisfied", "452", "(_assert(...),0)", "§6.7"),
@@ -1633,7 +1635,10 @@ class AcceptanceTests(unittest.TestCase):
             with self.subTest(essential=guideline):
                 record = by_id[guideline]
                 self.assertEqual(record["status"], status)
-                filename = "README.md" if guideline == "R12.3" else "expressions.md"
+                filename = {
+                    "R11.1": "pointer-conversions.md", "R11.9": "pointer-conversions.md",
+                    "R12.3": "README.md",
+                }.get(guideline, "expressions.md")
                 self.assertEqual(record["source"]["file"],
                                  "docs/standards/types/language-constructs/" + filename)
                 source = (self.root / record["source"]["file"]).read_text(encoding="utf-8")
@@ -1641,6 +1646,14 @@ class AcceptanceTests(unittest.TestCase):
                     "| " + guideline + " |"))
                 for phrase in evidence:
                     self.assertIn(phrase, record["conclusion"])
+        pointer_text = (self.root / by_id["R11.1"]["source"]["file"]).read_text(encoding="utf-8")
+        for evidence in (
+            "44835837239", "888 个程序 TU", "452 份独立展开", "`patchedLines`", "AMD2.58",
+            "`Det_ErrorHookType`", "`LPTHREAD_START_ROUTINE`", "`generated/src/Ecu_Execution.c:7:5`",
+            "两个比较方向", "包括未求值分支", "`CanTp_Perform`", "TC1 聚合初始化例外",
+            "`passed=false`", "`completeCompliance=false`", "`blocked`",
+        ):
+            self.assertIn(evidence, pointer_text)
         expression_text = (self.root / by_id["R10.2"]["source"]["file"]).read_text(
             encoding="utf-8")
         for evidence in ("每条记录均回查", "去注释保留其中全部换行", "STLR／UTLR",
