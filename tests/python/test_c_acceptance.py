@@ -1234,20 +1234,20 @@ class AcceptanceTests(unittest.TestCase):
             "R1.2", "R1.3", "R2.1", "R2.2", "R2.3", "R2.4", "R2.5", "R5.6",
             "R5.9", "R8.3", "R8.7",
             "R8.9", "R8.13", "R10.4", "R10.7",
-            "R11.2", "R11.3", "R11.4", "R11.5", "R11.8",
+            "R11.4", "R11.5",
             "R12.1", "R12.2", "R12.4", "R13.2", "R14.2", "R14.3",
             "R17.2", "R17.7", "R18.1", "R18.2", "R18.3", "R18.4",
             "R18.5", "R18.6", "R19.1", "R20.5",
             "R20.10", "R21.1",
             "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 39)
+        self.assertEqual(len(expected_gaps), 36)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 39)
+        self.assertEqual(len(objects), 36)
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 39)
+        self.assertEqual(len(located), 36)
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1268,7 +1268,7 @@ class AcceptanceTests(unittest.TestCase):
                         "R9.1", "R9.2", "R9.3", "R9.4", "R9.5"}
         expressions = {"R10.2", "R10.5", "R10.8", "R11.6", "R11.7", "R13.1",
                        "R13.3", "R13.4", "R13.6"}
-        pointer_conversions = {"R11.1", "R11.9"}
+        pointer_conversions = {"R11.1", "R11.2", "R11.3", "R11.8", "R11.9"}
         control_flow = {"R14.1", "R15.1", "R15.2", "R15.3", "R17.1", "R17.6", "R18.7",
                         "R19.2", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7",
                         "R15.4", "R15.6", "R15.7", "R17.4", "R17.5", "R17.8", "R18.8"}
@@ -1314,7 +1314,7 @@ class AcceptanceTests(unittest.TestCase):
             "R10.2": "TC2.19", "R10.4": "complete_activation", "R10.5": "AMD3.33",
             "R10.7": "HostBatch::number", "R10.8": "(LONG)~(uint32)1u",
             "R11.1": "(void)sink", "R11.2": "完整化", "R11.3": "AMD4.7–9",
-            "R11.4": "Os_HostStackRange", "R11.5": "mmap", "R11.6": "TC2.22",
+            "R11.4": "Os_HostStackRange", "R11.5": "pvOwner", "R11.6": "TC2.22",
             "R11.7": "Boolean、character、enum", "R11.8": "AMD4.10–14",
             "R11.9": "((void *)0)", "R12.1": "#if／#elif", "R12.2": "UTLR",
             "R12.4": "宽度≥64", "R13.1": "Os_ArtiCallerSave", "R13.2": "AMD4.17–23",
@@ -1615,13 +1615,13 @@ class AcceptanceTests(unittest.TestCase):
             "R10.7": ("not_assessed", "#544", "essential 宽度"),
             "R10.8": ("satisfied", "CanTp_DataLength", "(uint16)data[0] & 0x0fu"),
             "R11.1": ("satisfied", "兼容原型", "(void)sink", "Exception 2"),
-            "R11.2": ("not_assessed", "#544", "完整化"),
-            "R11.3": ("not_assessed", "#544", "AMD4.7–9"),
+            "R11.2": ("satisfied", "TaskHandle_t", "完整化", "Os_HostHandleType", "TC1", "Exception 1"),
+            "R11.3": ("satisfied", "AMD4.7–9", "configUSE_MINI_LIST_ITEM=0", "非原子字符例外"),
             "R11.4": ("not_assessed", "#544", "真实 Advisory 违反", "未批准新例外"),
-            "R11.5": ("not_assessed", "#544", "生命周期"),
+            "R11.5": ("not_assessed", "#544", "task_slot", "pvOwner", "生命周期"),
             "R11.6": ("satisfied", "TC2.22", "(void *)0"),
             "R11.7": ("satisfied", "Boolean、character、enum", "完整 cast 清单"),
-            "R11.8": ("not_assessed", "#544", "AMD4.10–14"),
+            "R11.8": ("satisfied", "AMD4.10–14", "C99 §6.5.9", "pxTaskOsPortStack", "volatile"),
             "R11.9": ("satisfied", "((void *)0)", "Os_InterruptVectorTable", "TC1"),
             "R12.1": ("not_assessed", "#544", "#if／#elif"),
             "R12.2": ("not_assessed", "#544", "UTLR"),
@@ -1636,7 +1636,8 @@ class AcceptanceTests(unittest.TestCase):
                 record = by_id[guideline]
                 self.assertEqual(record["status"], status)
                 filename = {
-                    "R11.1": "pointer-conversions.md", "R11.9": "pointer-conversions.md",
+                    **dict.fromkeys(("R11.1", "R11.2", "R11.3", "R11.8", "R11.9"),
+                                    "pointer-conversions.md"),
                     "R12.3": "README.md",
                 }.get(guideline, "expressions.md")
                 self.assertEqual(record["source"]["file"],
@@ -1651,6 +1652,10 @@ class AcceptanceTests(unittest.TestCase):
             "44835837239", "888 个程序 TU", "452 份独立展开", "`patchedLines`", "AMD2.58",
             "`Det_ErrorHookType`", "`LPTHREAD_START_ROUTINE`", "`generated/src/Ecu_Execution.c:7:5`",
             "两个比较方向", "包括未求值分支", "`CanTp_Perform`", "TC1 聚合初始化例外",
+            "Linux 228、Windows 224", "16 份原始 XML", "`Os_TimeClose` 一处空指针",
+            "`MiniListItem_t` 和 `ListItem_t` 同为 `struct xLIST_ITEM`",
+            "`Os_TargetTrace` 保留零终止位置", "`const void *` 与 `current` 比较",
+            "`pxTaskOsPortStack` 返回的 `volatile StackType_t *`", "`kernel/tasks.c:8943`",
             "`passed=false`", "`completeCompliance=false`", "`blocked`",
         ):
             self.assertIn(evidence, pointer_text)

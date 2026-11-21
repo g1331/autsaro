@@ -1,6 +1,6 @@
-# 函数指针与空指针常量
+# 指针转换
 
-[#544](https://github.com/g1331/autsaro/issues/544) 的本批证据取自
+[#544](https://github.com/g1331/autsaro/issues/544) 的前两批证据取自
 [master run 44835837239](https://github.com/g1331/autsaro/actions/runs/44835837239)
 （`f265ded8691fdc55c5286763439d000f89203d98`）。Linux 和 Windows 各核对四个 C99
 profile（standard-ecu、user-application、component-pipeline、no-diagnostic），覆盖
@@ -51,9 +51,62 @@ AMD2.27 追加 C11，其他修订对本批 C99 判据无改动。
 
 原始 `passed=false`、`completeCompliance=false` 和项目验收 `blocked` 保留。
 
+## 对象指针的转换与限定符
+
+第二批用同一提交的 452 份 GCC 展开（Linux 228、Windows 224），按 C99 的 LP64／
+LLP64 模型读取显式 cast 及初始化、赋值、实参、返回、比较与条件式中的隐式转换。
+按使用点回查两个程序的 16 份原始 XML 和实际文件。Windows 的辅助解析保留 SDK
+接口声明，从输入移除 GCC 私有 x86 intrinsic 头的正文，全部 452 份解析完成。
+`patchedLines` 保留项目补丁的评估责任，FreeRTOS 未修改的行和 SDK 原件沿各自的
+来源记录，主机仿真用点按 ADR 0030 和八个配置的 GCC 包含闭包判定。
+
+**R11.2。** 主文印刷 95–96／PDF 103–104，TC1 按指向类型去除外层限定符判断；
+检查转换点可见的 struct／union 定义和数组边界，`void *` 作为独立类型处理。
+`TaskHandle_t` 指向的 `tskTaskControlBlock` 在范围内转换处已经由 `task.h` 完整定义，
+`StaticTask_t` 与它沿同一 tag。Linux 的 `Os_HostHandleType` 仍可作为不完整类型，
+范围内涉及转换的只有 `Os_Backend.c` 七处和 `Os_TimeClose` 一处空指针初始化或比较。
+GCC 展开为 `((void *)0)`，按 Exception 1。`Os_HostSetEvent` 等接缝继续传递同型句柄，
+`winnt.h` 内部的不完整 `_TEB` 与 `_ACTIVATION_CONTEXT` 转换归 SDK 原件。
+
+**R11.3。** 主文印刷 96–97／PDF 104–105，AMD2.59、TC2.21、AMD4.7–9；
+按去掉被指向类型的外层限定符后的类型比较，保留内层限定；字符访问例外要求源对象
+无 `_Atomic` 限定。八个 `os/FreeRTOSConfig.h` 均将 `configUSE_MINI_LIST_ITEM` 设为 `0`。
+`prvOsInsertReadyTask` 中的 `listGET_END_MARKER` 把 `&xListEnd` 转成 `const ListItem_t *`，
+实际 `MiniListItem_t` 和 `ListItem_t` 同为 `struct xLIST_ITEM`；循环比较哨兵，再由
+`listGET_LIST_ITEM_OWNER` 读取有效节点。自有代码两处不同对象类型的转换均在
+`Os_Backend.c`。`report_and_exit` 以 `const char *` 读取 `os_backend_trace` 的字节前缀，
+`Os_TargetTrace` 保留零终止位置。`xTaskCreateStatic` 的名称参数以 `const char *` 接收
+配置中的 `uint8` 名称，由内核按字符复制到任务名缓冲。这两处均适用非原子字符访问例外。
+
+**R11.8。** 主文印刷 100–101／PDF 108–109，AMD2.61、AMD4.10–14，逐指针层检查
+const、volatile 和 `_Atomic`，`restrict` 沿原文说明。自有代码和项目 hunk 中需复判的
+三处仅是相等关系。`task_slot` 比较 `StaticTask_t *` 与 `const StaticTask_t *`；
+`prvOsInsertReadyTask` 比较 `ListItem_t *` 与 `const ListItem_t *`。两者按
+[C99 §6.5.9](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1256.pdf#page=98) 比较
+兼容类型的指针。`Os_BackendBeforeSelect` 按同节 §6.5.9p5 将任务对象指针转为
+`const void *` 与 `current` 比较。这三处按 C99 原文判定转换方向，Clang 插入的
+`BitCast` 作为定位线索。实际实参、返回和赋值逐层保留被指向类型的限定，
+包括 `pxTaskOsPortStack` 返回的 `volatile StackType_t *`。两处 R11.3 字节读取使用
+`const char *`，C99 范围内无 `_Atomic` 限定丢弃。
+
+**R11.5 待处置。** 主文印刷 98／PDF 106 的空指针常量例外只覆盖空值。
+`Os_Backend.c:1535,1666` 将 `native_task_start`／`task_entry` 的 `void *` 参数送进
+`task_slot`。`xTaskCreateStatic` 以 `&task_memory[i]` 提供同一数组中的静态对象，
+`task_slot` 用恢复的类型查找槽位。`kernel/tasks.c:8943` 的项目 FIFO hunk 从
+`pvOwner` 恢复 `const TCB_t *`，内核初始化列表项时写入原 `pxNewTCB`，随后读取
+`ullOsReadySequence`。这三处在当前配置有对应的存活对象、类型和对齐，仍属于 R11.5
+实际转换。`Os_BackendBeforeSelect` 的比较按上节语义处理。
+
+16 份原始 XML 无 R11.2／R11.3／R11.8 诊断。R11.5 的现有原始诊断落在采用原件
+`kernel/tasks.c:4474` 和 Linux 主机实现 `Os_HostLinux.c:359`，三个自有或补丁实例均漏报。
+AMD2.27 补充语言适用性，其余修订未改变本节所用 C99 判据。
+
 <!-- misra-checker-obligations-begin -->
 | 规则 | 类别 | 范围 | 状态 | 结论 |
 | --- | --- | --- | --- | --- |
 | R11.1 | Required | 函数指针的显式与隐式转换 | satisfied | 双平台四 profile 的兼容原型和调用约定逐项回查；`(void)sink` 按 Exception 2，空指针常量和自身函数设计符分别按 Exception 1／3。 |
+| R11.2 | Required | 不完整类型指针的显式与隐式转换 | satisfied | `TaskHandle_t` 在转换处完整化；`Os_HostHandleType` 的空指针使用按 TC1 的无限定类型判据及原文 Exception 1。 |
+| R11.3 | Required | 不同对象类型的指针转换 | satisfied | AMD4.7–9；`configUSE_MINI_LIST_ITEM=0` 使 `listGET_END_MARKER` 保持指向同一类型，两处 `const char *` 访问适用非原子字符例外。 |
+| R11.8 | Required | 指向类型的限定符保留 | satisfied | AMD4.10–14；按 C99 §6.5.9 复判三处比较，赋值、实参及返回逐层保留限定符。`pxTaskOsPortStack` 保留 `volatile`。 |
 | R11.9 | Required | 整数空指针常量的形式 | satisfied | 双平台四 profile 的类型化指针消费者使用 `((void *)0)`；`Os_InterruptVectorTable` 的 `{0}` 按 TC1 聚合例外。 |
 <!-- misra-checker-obligations-end -->
