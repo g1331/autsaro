@@ -72,6 +72,7 @@ producer 和封存输入重算[当前绑定](declarations.md#当前输入重评)
 11 条转 #556，其中 R14.3 修复了 Os_Backend 的一个具体违反，R18.4、R18.6
 有既有违反和处置。全组为 92 satisfied、3 not_applicable、49 not_assessed。
 R17.2 主机端口的既有偏离沿 ADR 0030 转历史；当前自有回调与再入边仍归 #556。
+接续 #556 的 R18.2／R18.3／R18.5 评估见[指针关系与声明](pointer-relationships.md)。
 
 <!-- misra-checker-obligations-begin -->
 | 规则 | 类别 | 评估范围 | 状态 | 结论 |
@@ -101,10 +102,7 @@ R17.2 主机端口的既有偏离沿 ADR 0030 转历史；当前自有回调与�
 | R17.7 | Required | 非 void 返回值的使用或显式丢弃 | not_assessed | 主文 141–142。为实际调用提取表达式父节点；Ecu_ExecutionTransmit 状态赋给 result，Can_TxSinkType 由所选 provider 消除，CAN 和 DET 显式丢弃按语义核对。#556 承接，归 #443，须闭合全部跨 TU 及间接声明返回类型、嵌套表达式、内建与 SDK 宏。D4.7 的错误处理继续独立。 |
 | R17.8 | Advisory | 函数形参对象的修改 | satisfied | 主文 142。按展开的形参声明回接赋值／自增的左对象及取址。#503 移除 0023-preserve-parameter-values.patch 后，内核形参推进恢复为 FreeRTOS 采用代码。已核的自有形参对象无直接写，三处对按值形参 data 的取址均为生成 Rte_Write 向 Com_SendSignal 传只读源，由 memcpy 读入 COM 的 signal_values。指针所指对象写入另沿服务输出合同。 |
 | R18.1 | Required | 指针算术结果所在数组范围 | not_assessed | 主文 143–144＋AMD2.75–76／TC2.33–34。0020-bounded-queue-front.patch 先判队列头再执行减步；Can_ReceiveHost 按 DLC 遍历且当前输入容量为八。#556 承接，归 #443，须逐偏移／下标及复合赋值证明基对象、最大范围和 one-past 不解引用，含队列步长、Dcm 请求／响应及 OS 索引。 |
-| R18.2 | Required | 指针相减的对象归属 | not_assessed | 主文 145。同数组或其末尾后一位置的指针可相减。旧 record-stacks 例已随两个栈 provider 归主机范围外。#556 承接，归 #443，须按当前实际操作数类型核对减法全集，将每个指针对回接共同对象和 ptrdiff_t 可表示范围，区分整数地址差。 |
-| R18.3 | Required | 指针关系比较的对象归属 | not_assessed | 主文 145–146＋AMD4.52 按 pointer 表达式判断。主机 record 范围比较已随平台栈迁移归范围外。#556 承接，归 #443，须逐当前关系式确认指针两端共同对象、one-past 或同结构成员关系，含 SDK 及项目补丁展开。 |
 | R18.4 | Advisory | 指针的 +／-／+=／-= | not_assessed | 主文 147–148。满足 R18.2 的指针相减属于例外，自增减另行判断。回退前原始报告的五个位置来自采用 queue.c 的环形存储运算。#503 恢复采用代码的栈游标减法赋值。0020 的队列退步仍按有界下标写法保留。#556 承接，归 #443，须独立核对项目补丁和当前作用域的所有四类运算符与消费者。 |
-| R18.5 | Advisory | 对象声明的指针层数 | not_assessed | 主文 148–149。按 typedef 替换及数组形参调整后计算连续 pointer declarator；函数与数组边界分段处理。#556 承接，归 #443，逐声明解析 RTE 回调、Can_TxSinkType 和 OS native handle 的真实类型层次。 |
 | R18.6 | Required | 自动对象地址的存续范围 | not_assessed | 主文 150＋AMD4.24。开启 ErrorHook 参数访问时，Os_ErrorResult 复制含自动输出地址的参数到 TLS，Os_ErrorContextSave 再转存至静态 ISR frame。沿既有 ErrorHook 风险处置保留 Required 违反及清空证明，正式义务开放。#556 承接，归 #443，补全部地址副本、owner 和线程退出证据。 |
 | R18.7 | Required | flexible array member 声明 | satisfied | 主文 151，AMD2.27 追加 C11；同号入口的 Struct／[] 模型另以实际声明独立补齐。当前物理及展开的结构成员均无 flexible array member；空 [] 为 tasks／counters／configured_alarms、通信路由／PDU 配置、task_name 和 fatal 文本等由初始化器推导容量的独立数组，数组形参另按声明角色区分。Os_ErrorParametersType 当前为有界结构，Dcm／CAN 缓冲为固定成员容量。 |
 | R18.8 | Required | variable length array 类型 | satisfied | 主文 152–153＋AMD4.25–30 区分 VLA 与 R18.10。四 profile 双目标的数组声明各维只见字面量、整数常量组合、枚举常量或推导容量。Arti_Types.h 的 char[条件?1:-1] 使用 sizeof 固定类型，实际 LP64／LLP64 选正界；Linux 全部 228 个展开另以 -Werror=vla 编译。 |
