@@ -126,6 +126,17 @@ def identity(project: Path, tree: str, target: str, sample: str, tool: dict,
     }
 
 
+def database_digests(output: Path, summary: dict) -> dict[str, str]:
+    databases = {}
+    for program in summary["programs"]:
+        name = program["name"]
+        directory = output / name if len(summary["programs"]) > 1 else output
+        path = directory / "compile_commands.json"
+        if path.is_file():
+            databases[name] = digest(path)
+    return databases
+
+
 def record(output: Path, tree: str, target: str, sample: str, candidates: set[str] | None = None, *,
            fingerprints: bool = False, cached_fingerprints: list[dict] | None = None) -> None:
     summary = read(output / "summary.json")
@@ -147,19 +158,11 @@ def record(output: Path, tree: str, target: str, sample: str, candidates: set[st
         rows = (c_fingerprint.inventory(summary, output, value["compiler"])
                 if cached_fingerprints is None else cached_fingerprints)
         fingerprint_fields["fingerprintSha256"] = c_fingerprint.write_receipt(output, rows)
-        databases = {}
-        for program in summary["programs"]:
-            name = program["name"]
-            directory = output / name if len(summary["programs"]) > 1 else output
-            path = directory / "compile_commands.json"
-            if path.is_file():
-                databases[name] = digest(path)
-        if cached_fingerprints is not None:
+        if cached_fingerprints is None:
+            databases = database_digests(output, summary)
+        else:
             cached_manifest = output / "analysis-identity.json"
-            original = read(cached_manifest).get("compileCommandsSha256", {}) if cached_manifest.is_file() else {}
-            if original and original != databases:
-                raise ValueError("Restored compilation databases differ from their producer")
-            databases = original
+            databases = read(cached_manifest).get("compileCommandsSha256", {}) if cached_manifest.is_file() else {}
         if databases:
             fingerprint_fields["compileCommandsSha256"] = databases
     manifest = {
@@ -254,6 +257,9 @@ def restore(candidate: Path, project: Path, output: Path, tree: str,
         raise ValueError("Cached raw analysis receipt identity differs")
     c_rename.verify(candidate, manifest.get("identifierEvidence", {}))
     c_acceptance._complete(summary)
+    original_databases = manifest.get("compileCommandsSha256")
+    if original_databases and original_databases != database_digests(candidate, summary):
+        raise ValueError("Restored compilation databases differ from their producer")
     sealed_sources(project)
     compiler = os.environ.get("AUTOSAR_CC") or shutil.which("gcc")
     if compiler is None:

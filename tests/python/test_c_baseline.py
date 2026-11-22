@@ -308,7 +308,7 @@ class BaselineReuseTests(unittest.TestCase):
 
     def test_sdk_or_current_checker_changes_refuse_cached_analysis(self):
         for changed in ("sdk", "coverage", "driver", "configuration", "source",
-                        "compiler", "analyzer", "receipt", "summary"):
+                        "compiler", "analyzer", "receipt", "database", "summary"):
             with self.subTest(changed=changed), \
                     tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as temporary, \
                     ExitStack() as stack:
@@ -340,6 +340,11 @@ class BaselineReuseTests(unittest.TestCase):
                 elif changed == "receipt":
                     summary["diagnostics"].append(copy.deepcopy(summary["diagnostics"][0]))
                     (candidate / "summary.json").write_text(json.dumps(summary))
+                elif changed == "database":
+                    manifest = candidate / "analysis-identity.json"
+                    receipt = c_baseline.read(manifest)
+                    receipt["compileCommandsSha256"] = {summary["programs"][0]["name"]: "d" * 64}
+                    manifest.write_text(json.dumps(receipt))
                 else:
                     (candidate / "summary.json").write_text("{}")
                 with self.assertRaises((ValueError, KeyError)):
