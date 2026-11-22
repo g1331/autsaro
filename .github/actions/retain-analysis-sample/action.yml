@@ -24,6 +24,7 @@ runs:
         path: |
           build/analysis-output/${{ inputs.sample }}/*/summary.json
           build/analysis-output/${{ inputs.sample }}/*/project
+          build/analysis-output/${{ inputs.sample }}/*/**/compile_commands.json
           build/analysis-output/${{ inputs.sample }}/*/analysis-identity.json
           build/analysis-output/${{ inputs.sample }}/*/diagnostic-fingerprints.json
           build/analysis-output/${{ inputs.sample }}/*/identifier-evidence

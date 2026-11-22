@@ -234,6 +234,8 @@ def fingerprint_comparison(path: Path, current_bytes: bytes, current: dict,
     fingerprints = {(row["diagnostic"], row["locationIndex"], row["program"]): row["fingerprint"]
                     for row in preview["current"]}
     before = {row["fingerprint"] for row in preview["baseline"]}
+    if preview.get("mode") == "pr":
+        before.update(preview.get("replayed", {}))
     incomplete = {row["program"] for side in ("current", "baseline") for row in preview[side]
                   if row["fingerprint"] is None}
     return fingerprints, before, incomplete

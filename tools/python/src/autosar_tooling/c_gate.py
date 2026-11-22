@@ -13,7 +13,14 @@ import subprocess
 from collections import Counter
 from pathlib import Path
 
-from autosar_tooling import c_acceptance, c_comparison, c_fingerprint, c_rename
+from autosar_tooling import (
+    c_acceptance,
+    c_comparison,
+    c_disposition,
+    c_fingerprint,
+    c_rename,
+    c_type_match,
+)
 from autosar_tooling.config import ROOT
 
 SAMPLES = c_comparison.MATRIX_SAMPLES
@@ -266,8 +273,21 @@ def producer_receipt(directory: Path, side: str, target: str, sample: str) -> st
     return receipts[0].read_text(encoding="ascii").strip()
 
 
+def excluded_type_fingerprints(summary: dict, sample: str) -> set[str]:
+    target = summary["scope"]["target"]
+    binary = summary["tool"]["binarySha256"]
+    current = c_disposition.load(ROOT, target, sample, binary)
+    path = Path(c_disposition.DIRECTORY) / target
+    if target == c_disposition.WINDOWS:
+        path /= binary
+    path /= sample + ".json"
+    previous = json.loads(git("show", "HEAD^1:" + path.as_posix()))
+    return set(current).union(*(values for values in previous["proofs"].values()))
+
+
 def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict, *,
-                           mode: str | None = None) -> dict:
+                           mode: str | None = None, replay_inputs: dict | None = None,
+                           replayed: dict | None = None, sample: str | None = None) -> dict:
     """Compare per-program fingerprints within both complete scope matrices."""
     inside = {}
     for side, summary in summaries.items():
@@ -283,6 +303,26 @@ def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict, *
         dispositions = current["projectAcceptance"]["fingerprintDispositions"]
         approved = set(dispositions["accepted"])
         comparison = c_fingerprint.verdict(inside["current"], inside["baseline"], approved)
+        if mode == "pr" and (replay_inputs is not None or replayed):
+            pairs = c_type_match.candidates(summaries, inside, comparison)
+            if pairs:
+                excluded = excluded_type_fingerprints(current, sample) | dispositions["candidates"].keys()
+                if replay_inputs is not None:
+                    try:
+                        replayed = c_type_match.replay(summaries, replay_inputs, pairs, excluded)
+                    except (OSError, RuntimeError, TypeError, ValueError, KeyError) as error:
+                        print(f"Type diagnostic replay unavailable: {error}", flush=True)
+                if replayed:
+                    allowed = {new: old for new, old in pairs.values()
+                               if not excluded.intersection((new, old))}
+                    if any(allowed.get(new) != proof["baseline"]
+                           or not c_type_match.same_observations(proof["observations"])
+                           for new, proof in replayed.items()):
+                        raise ValueError("Replay differs from unique unbound source candidates")
+                    paired = [dict(row, fingerprint=replayed[row["fingerprint"]]["baseline"])
+                              if row["fingerprint"] in replayed else row for row in inside["current"]]
+                    comparison = c_fingerprint.verdict(paired, inside["baseline"], approved)
+                    comparison["replayed"] = replayed
         comparison["staleDispositions"] = dispositions["stale"]
         if comparison["status"] == "passed" and dispositions["stale"]:
             comparison["status"] = "blocked"
@@ -387,7 +427,9 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
         result["baselineScopeMatrix"] = matrices["baseline"]
     if fingerprints:
         result["diagnosticFingerprints"] = fingerprint_comparison(
-            summaries, inventories, matrices, mode=mode,
+            summaries, inventories, matrices, mode=mode, sample=sample,
+            replay_inputs={side: (output, manifests[side])
+                           for side, output in outputs.items()} if mode == "pr" else None,
         )
         if mode is not None:
             result["status"] = result["diagnosticFingerprints"]["status"]
@@ -489,7 +531,8 @@ def aggregate(directory: Path, mode: str | None = None) -> None:
             for side, value in summaries.items():
                 c_fingerprint.validate_occurrences(value, inventories[side])
             if comparison != fingerprint_comparison(
-                    summaries, inventories, {"current": current_matrix, "baseline": baseline_matrix}, mode=mode):
+                    summaries, inventories, {"current": current_matrix, "baseline": baseline_matrix}, mode=mode,
+                    replayed=comparison.get("replayed"), sample=gate["sample"]):
                 raise ValueError("Fingerprint gate decision differs from the analyzed positions")
         statistics.append({"target": gate["target"], "sample": gate["sample"], **expected_scope})
     (directory / "compliance-scope.json").write_text(

@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -185,6 +186,99 @@ class FingerprintTests(unittest.TestCase):
             self.assertEqual(result["status"], "blocked")
             self.assertEqual(set(result["staleDispositions"]), approved)
             self.assertEqual(fingerprints[0], fingerprints[2])
+
+    def test_pr_type_match_requires_replayed_unchanged_operands_and_unbound_unique_reports(self):
+        from autosar_tooling import c_type_match
+        from ecu_tools.build import digest, tool_argument
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            try:
+                exe, addons, tool = c_check.tool_identity(root)
+            except (OSError, RuntimeError, ValueError) as error:
+                if os.environ.get("CPPCHECK"):
+                    self.fail(f"Configured CPPCHECK is unusable: {error}")
+                self.skipTest(f"Pinned Cppcheck unavailable: {error}")
+            target = "windows-x64-controlled-v1" if os.name == "nt" else "linux-x64-controlled-v1"
+            libs = ("std", "windows" if os.name == "nt" else "posix")
+            cfg = exe.parent / "cfg"
+            header = "typedef struct Tag *Handle;\n#define VALUE 300\ntypedef unsigned char Narrow;\n"
+            code = ('#include "types.h"\n'
+                    'unsigned count(unsigned n) { unsigned index; unsigned sum = 0u; for (index=0u; index<n; ++index) { sum+=index; } return sum; }\n'
+                    'int sample(unsigned input)\n{\n'
+                    '    Narrow value;\n    value = VALUE;\n    return (input < 3) && (value != 0u);\n}\n')
+
+            def scan(label, source=code, types=header):
+                output = root / label
+                output.mkdir(mode=0o700)
+                project = output / "project"
+                project.mkdir()
+                (project / "main.c").write_text(source, encoding="utf-8")
+                (project / "types.h").write_text(types, encoding="utf-8")
+                unit = tool_argument(project / "main.c")
+                command = {"directory": tool_argument(project), "file": unit,
+                           "arguments": ["gcc", "-std=c99", "-c", unit]}
+                scope = {"target": target, "cppcheckConfig": None, "compilerFlags": ["-std=c99"],
+                         "includePaths": [], "compilerSemanticInputs": {"builtins": []},
+                         "compilerDiscoveredDefines": {"main.c": []}, "sdkHeaders": [],
+                         "platformModel": None, "platformLibrary": None,
+                         "projectTranslationUnits": {"main.c": ["main.c", "types.h"]},
+                         "cppcheckLibraries": {name: str(cfg / (name + ".cfg")) for name in libs}}
+                _, _, reports, argv, inputs = c_check.analyze_program(
+                    exe, addons, project, ["main.c"], [command], scope, target, output,
+                )
+                scope["cppcheckInputs"] = inputs
+                reports = [d | {"programs": ["target"]} for d in reports if d["id"] in c_type_match.RULES]
+                def text_hash(path):
+                    return hashlib.sha256(path.read_text(encoding="utf-8").encode()).hexdigest()
+                semantic = {"sdk": "", "models": {}, "compiler": {
+                    "machine": "test", "release": "test", "predefines": [], "builtins": []},
+                    "analysisCode": {"c_check.py": "test", "c_addon.py": "test"},
+                    "libraries": {**{n: text_hash(cfg / (n + ".cfg")) for n in libs},
+                                  "implicitStd": text_hash(cfg / "std.cfg")},
+                    "addonRuntime": {n: text_hash(addons / n) for n in ("runaddon.py", "cppcheck.py", "cppcheckdata.py")}}
+                (output / "analysis-identity.json").write_text(json.dumps({
+                    "identity": {"python": {"binary": digest(Path(sys.executable))}},
+                    "compileCommandsSha256": {"target": digest(output / "compile_commands.json")}}))
+                summary = {"scope": scope, "diagnostics": reports, "tool": tool, "semanticIdentity": semantic,
+                           "programs": [{"name": "target", "translationUnits": ["main.c"], "command": argv}],
+                           "projectAcceptance": {"fingerprintDispositions": {
+                               "accepted": [], "stale": [], "candidates": {}}}}
+                rows = [{"diagnostic": i, "program": "target", "locationIndex": 0,
+                         "fingerprint": c_fingerprint.sha((label, i))} for i in range(len(reports))]
+                return output, summary, rows
+
+            before = scan("baseline")
+            def compare(after, mode="pr", excluded=()):
+                outputs, summaries, inventories = ({"baseline": b, "current": a} for b, a in zip(before, after))
+                with patch.object(c_gate.c_comparison, "matrix_headers", return_value=set()), \
+                        patch.object(c_gate, "excluded_type_fingerprints", return_value=set(excluded)):
+                    return c_gate.fingerprint_comparison(summaries, inventories, {side: {} for side in outputs},
+                                                         mode=mode, sample="standard-ecu", replay_inputs={
+                            side: (out, c_gate.read(out / "analysis-identity.json"))
+                            for side, out in outputs.items()})
+            tag = scan("tag", types=header.replace("Tag", "PrivateTag"))
+            self.assertEqual({d["id"] for d in tag[1]["diagnostics"]}, c_type_match.RULES)
+            match = compare(tag)
+            self.assertEqual(match["status"], "passed", match)
+            self.assertTrue(all(c_type_match.same_observations(proof["observations"])
+                                for proof in match["replayed"].values()))
+            local = scan("local", source=code.replace("index", "counter"))
+            self.assertEqual(compare(local)["status"], "passed")
+            self.assertEqual(compare(tag, "strict")["status"], "blocked")
+            bound = before[2][0]["fingerprint"]
+            self.assertEqual(compare(tag, excluded=[bound])["status"], "blocked")
+            # The raw report can survive these edits while its rule inputs change.
+            for label, source, types in (
+                ("macro", code, header.replace("300", "301")),
+                ("width", code, header.replace("unsigned char", "signed char")),
+                ("operator", code.replace("input < 3", "input > 3"), header),
+            ):
+                with self.subTest(label=label):
+                    self.assertEqual(compare(scan(label, source, types))["status"], "blocked")
+            database = tag[0] / "compile_commands.json"
+            database.write_bytes(database.read_bytes() + b"\n")
+            self.assertEqual(compare(tag)["status"], "blocked")
 
     def test_pinned_cppcheck_preprocesses_macro_spelling_differently(self):
         with tempfile.TemporaryDirectory() as directory:

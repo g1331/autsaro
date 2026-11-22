@@ -1463,6 +1463,21 @@ jobs:
               if len(scans) != 1:
                   raise RuntimeError('Missing or duplicated scan: ' + prefix + str(scans))
               shutil.copytree(scans[0], Path('build') / result)
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: github.event_name == 'pull_request' && matrix.target == 'linux-x64-controlled-v1'
+        with:
+          name: c-analysis-tools-${{ matrix.target }}
+          path: build/c-analysis-tools
+      - name: Select PR replay analyzer
+        if: github.event_name == 'pull_request' && matrix.target == 'linux-x64-controlled-v1'
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          executable = Path('build/c-analysis-tools/cppcheck')
+          executable.chmod(0o755)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('CPPCHECK=' + str(executable.resolve()) + '\n')
       - name: Strict generated source gate
         env:
           ANALYSIS_TARGET: ${{ matrix.target }}

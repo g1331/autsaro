@@ -147,6 +147,21 @@ def record(output: Path, tree: str, target: str, sample: str, candidates: set[st
         rows = (c_fingerprint.inventory(summary, output, value["compiler"])
                 if cached_fingerprints is None else cached_fingerprints)
         fingerprint_fields["fingerprintSha256"] = c_fingerprint.write_receipt(output, rows)
+        databases = {}
+        for program in summary["programs"]:
+            name = program["name"]
+            directory = output / name if len(summary["programs"]) > 1 else output
+            path = directory / "compile_commands.json"
+            if path.is_file():
+                databases[name] = digest(path)
+        if cached_fingerprints is not None:
+            cached_manifest = output / "analysis-identity.json"
+            original = read(cached_manifest).get("compileCommandsSha256", {}) if cached_manifest.is_file() else {}
+            if original and original != databases:
+                raise ValueError("Restored compilation databases differ from their producer")
+            databases = original
+        if databases:
+            fingerprint_fields["compileCommandsSha256"] = databases
     manifest = {
         "format": FORMAT, "identity": value,
         "summarySha256": digest(output / "summary.json"),

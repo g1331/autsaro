@@ -6,7 +6,8 @@ DOCUMENTATION = (
 DRIVERS = {
     "tools/python/src/autosar_tooling/" + name + ".py"
     for name in ("c_check", "c_acceptance", "c_sdk", "c_comparison",
-                 "c_addon", "c_gate", "c_baseline", "c_rename", "c_fingerprint", "c_disposition")
+                 "c_addon", "c_gate", "c_baseline", "c_rename", "c_fingerprint", "c_disposition",
+                 "c_type_match", "c_type_replay")
 }
 # These files run in the always-selected Python matrix for code changes.
 PYTHON_CHECK_INPUTS = {
