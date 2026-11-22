@@ -14,7 +14,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
-from autosar_tooling import c_fingerprint
+from autosar_tooling import c_fingerprint, c_gate
 
 # GitHub truncates displayed results above this limit even when upload succeeds.
 SARIF_RESULTS_PER_RUN = 5000
@@ -234,8 +234,19 @@ def fingerprint_comparison(path: Path, current_bytes: bytes, current: dict,
     fingerprints = {(row["diagnostic"], row["locationIndex"], row["program"]): row["fingerprint"]
                     for row in preview["current"]}
     before = {row["fingerprint"] for row in preview["baseline"]}
-    if preview.get("mode") == "pr":
-        before.update(preview.get("replayed", {}))
+    if preview.get("mode") == "pr" and preview.get("replayed"):
+        summaries = {"current": current, "baseline": json.loads(baseline_bytes)}
+        manifests = gate["analysisInputs"]
+        for side, summary in summaries.items():
+            c_gate.validate_gate_producer(gate, side, summary)
+        verified = c_gate.fingerprint_comparison(
+            summaries, {side: preview[side] for side in summaries},
+            {"current": current["projectAcceptance"]["scopeMatrix"], "baseline": gate["baselineScopeMatrix"]},
+            mode="pr", sample=gate["sample"], manifests=manifests, replayed=preview["replayed"],
+            replay_receipt=path.with_name(c_gate.REPLAY_RECEIPT))
+        if verified != preview:
+            raise ValueError("Replay comparison differs from source gate")
+        before.update(verified["replayed"])
     incomplete = {row["program"] for side in ("current", "baseline") for row in preview[side]
                   if row["fingerprint"] is None}
     return fingerprints, before, incomplete

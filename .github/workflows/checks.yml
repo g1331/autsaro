@@ -1508,6 +1508,7 @@ jobs:
             build/c-analysis-results/*/summary.json
             build/c-analysis-results/*/baseline-summary.json
             build/c-analysis-results/*/gate.json
+            build/c-analysis-results/*/diagnostic-replay.sha256
           if-no-files-found: error
           retention-days: 14
       # Offline context rebinding consumes these exact source bytes and raw receipts.

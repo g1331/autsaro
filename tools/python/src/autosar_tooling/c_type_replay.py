@@ -113,6 +113,8 @@ def read_dump(dump, addons, root, unit, expected, model, edits):
         actual.discard(Path(model))
     if actual != expected or not configurations:
         raise ValueError("Replay did not consume the original Cppcheck input set")
+    if edits["tags"] and len(configurations) != 1:
+        return {}
     common = set.intersection(*(set(sites) for _, _, sites in configurations))
     return {site: [(name, standard, sites[site]) for name, standard, sites in configurations]
             for site in common if all(None not in sites[site] for _, _, sites in configurations)}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -188,7 +189,7 @@ class FingerprintTests(unittest.TestCase):
             self.assertEqual(fingerprints[0], fingerprints[2])
 
     def test_pr_type_match_requires_replayed_unchanged_operands_and_unbound_unique_reports(self):
-        from autosar_tooling import c_type_match
+        from autosar_tooling import c_baseline, c_type_match
         from ecu_tools.build import digest, tool_argument
 
         with tempfile.TemporaryDirectory() as directory:
@@ -238,7 +239,9 @@ class FingerprintTests(unittest.TestCase):
                                   "implicitStd": text_hash(cfg / "std.cfg")},
                     "addonRuntime": {n: text_hash(addons / n) for n in ("runaddon.py", "cppcheck.py", "cppcheckdata.py")}}
                 (output / "analysis-identity.json").write_text(json.dumps({
-                    "identity": {"python": {"binary": digest(Path(sys.executable))}},
+                    "identity": {"tree": label, "compiler": c_baseline.compiler_identity(Path(shutil.which("gcc"))),
+                                 "python": {"binary": digest(Path(sys.executable))}},
+                    "summarySha256": c_fingerprint.sha(reports),
                     "compileCommandsSha256": {"target": digest(output / "compile_commands.json")}}))
                 summary = {"scope": scope, "diagnostics": reports, "tool": tool, "semanticIdentity": semantic,
                            "programs": [{"name": "target", "translationUnits": ["main.c"], "command": argv}],
@@ -254,7 +257,8 @@ class FingerprintTests(unittest.TestCase):
                 with patch.object(c_gate.c_comparison, "matrix_headers", return_value=set()), \
                         patch.object(c_gate, "excluded_type_fingerprints", return_value=set(excluded)):
                     return c_gate.fingerprint_comparison(summaries, inventories, {side: {} for side in outputs},
-                                                         mode=mode, sample="standard-ecu", replay_inputs={
+                                                         mode=mode, sample="standard-ecu",
+                                                         replay_receipt=after[0] / c_gate.REPLAY_RECEIPT, replay_inputs={
                             side: (out, c_gate.read(out / "analysis-identity.json"))
                             for side, out in outputs.items()})
             tag = scan("tag", types=header.replace("Tag", "PrivateTag"))
@@ -266,8 +270,6 @@ class FingerprintTests(unittest.TestCase):
             local = scan("local", source=code.replace("index", "counter"))
             self.assertEqual(compare(local)["status"], "passed")
             self.assertEqual(compare(tag, "strict")["status"], "blocked")
-            bound = before[2][0]["fingerprint"]
-            self.assertEqual(compare(tag, excluded=[bound])["status"], "blocked")
             # The raw report can survive these edits while its rule inputs change.
             for label, source, types in (
                 ("macro", code, header.replace("300", "301")),
@@ -276,9 +278,82 @@ class FingerprintTests(unittest.TestCase):
             ):
                 with self.subTest(label=label):
                     self.assertEqual(compare(scan(label, source, types))["status"], "blocked")
+            # Re-aggregation and SARIF must reject observations transplanted to another
+            # genuine candidate, even if its outer old/new fingerprint pair is eligible.
+            summaries = {"current": tag[1], "baseline": before[1]}
+            inventories = {"current": tag[2], "baseline": before[2]}
+            manifests = {side: c_gate.read(out / "analysis-identity.json")
+                         for side, out in (("baseline", before[0]), ("current", tag[0]))}
+            matrices = {side: {} for side in summaries}
+            summaries["current"]["projectAcceptance"]["scopeMatrix"] = {}
+            for side, summary in summaries.items():
+                file = "summary.json" if side == "current" else "baseline-summary.json"
+                (tag[0] / file).write_text(json.dumps(summary))
+            current_path = tag[0] / "summary.json"
+            gate = {"sample": "standard-ecu", "target": target, "baseline": "baseline", "commit": "tag",
+                    "baselineScopeMatrix": {}, "analysisInputs": manifests,
+                    "analysisProducerSha256": {side: c_fingerprint.sha(m) for side, m in manifests.items()},
+                    "summarySha256": {"baseline": digest(tag[0] / "baseline-summary.json"),
+                                      "current": digest(current_path)}}
+            with patch.object(c_gate.c_comparison, "matrix_headers", return_value=set()), \
+                    patch.object(c_gate, "excluded_type_fingerprints", return_value=set()), \
+                    patch.object(c_gate, "validate_analysis_identity"):
+                def sarif(preview):
+                    (tag[0] / "gate.json").write_text(json.dumps(dict(gate, diagnosticFingerprints=preview)))
+                    return ci_reporting.fingerprint_comparison(current_path, current_path.read_bytes(), tag[1], None)
+                self.assertTrue(set(match["replayed"]).issubset(sarif(match)[1]))
+                for mutation in ("position", "observations", "program", "command", "missing-field", "rehashed"):
+                    invalid = copy.deepcopy(match)
+                    first, second, *_ = invalid["replayed"].values()
+                    if mutation == "position":
+                        first["bindings"] = second["bindings"]
+                    elif mutation == "observations":
+                        first["observations"] = next(proof["observations"] for proof in invalid["replayed"].values()
+                                                     if proof["observations"] != first["observations"])
+                    elif mutation == "program":
+                        first["bindings"]["current"]["program"] = "probe"
+                    elif mutation == "command":
+                        first["bindings"]["baseline"]["compileCommandsSha256"] = "0" * 64
+                    elif mutation == "rehashed":
+                        for side, binding in first["bindings"].items():
+                            configs = first["observations"][side]
+                            configs[0][2][0]["operator"] = "different"
+                            identity = {k: v for k, v in binding.items() if k != "observationSha256"}
+                            binding["observationSha256"] = c_fingerprint.sha([identity, configs])
+                    else:
+                        for configs in first["observations"].values():
+                            del configs[0][2][0]["operands"][0]["knownInt"]
+                    with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                        c_gate.fingerprint_comparison(summaries, inventories, matrices, mode="pr", manifests=manifests,
+                                                      replayed=invalid["replayed"], sample="standard-ecu",
+                                                      replay_receipt=tag[0] / c_gate.REPLAY_RECEIPT)
+                    with self.subTest(sarif=mutation), self.assertRaises(ValueError):
+                        sarif(invalid)
+            bound = before[2][0]["fingerprint"]
+            self.assertEqual(compare(tag, excluded=[bound])["status"], "blocked")
             database = tag[0] / "compile_commands.json"
             database.write_bytes(database.read_bytes() + b"\n")
             self.assertEqual(compare(tag)["status"], "blocked")
+
+            collision_code = ('#include "types.h"\nunsigned short sample(void) {\n'
+                              '    unsigned source = __builtin_types_compatible_p(Handle, Other) ? 65536u : 256u;\n'
+                              '    unsigned short out;\n    out = source;\n    return out;\n}\n')
+            types = "typedef struct OldTag *Handle;\ntypedef struct OtherTag *Other;\n"
+            before = scan("collision-before", collision_code, types)
+            collision = scan("collision-after", collision_code, types.replace("OldTag", "OtherTag"))
+            self.assertTrue(any(d["id"] == "misra-c2012-10.3" for d in collision[1]["diagnostics"]))
+            self.assertEqual(compare(collision)["status"], "blocked")
+            self.assertEqual(compare(collision, "strict")["status"], "blocked")
+
+            # The occupied spelling can be constructed by a macro in an unchanged line.
+            types = ("#define JOIN(a, b) a ## b\n"
+                     "typedef struct OldTag *Handle;\ntypedef struct JOIN(Other, Tag) *Other;\n")
+            before = scan("paste-before", collision_code, types)
+            collision = scan("paste-after", collision_code, types.replace("OldTag", "OtherTag"))
+            self.assertTrue(c_type_match.renamed_inputs(
+                "main.c", {"baseline": before[1], "current": collision[1]},
+                {"baseline": before[0], "current": collision[0]}))
+            self.assertEqual(compare(collision)["status"], "blocked")
 
     def test_pinned_cppcheck_preprocesses_macro_spelling_differently(self):
         with tempfile.TemporaryDirectory() as directory:

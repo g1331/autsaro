@@ -26,6 +26,7 @@ from autosar_tooling.config import ROOT
 SAMPLES = c_comparison.MATRIX_SAMPLES
 TARGETS = c_comparison.MATRIX_TARGETS
 FORMAT = "c-source-no-regression-v1"
+REPLAY_RECEIPT = "diagnostic-replay.sha256"
 
 
 def read(path: Path) -> dict:
@@ -252,6 +253,14 @@ def validate_analysis_identity(manifest: dict, summary: dict, tree: str, target:
         raise ValueError(f"Raw analysis identity incomplete or differs: {target}/{sample}/{tree}")
 
 
+def validate_gate_producer(gate: dict, side: str, summary: dict) -> None:
+    manifest = gate["analysisInputs"][side]
+    if c_fingerprint.sha(manifest) != gate["analysisProducerSha256"][side]:
+        raise ValueError("Analysis producer receipt differs")
+    validate_analysis_identity(manifest, summary, gate["commit" if side == "current" else "baseline"],
+                               gate["target"], gate["sample"])
+
+
 def validate_consumed_inputs(manifest: dict, project: Path, producer_digest: str) -> None:
     from autosar_tooling.c_baseline import (
         analysis_inputs_identity,
@@ -287,7 +296,8 @@ def excluded_type_fingerprints(summary: dict, sample: str) -> set[str]:
 
 def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict, *,
                            mode: str | None = None, replay_inputs: dict | None = None,
-                           replayed: dict | None = None, sample: str | None = None) -> dict:
+                           replayed: dict | None = None, manifests: dict | None = None,
+                           sample: str | None = None, replay_receipt: Path | None = None) -> dict:
     """Compare per-program fingerprints within both complete scope matrices."""
     inside = {}
     for side, summary in summaries.items():
@@ -308,17 +318,18 @@ def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict, *
             if pairs:
                 excluded = excluded_type_fingerprints(current, sample) | dispositions["candidates"].keys()
                 if replay_inputs is not None:
+                    manifests = {side: value[1] for side, value in replay_inputs.items()}
                     try:
                         replayed = c_type_match.replay(summaries, replay_inputs, pairs, excluded)
-                    except (OSError, RuntimeError, TypeError, ValueError, KeyError) as error:
+                    except (OSError, RuntimeError, TypeError, ValueError, KeyError, subprocess.SubprocessError) as error:
                         print(f"Type diagnostic replay unavailable: {error}", flush=True)
+                    if replayed and replay_receipt is not None:
+                        replay_receipt.write_text(c_fingerprint.sha(replayed) + "\n", encoding="ascii")
                 if replayed:
-                    allowed = {new: old for new, old in pairs.values()
-                               if not excluded.intersection((new, old))}
-                    if any(allowed.get(new) != proof["baseline"]
-                           or not c_type_match.same_observations(proof["observations"])
-                           for new, proof in replayed.items()):
-                        raise ValueError("Replay differs from unique unbound source candidates")
+                    c_type_match.verify_replayed(replayed, pairs, excluded, manifests)
+                    if replay_inputs is None and (replay_receipt is None
+                            or replay_receipt.read_text(encoding="ascii").strip() != c_fingerprint.sha(replayed)):
+                        raise ValueError("Replay observations differ from producer receipt")
                     paired = [dict(row, fingerprint=replayed[row["fingerprint"]]["baseline"])
                               if row["fingerprint"] in replayed else row for row in inside["current"]]
                     comparison = c_fingerprint.verdict(paired, inside["baseline"], approved)
@@ -420,17 +431,17 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
         )
         result = {"comparison": comparison, "complianceScope": summary["complianceScope"],
                   "projectAcceptance": summary["projectAcceptance"]["status"]}
-        if mode == "strict":
-            result["analysisInputs"] = manifests
-            result["analysisProducerSha256"] = producer_digests
     if matrices:
         result["baselineScopeMatrix"] = matrices["baseline"]
     if fingerprints:
         result["diagnosticFingerprints"] = fingerprint_comparison(
-            summaries, inventories, matrices, mode=mode, sample=sample,
+            summaries, inventories, matrices, mode=mode, sample=sample, replay_receipt=current / REPLAY_RECEIPT,
             replay_inputs={side: (output, manifests[side])
                            for side, output in outputs.items()} if mode == "pr" else None,
         )
+        if mode == "strict" or result["diagnosticFingerprints"].get("replayed"):
+            result["analysisInputs"] = manifests
+            result["analysisProducerSha256"] = producer_digests
         if mode is not None:
             result["status"] = result["diagnosticFingerprints"]["status"]
     result.update(format=FORMAT, target=target, sample=sample,
@@ -483,25 +494,20 @@ def aggregate(directory: Path, mode: str | None = None) -> None:
                     or gate["summarySha256"][side] != sha(summary_path)
                     or summary["scope"]["target"] != gate["target"]):
                 raise ValueError(f"Source gate analysis identity invalid: {summary_path}")
-            if mode == "strict":
-                manifest = gate["analysisInputs"][side]
-                if c_fingerprint.sha(manifest) != gate["analysisProducerSha256"][side]:
-                    raise ValueError(f"Strict analysis producer receipt differs: {path}")
-                validate_analysis_identity(manifest, summary,
-                                           gate["commit" if side == "current" else "baseline"],
-                                           gate["target"], gate["sample"])
+            if mode == "strict" or (mode == "pr" and fingerprints.get("replayed")):
+                validate_gate_producer(gate, side, summary)
             identities.add((side, gate["target"], identity))
             summaries[side] = summary
-        matrix.append((gate, summaries))
+        matrix.append((gate, summaries, path))
         found.add(pair)
     if found != expected or len(list(directory.glob("*/*/summary.json"))) != len(expected):
         raise ValueError(f"Source gate matrix incomplete: {sorted(expected - found)}")
     current_matrix = c_comparison.scope_matrix([
-        c_comparison.scope_receipt(summaries["current"], gate["sample"]) for gate, summaries in matrix])
+        c_comparison.scope_receipt(summaries["current"], gate["sample"]) for gate, summaries, _path in matrix])
     baseline_matrix = c_comparison.scope_matrix([
-        c_comparison.scope_receipt(summaries["baseline"], gate["sample"]) for gate, summaries in matrix])
+        c_comparison.scope_receipt(summaries["baseline"], gate["sample"]) for gate, summaries, _path in matrix])
     statistics = []
-    for gate, summaries in matrix:
+    for gate, summaries, path in matrix:
         summary = summaries["current"]
         acceptance = summary["projectAcceptance"]
         if (acceptance.get("scopeMatrix") != current_matrix
@@ -532,7 +538,8 @@ def aggregate(directory: Path, mode: str | None = None) -> None:
                 c_fingerprint.validate_occurrences(value, inventories[side])
             if comparison != fingerprint_comparison(
                     summaries, inventories, {"current": current_matrix, "baseline": baseline_matrix}, mode=mode,
-                    replayed=comparison.get("replayed"), sample=gate["sample"]):
+                    replayed=comparison.get("replayed"), manifests=gate.get("analysisInputs"), sample=gate["sample"],
+                    replay_receipt=path.with_name(REPLAY_RECEIPT)):
                 raise ValueError("Fingerprint gate decision differs from the analyzed positions")
         statistics.append({"target": gate["target"], "sample": gate["sample"], **expected_scope})
     (directory / "compliance-scope.json").write_text(

@@ -11,6 +11,7 @@ import shutil
 import sys
 import tempfile
 from collections import defaultdict
+from itertools import pairwise
 from pathlib import Path
 
 from ecu_tools.build import digest, safe_relative, tool_argument
@@ -34,16 +35,43 @@ def same_observations(observations: dict) -> bool:
         if not isinstance(name, str) or standard != 'c99' or not isinstance(reports, list) or not reports:
             return False
         for report in reports:
-            if not isinstance(report, dict) or not report.get('operator'):
+            if (not isinstance(report, dict) or set(report) != {'operator', 'originalName', 'macro', 'operands'}
+                    or not report['operator']):
                 return False
             operands = report.get('operands')
             if not isinstance(operands, list) or len(operands) != 2 or any(
                     not isinstance(operand, dict) or not operand.get('token')
-                    or 'essentialType' not in operand or 'category' not in operand
+                    or set(operand) != {'token', 'macro', 'originalName', 'declaration', 'type', 'sign', 'bits',
+                                        'constness', 'originalType', 'knownInt', 'essentialType', 'essentialBits', 'category'}
                     or operand.get('type') not in {'bool', 'char', 'short', 'int', 'long', 'long long'}
                     for operand in operands):
                 return False
     return True
+
+
+def observation_binding(site, fingerprint, manifest, configs):
+    # The verified producer database has exactly one effective command for this program and TU.
+    program, unit, rule, line, column = site
+    database = manifest['compileCommandsSha256'][program]
+    if not c_fingerprint.SHA256.fullmatch(database):
+        raise ValueError('Replay compilation database digest missing')
+    identity = {'program': program, 'unit': unit, 'rule': rule, 'line': line, 'column': column,
+                'fingerprint': fingerprint, 'tree': manifest['identity']['tree'],
+                'summarySha256': manifest['summarySha256'], 'compileCommandsSha256': database}
+    return {**identity, 'observationSha256': c_fingerprint.sha([identity, configs])}
+
+
+def verify_replayed(replayed, pairs, excluded, manifests):
+    allowed = {new: (site, old) for site, (new, old) in pairs.items()
+               if not excluded.intersection((new, old))}
+    for new, proof in replayed.items():
+        if new not in allowed or not same_observations(proof['observations']):
+            raise ValueError('Replay differs from unique unbound source candidates')
+        site, old = allowed[new]
+        expected = {side: observation_binding(site, fingerprint, manifests[side], proof['observations'][side])
+                    for side, fingerprint in (('baseline', old), ('current', new))}
+        if proof['baseline'] != old or proof['bindings'] != expected:
+            raise ValueError('Replay observations differ from bound diagnostic or command')
 
 
 def candidates(summaries, inventories, comparison):
@@ -70,6 +98,34 @@ def candidates(summaries, inventories, comparison):
             if site in sites['baseline'] and sites['baseline'][site][1] == signature}
 
 
+def isolated_expanded_tag(text, root, edit):
+    """Require one expanded declaration and reject every other use in the tag namespace."""
+    header, line, spelling, alias = edit['declaration']
+    names = set(edit['tags'])
+    filename, number, found, previous = '', 0, 0, None
+    for row in text.splitlines():
+        marker = re.fullmatch(r'\s*#(?:line)?\s+(\d+) "([^"]+)"(?: .*)?', row)
+        if marker:
+            filename, number = marker[2], int(marker[1])
+            continue
+        # Generated declarations can use a section attribute before an ordinary
+        # typedef. Strip only this known form and preserve a preceding tag keyword.
+        row = re.sub(r'\b__attribute__\s*\(\s*\(\s*section\s*\(\s*"[\w.]+"\s*\)\s*\)\s*\)', ' ', row)
+        words = c_fingerprint.tokens(row)
+        if Path(filename) == root / header and number == line and words == [
+                'typedef', 'struct', spelling, '*', alias, ';']:
+            found += 1
+            previous = ';'
+        else:
+            for word in words:
+                # Unrecognized attributes between a keyword and its identifier may end in ')' or ']'.
+                if word in names and previous in {'struct', 'enum', 'union', ')', ']'}:
+                    return False
+                previous = word
+        number += 1
+    return found == 1
+
+
 def renamed_inputs(unit, summaries, outputs):
     """Require the complete analyzer/project closure to differ only by identifier substitutions."""
     paths = {}
@@ -87,6 +143,7 @@ def renamed_inputs(unit, summaries, outputs):
     changes = set()
     local = {'baseline': [], 'current': []}
     tags = set()
+    declarations = []
     for path in paths['current']:
         if not safe_relative(path):
             return False
@@ -112,9 +169,31 @@ def renamed_inputs(unit, summaries, outputs):
                     return False
                 else:
                     tags.update((left[2], right[2]))
+                    alias = texts[0].splitlines()[line - 1].split("*")[1].split(";")[0].strip()
+                    declarations.append((path, line, alias))
     if len(changes) != 1:
         return False
-    return {side: {'local': positions, 'tags': sorted(tags)} for side, positions in local.items()}
+    edits = {side: {'local': positions, 'tags': sorted(tags)} for side, positions in local.items()}
+    if tags:
+        if len(declarations) != 1 or any(local.values()):
+            return False
+        path, line, alias = declarations[0]
+        for side, spelling in zip(('baseline', 'current'), next(iter(changes))):
+            # Include inactive source branches. Even another forward declaration
+            # makes the physical rename ambiguous in the captured closure.
+            for name in paths[side]:
+                text = (outputs[side] / 'project' / name).read_text(encoding='utf-8')
+                logical = c_fingerprint.LINE_SPLICE.sub('', text)
+                if not any(tag in logical for tag in tags):
+                    continue
+                tokens = [token for token in c_fingerprint.SOURCE_TOKEN.findall(logical)
+                          if not token.startswith(('//', '/*'))]
+                used = [word for prev, word in pairwise(tokens)
+                        if prev in ('struct', 'enum', 'union') and word in tags]
+                if used != ([spelling] if name == path else []):
+                    return False
+            edits[side]['declaration'] = (path, line, spelling, alias)
+    return edits
 
 
 def program_input(output, summary, program, unit, database_digests):
@@ -162,7 +241,7 @@ def program_input(output, summary, program, unit, database_digests):
     return (*scope['compilerFlags'], *actual_builtins, *scope['compilerDiscoveredDefines'][unit])
 
 
-def replay_side(summary, output, selected, edits, tool, python, work):
+def replay_side(summary, output, selected, edits, tool, python, work, compiler):
     exe, addons, tool_info = tool
     scope = summary['scope']
     if any(tool_info[key] != summary['tool'][key] for key in ('binarySha256', 'addons', 'version', 'expectedSourceRevision')):
@@ -205,6 +284,21 @@ def replay_side(summary, output, selected, edits, tool, python, work):
         commands.append({'directory': tool_argument(root), 'file': file, 'arguments': [
             'gcc', *flags, *('-I' + tool_argument(root / path) for path in scope['includePaths']), '-c', file]})
         units[unit] = [str(root / name) for name in scope['cppcheckInputs'][unit]['project']]
+    refused = set()
+    for index, (unit, command) in enumerate(zip(selected, commands)):
+        if not edits[unit]['tags']:
+            continue
+        # Inspect actual preprocessor output in both namespaces. A spelling may
+        # validly remain as an ordinary typedef after its independent tag moves.
+        args = [compiler, *scope['compilerFlags'], *('-I' + tool_argument(root / path) for path in scope['includePaths']),
+                '-E', command['file']]
+        _, gcc_text, _ = c_check.run(args, work, f'tag-gcc-{index}')
+        single = work / f'tag-command-{index}.json'
+        single.write_text(json.dumps([command]), encoding='utf-8')
+        _, checker_text, _ = c_check.run([str(exe), '-E', '--quiet', *argv[2:], '--project=' + str(single)],
+                                         work, f'tag-cppcheck-{index}')
+        if not all(isolated_expanded_tag(text, root, edits[unit]) for text in (gcc_text, checker_text)):
+            refused.add(unit)
     db = work / 'compile_commands.json'
     db.write_text(json.dumps(commands), encoding='utf-8')
     cache = work / 'cache'
@@ -217,7 +311,7 @@ def replay_side(summary, output, selected, edits, tool, python, work):
     c_check.run([str(python), '-I', str(Path(__file__).with_name('c_type_replay.py')),
                  str(request), str(result)], work, 'type-operands')
     return {unit: {(rule, line, column): evidence for rule, line, column, evidence in rows}
-            for unit, rows in json.loads(result.read_bytes()).items()}
+            for unit, rows in json.loads(result.read_bytes()).items() if unit not in refused}
 
 
 def replay(summaries, inputs, pairs, excluded):
@@ -271,12 +365,24 @@ def replay(summaries, inputs, pairs, excluded):
         if python is None:
             raise ValueError("Original addon Python executable unavailable for replay")
         tool = c_check.tool_identity(work)
-        results = {side: replay_side(summaries[side], outputs[side], selected, {unit: edits[unit][side] for unit in selected}, tool, python, work / side)
-                   for side in ('baseline', 'current')}
+        compiler = os.environ.get('AUTOSAR_CC') or shutil.which('gcc')
+        if any(edits[unit]['current']['tags'] for unit in selected):
+            from autosar_tooling.c_baseline import compiler_identity
+            actual = compiler_identity(Path(compiler)) if compiler else None
+            if any(actual != manifest['identity']['compiler'] for _, manifest in inputs.values()):
+                raise ValueError('Original compiler unavailable for tag preprocessing')
+        results = {}
+        for side in ('baseline', 'current'):
+            side_edits = {unit: edits[unit][side] for unit in selected}
+            results[side] = replay_side(summaries[side], outputs[side], selected, side_edits,
+                                        tool, python, work / side, compiler)
     matches = {}
     for site, (current, baseline) in comparable.items():
         _, unit, *position = site
-        facts = [results[side][unit].get(tuple(position)) for side in ('baseline', 'current')]
+        facts = [results[side].get(unit, {}).get(tuple(position)) for side in ('baseline', 'current')]
         if facts[0] and facts[0] == facts[1]:
-            matches[current] = {'baseline': baseline, 'observations': dict(zip(('baseline', 'current'), facts))}
+            observations = dict(zip(('baseline', 'current'), facts))
+            bindings = {side: observation_binding(site, fingerprint, inputs[side][1], observations[side])
+                        for side, fingerprint in (('baseline', baseline), ('current', current))}
+            matches[current] = {'baseline': baseline, 'observations': observations, 'bindings': bindings}
     return matches
