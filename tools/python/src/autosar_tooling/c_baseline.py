@@ -31,6 +31,7 @@ from autosar_tooling import (
     c_fingerprint,
     c_gate,
     c_rename,
+    c_type_match,
 )
 from autosar_tooling.c_baseline_jobs import previous_wrapper, producer_matches
 from autosar_tooling.config import ROOT
@@ -160,9 +161,14 @@ def record(output: Path, tree: str, target: str, sample: str, candidates: set[st
         fingerprint_fields["fingerprintSha256"] = c_fingerprint.write_receipt(output, rows)
         if cached_fingerprints is None:
             databases = database_digests(output, summary)
+            views = c_type_match.producer_views(output, summary)
         else:
             cached_manifest = output / "analysis-identity.json"
-            databases = read(cached_manifest).get("compileCommandsSha256", {}) if cached_manifest.is_file() else {}
+            original = read(cached_manifest) if cached_manifest.is_file() else {}
+            databases = original.get("compileCommandsSha256", {})
+            views = original.get("compilerViewSha256", {})
+        if views:
+            fingerprint_fields["compilerViewSha256"] = views
         if databases:
             fingerprint_fields["compileCommandsSha256"] = databases
     manifest = {

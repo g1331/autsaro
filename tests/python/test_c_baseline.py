@@ -120,6 +120,7 @@ class BaselineReuseTests(unittest.TestCase):
             proof.write_bytes(b"historical proof")
             receipt = c_baseline.read(candidate / "analysis-identity.json")
             receipt["identifierEvidence"] = {"main.c": digest(proof)}
+            receipt["compilerViewSha256"] = {"main.c": c_fingerprint.sha(["producer view"])}
             (candidate / "analysis-identity.json").write_text(json.dumps(receipt))
             archive = root / "artifact.zip"
             with zipfile.ZipFile(archive, "w") as package:
@@ -170,6 +171,7 @@ class BaselineReuseTests(unittest.TestCase):
             self.assertEqual(c_fingerprint.read_receipt(output, result, manifest["fingerprintSha256"]),
                              fingerprints)
             self.assertNotEqual(manifest["fingerprintSha256"], receipt["fingerprintSha256"])
+            self.assertEqual(manifest["compilerViewSha256"], receipt["compilerViewSha256"])
             self.assertNotIn("identifierEvidence", manifest)
             self.assertFalse((output / "identifier-evidence").exists())
 

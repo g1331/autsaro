@@ -238,7 +238,12 @@ class FingerprintTests(unittest.TestCase):
                     "libraries": {**{n: text_hash(cfg / (n + ".cfg")) for n in libs},
                                   "implicitStd": text_hash(cfg / "std.cfg")},
                     "addonRuntime": {n: text_hash(addons / n) for n in ("runaddon.py", "cppcheck.py", "cppcheckdata.py")}}
+                scope["translationUnits"] = ["main.c"]
+                c_check.run([shutil.which("gcc"), "-std=c99", "-E", "-dD", unit],
+                            output, "compiler-origins-0")
+                views = c_type_match.producer_views(output, {"scope": scope, "diagnostics": reports})
                 (output / "analysis-identity.json").write_text(json.dumps({
+                    "compilerViewSha256": views,
                     "identity": {"tree": label, "compiler": c_baseline.compiler_identity(Path(shutil.which("gcc"))),
                                  "python": {"binary": digest(Path(sys.executable))}},
                     "summarySha256": c_fingerprint.sha(reports),
@@ -329,6 +334,16 @@ class FingerprintTests(unittest.TestCase):
                                                       replay_receipt=tag[0] / c_gate.REPLAY_RECEIPT)
                     with self.subTest(sarif=mutation), self.assertRaises(ValueError):
                         sarif(invalid)
+            # Missing and disagreeing evidence never authorizes either rename class.
+            for candidate in (tag, local):
+                manifest_path = candidate[0] / "analysis-identity.json"
+                original = c_gate.read(manifest_path)
+                baseline_views = manifests["baseline"]["compilerViewSha256"]
+                self.assertNotEqual(original["compilerViewSha256"], baseline_views)
+                for views in ({}, baseline_views):
+                    manifest_path.write_text(json.dumps(dict(original, compilerViewSha256=views)))
+                    self.assertEqual(compare(candidate)["status"], "blocked")
+                manifest_path.write_text(json.dumps(original))
             bound = before[2][0]["fingerprint"]
             self.assertEqual(compare(tag, excluded=[bound])["status"], "blocked")
             database = tag[0] / "compile_commands.json"

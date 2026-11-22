@@ -10,7 +10,7 @@ import re
 import shutil
 import sys
 import tempfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from itertools import pairwise
 from pathlib import Path
 
@@ -57,7 +57,8 @@ def observation_binding(site, fingerprint, manifest, configs):
         raise ValueError('Replay compilation database digest missing')
     identity = {'program': program, 'unit': unit, 'rule': rule, 'line': line, 'column': column,
                 'fingerprint': fingerprint, 'tree': manifest['identity']['tree'],
-                'summarySha256': manifest['summarySha256'], 'compileCommandsSha256': database}
+                'summarySha256': manifest['summarySha256'], 'compileCommandsSha256': database,
+                'compilerViewSha256': manifest['compilerViewSha256'][unit]}
     return {**identity, 'observationSha256': c_fingerprint.sha([identity, configs])}
 
 
@@ -98,32 +99,71 @@ def candidates(summaries, inventories, comparison):
             if site in sites['baseline'] and sites['baseline'][site][1] == signature}
 
 
-def isolated_expanded_tag(text, root, edit):
-    """Require one expanded declaration and reject every other use in the tag namespace."""
-    header, line, spelling, alias = edit['declaration']
-    names = set(edit['tags'])
-    filename, number, found, previous = '', 0, 0, None
-    for row in text.splitlines():
-        marker = re.fullmatch(r'\s*#(?:line)?\s+(\d+) "([^"]+)"(?: .*)?', row)
+def expanded_view(text, root, unit, *, compiler):
+    """Ordered emitted tokens and original lines in the sealed project, or no proof."""
+    name, number = unit, 1
+    rows = []
+    for line in text.splitlines():
+        marker = re.fullmatch(r'\s*#(?:line)?\s+(\d+) "([^"]+)"(?: .*)?', line)
         if marker:
-            filename, number = marker[2], int(marker[1])
+            path = Path(marker[2].replace("\\\\", "\\"))
+            if path.is_absolute():
+                path = path.resolve()
+            name = path.relative_to(root).as_posix() if path.is_relative_to(root) else None
+            number = int(marker[1])
             continue
-        # Generated declarations can use a section attribute before an ordinary
-        # typedef. Strip only this known form and preserve a preceding tag keyword.
-        row = re.sub(r'\b__attribute__\s*\(\s*\(\s*section\s*\(\s*"[\w.]+"\s*\)\s*\)\s*\)', ' ', row)
-        words = c_fingerprint.tokens(row)
-        if Path(filename) == root / header and number == line and words == [
-                'typedef', 'struct', spelling, '*', alias, ';']:
-            found += 1
-            previous = ';'
-        else:
-            for word in words:
-                # Unrecognized attributes between a keyword and its identifier may end in ')' or ']'.
-                if word in names and previous in {'struct', 'enum', 'union', ')', ']'}:
-                    return False
-                previous = word
+        if compiler and line.startswith(('#define ', '#undef ')):
+            # GCC -dD also prints its definitions. Their expansions are in the emitted code.
+            number += 1
+            continue
+        if line.strip():
+            if not name or line.lstrip().startswith('#'):
+                return None
+            rows.append((name, number, c_fingerprint.tokens(line)))
         number += 1
-    return found == 1
+    return rows or None
+
+
+def producer_views(output, summary):
+    """Use the GCC -dD trace from the original scan; cached receipts are never reminted."""
+    wanted = {loc['file'] for diagnostic in summary['diagnostics'] if diagnostic['id'] in RULES
+              for loc in diagnostic['locations']}
+    views = {}
+    for index, unit in enumerate(summary['scope'].get('translationUnits', [])):
+        if unit not in wanted:
+            continue
+        trace = output / f'compiler-origins-{index}.stdout.log'
+        if trace.is_file():
+            rows = expanded_view(trace.read_text(encoding='utf-8'), (output / 'project').resolve(), unit, compiler=True)
+            if rows:
+                views[unit] = c_fingerprint.sha(rows)
+    return views
+
+
+def equivalent_view(rows, unit, edit, expected):
+    """Seal all tokens except the isolated, physically verified rename occurrences."""
+    if not rows or c_fingerprint.sha(rows) != expected:
+        return None
+    allowed = Counter()
+    if edit['tags']:
+        header, line, spelling, alias = edit['declaration']
+        allowed[header, line] = 1
+    else:
+        spelling = edit['local'][0][2]
+        allowed.update((unit, line) for line, _, _ in edit['local'])
+    normalized = []
+    for name, number, words in rows:
+        if edit['other'] in words:
+            return None
+        if spelling in words:
+            if edit['tags'] and words != ['typedef', 'struct', spelling, '*', alias, ';']:
+                return None
+            allowed[name, number] -= words.count(spelling)
+            words = [None if word == spelling else word for word in words]
+        normalized.append((name, number, words))
+    if any(allowed.values()):
+        return None
+    return c_fingerprint.sha(normalized)
 
 
 def renamed_inputs(unit, summaries, outputs):
@@ -174,6 +214,8 @@ def renamed_inputs(unit, summaries, outputs):
     if len(changes) != 1:
         return False
     edits = {side: {'local': positions, 'tags': sorted(tags)} for side, positions in local.items()}
+    old, new = next(iter(changes))
+    edits['baseline']['other'], edits['current']['other'] = new, old
     if tags:
         if len(declarations) != 1 or any(local.values()):
             return False
@@ -241,7 +283,7 @@ def program_input(output, summary, program, unit, database_digests):
     return (*scope['compilerFlags'], *actual_builtins, *scope['compilerDiscoveredDefines'][unit])
 
 
-def replay_side(summary, output, selected, edits, tool, python, work, compiler):
+def replay_side(summary, output, selected, edits, tool, python, work, compiler_views):
     exe, addons, tool_info = tool
     scope = summary['scope']
     if any(tool_info[key] != summary['tool'][key] for key in ('binarySha256', 'addons', 'version', 'expectedSourceRevision')):
@@ -284,21 +326,20 @@ def replay_side(summary, output, selected, edits, tool, python, work, compiler):
         commands.append({'directory': tool_argument(root), 'file': file, 'arguments': [
             'gcc', *flags, *('-I' + tool_argument(root / path) for path in scope['includePaths']), '-c', file]})
         units[unit] = [str(root / name) for name in scope['cppcheckInputs'][unit]['project']]
-    refused = set()
+    views = {}
     for index, (unit, command) in enumerate(zip(selected, commands)):
-        if not edits[unit]['tags']:
-            continue
-        # Inspect actual preprocessor output in both namespaces. A spelling may
-        # validly remain as an ordinary typedef after its independent tag moves.
-        args = [compiler, *scope['compilerFlags'], *('-I' + tool_argument(root / path) for path in scope['includePaths']),
-                '-E', command['file']]
-        _, gcc_text, _ = c_check.run(args, work, f'tag-gcc-{index}')
         single = work / f'tag-command-{index}.json'
         single.write_text(json.dumps([command]), encoding='utf-8')
         _, checker_text, _ = c_check.run([str(exe), '-E', '--quiet', *argv[2:], '--project=' + str(single)],
                                          work, f'tag-cppcheck-{index}')
-        if not all(isolated_expanded_tag(text, root, edits[unit]) for text in (gcc_text, checker_text)):
-            refused.add(unit)
+        rows = expanded_view(checker_text, root, unit, compiler=False)
+        view = equivalent_view(rows, unit, edits[unit], compiler_views.get(unit))
+        if view:
+            views[unit] = view
+    commands = [command for unit, command in zip(selected, commands) if unit in views]
+    if not commands:
+        return {}, {}
+    units = {unit: files for unit, files in units.items() if unit in views}
     db = work / 'compile_commands.json'
     db.write_text(json.dumps(commands), encoding='utf-8')
     cache = work / 'cache'
@@ -311,7 +352,7 @@ def replay_side(summary, output, selected, edits, tool, python, work, compiler):
     c_check.run([str(python), '-I', str(Path(__file__).with_name('c_type_replay.py')),
                  str(request), str(result)], work, 'type-operands')
     return {unit: {(rule, line, column): evidence for rule, line, column, evidence in rows}
-            for unit, rows in json.loads(result.read_bytes()).items() if unit not in refused}
+            for unit, rows in json.loads(result.read_bytes()).items()}, views
 
 
 def replay(summaries, inputs, pairs, excluded):
@@ -328,7 +369,8 @@ def replay(summaries, inputs, pairs, excluded):
     outputs = {side: value[0] for side, value in inputs.items()}
     databases = {side: value[1].get('compileCommandsSha256', {}) for side, value in inputs.items()}
     eligible = {unit for _, unit, *_ in pairs if unit in summaries['baseline']['scope']['cppcheckInputs']
-                and unit in summaries['current']['scope']['cppcheckInputs']}
+                and unit in summaries['current']['scope']['cppcheckInputs']
+                and all(unit in manifest.get('compilerViewSha256', {}) for _, manifest in inputs.values())}
     edits = {unit: change for unit in eligible if (change := renamed_inputs(unit, summaries, outputs))}
     anchors = {unit: [c_fingerprint.SourceContext((outputs[side] / 'project' / unit).read_text(encoding='utf-8'))
                       for side in ('baseline', 'current')] for unit in edits}
@@ -353,7 +395,7 @@ def replay(summaries, inputs, pairs, excluded):
     if not selected:
         return {}
     with tempfile.TemporaryDirectory(prefix='c-type-replay-') as directory:
-        work = Path(directory)
+        work = Path(directory).resolve()
         executable = os.environ.get("CPPCHECK") or shutil.which("cppcheck")
         if not executable or digest(Path(executable)) != summaries['current']['tool']['binarySha256']:
             raise ValueError("Original analyzer executable unavailable for replay")
@@ -365,22 +407,17 @@ def replay(summaries, inputs, pairs, excluded):
         if python is None:
             raise ValueError("Original addon Python executable unavailable for replay")
         tool = c_check.tool_identity(work)
-        compiler = os.environ.get('AUTOSAR_CC') or shutil.which('gcc')
-        if any(edits[unit]['current']['tags'] for unit in selected):
-            from autosar_tooling.c_baseline import compiler_identity
-            actual = compiler_identity(Path(compiler)) if compiler else None
-            if any(actual != manifest['identity']['compiler'] for _, manifest in inputs.values()):
-                raise ValueError('Original compiler unavailable for tag preprocessing')
-        results = {}
+        results, views = {}, {}
         for side in ('baseline', 'current'):
             side_edits = {unit: edits[unit][side] for unit in selected}
-            results[side] = replay_side(summaries[side], outputs[side], selected, side_edits,
-                                        tool, python, work / side, compiler)
+            results[side], views[side] = replay_side(
+                summaries[side], outputs[side], selected, side_edits, tool, python, work / side,
+                inputs[side][1]['compilerViewSha256'])
     matches = {}
     for site, (current, baseline) in comparable.items():
         _, unit, *position = site
         facts = [results[side].get(unit, {}).get(tuple(position)) for side in ('baseline', 'current')]
-        if facts[0] and facts[0] == facts[1]:
+        if facts[0] and facts[0] == facts[1] and views['baseline'][unit] == views['current'][unit]:
             observations = dict(zip(('baseline', 'current'), facts))
             bindings = {side: observation_binding(site, fingerprint, inputs[side][1], observations[side])
                         for side, fingerprint in (('baseline', baseline), ('current', current))}
