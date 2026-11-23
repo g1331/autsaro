@@ -45,4 +45,14 @@
 
 项目技能只维护在 `.agents/skills`（`impeccable`、`misra-c2012`），Codex 直接读取；Claude Code 通过 `.claude/skills` 软链接读取同一目录，两者都能自动发现技能变化。新增或更新技能只改 `.agents/skills`。`c-check` 读取 `misra-c2012/references/baseline-index.json`，该技能不能随意移除。手工开发按贡献指南操作即可。
 
+Impeccable 找不到已安装的引擎时，会按 `scripts/VERSION` 下载并校验引擎，存入用户缓存。若代理沙箱无法联网，可从有网络的终端在仓库根目录预装。Linux／macOS 运行 `.agents/skills/impeccable/scripts/impeccable engine-probe`，Windows 运行 `.\.agents\skills\impeccable\scripts\impeccable.cmd engine-probe`。
+
+需要用完整字体目录运行 `font-match --rank` 时，先在仓库根目录安装与当前技能配套的索引。Windows PowerShell 中使用 `curl.exe`。
+
+```sh
+curl --fail --location --silent --show-error --remove-on-error --output .agents/skills/impeccable/scripts/data/font-index.json https://raw.githubusercontent.com/pbakaus/impeccable/86be0f02dcdaaeb3f9b6780711dbdc03a14ce222/skill/scripts/data/font-index.json
+```
+
+索引只保存在本地。未安装时，字体匹配使用引擎内置的短名单。
+
 Windows 上使用 Claude Code 时，需要让 Git 检出真正的软链接，否则 `.claude/skills` 会成为普通文件，Claude Code 找不到技能，其他开发不受影响。每台电脑设置一次：开启“开发者模式”，执行 `git config --global core.symlinks true`（或在 Git for Windows 安装时勾选 Enable symbolic links）。之后的克隆会自动生效；已有克隆删除 `.claude/skills` 后执行 `git checkout -- .claude/skills` 重新检出。
