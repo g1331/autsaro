@@ -25,6 +25,3 @@ build/
 # Per-machine CodeGraph index; initialize locally with `codegraph init`.
 .codegraph/
 .cortexkit/
-
-# Impeccable font catalog, installed on demand.
-/.agents/skills/impeccable/scripts/data/font-index.json
