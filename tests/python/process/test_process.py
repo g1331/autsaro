@@ -11,7 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
-from contextlib import redirect_stderr
+from contextlib import nullcontext, redirect_stderr
 from dataclasses import replace
 from io import StringIO
 from pathlib import Path
@@ -114,8 +114,11 @@ if sys.argv.pop(1) == 'request_failed':
 owner.serve = stall
 raise SystemExit(owner.main())
 """
-        for outcome in ("closed", "request_failed"):
-            with self.subTest(shutdown=outcome), tempfile.TemporaryDirectory() as directory:
+        for outcome, sampling_fails in (("closed", False), ("request_failed", False), ("closed", True)):
+            with (
+                self.subTest(shutdown=outcome, sampling_fails=sampling_fails),
+                tempfile.TemporaryDirectory() as directory,
+            ):
                 def start_stalled(argv, outcome=outcome, **kwargs):
                     return actual_popen(
                         [*argv[:3], "-c", stalled_supervisor, outcome, *argv[4:]], **kwargs
@@ -134,17 +137,32 @@ raise SystemExit(owner.main())
                 self.assertIsNotNone(process)
                 try:
                     stderr = StringIO()
+                    reason = f"supervisor_failed: shutdown timed out; {owner.directory}"
+                    sampling = (
+                        patch(
+                            "ecu_tools.owner._shutdown_snapshot",
+                            side_effect=RuntimeError("fixture sampling failed"),
+                        )
+                        if sampling_fails
+                        else nullcontext()
+                    )
                     with (
                         patch("ecu_tools.build.build", side_effect=lambda *_, owner=owner: owner.close()),
                         patch.object(sys, "argv", [
                             "ecu-tool", "build", "--project", directory,
                             "--output", directory, "--mode", "host-batch",
                         ]),
+                        sampling as sample,
                         redirect_stderr(stderr),
                     ):
                         self.assertEqual(ecu_tool(), 1)
-                    reason, evidence = stderr.getvalue().splitlines()
-                    self.assertEqual(reason, f"supervisor_failed: shutdown timed out; {owner.directory}")
+                    if sampling_fails:
+                        sample.assert_called_once_with(process.pid)
+                        self.assertEqual(stderr.getvalue(), reason + "\n")
+                        self.assertEqual(process.returncode, -signal.SIGKILL)
+                        continue
+                    error_line, evidence = stderr.getvalue().splitlines()
+                    self.assertEqual(error_line, reason)
                     self.assertTrue(evidence.startswith("shutdown evidence: "))
                     receipt = json.loads(evidence.removeprefix("shutdown evidence: "))
                     self.assertEqual(receipt["shutdown"], outcome)

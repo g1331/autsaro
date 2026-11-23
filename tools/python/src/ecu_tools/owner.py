@@ -94,8 +94,10 @@ def _shutdown_snapshot(pid: int) -> dict[str, Any]:
             thread["children_error"] = child_ids[0].decode("ascii")
         threads.append(thread)
         for child in child_ids[:limit + 1]:
+            if not child.isdigit():
+                continue
             child_pid = child.decode("ascii")
-            if not child.isdigit() or child_pid in children:
+            if child_pid in children:
                 continue
             if len(children) == limit:
                 children_truncated = True
@@ -756,14 +758,17 @@ class Owner:
                     evidence = None
                     try:
                         if sys.platform == "linux":
-                            evidence = _shutdown_snapshot(self.process.pid)
+                            with suppress(Exception):
+                                evidence = _shutdown_snapshot(self.process.pid)
                     finally:
                         self.process.kill()
                         exit_code = self.process.wait()
                     message = f"supervisor_failed: shutdown timed out; {self.directory}"
                     if evidence is not None:
-                        evidence.update(shutdown=shutdown, exit_code=exit_code)
-                        message += "\nshutdown evidence: " + json.dumps(evidence)
+                        # Diagnostics must not replace the shutdown timeout.
+                        with suppress(Exception):
+                            evidence.update(shutdown=shutdown, exit_code=exit_code)
+                            message += "\nshutdown evidence: " + json.dumps(evidence)
                     raise OwnershipError(message) from error
                 if shutdown == "closed" and exit_code == 0 and self.directory is not None:
                     self.socket_path.unlink(missing_ok=True)
