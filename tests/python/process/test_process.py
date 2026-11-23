@@ -11,12 +11,15 @@ import sys
 import tempfile
 import time
 import unittest
+from contextlib import nullcontext, redirect_stderr
 from dataclasses import replace
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
 from autosar_tooling.config import ROOT
-from ecu_tools.owner import Owner, OwnershipError
+from ecu_tools.cli import main as ecu_tool
+from ecu_tools.owner import Owner, OwnershipError, _shutdown_snapshot
 from ecu_tools.process import CompletionPolicy, OwnedProcess, ProcessSpec, run_bounded
 
 PROBE = str(Path(__file__).with_name("probe.py"))
@@ -88,6 +91,108 @@ def _assert_closed(
 
 
 class BoundedProcessTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "linux", "Linux shutdown evidence")
+    def test_owner_shutdown_timeout_preserves_exit_and_reports_request_result(self):
+        actual_popen = subprocess.Popen
+        source_root = ROOT / "tools" / "python" / "src"
+        stalled_supervisor = f"""
+import signal, sys
+sys.path.insert(0, {str(source_root)!r})
+from ecu_tools import owner
+
+serve = owner.serve
+dispatch = owner.Registry.dispatch
+def stall(*args):
+    serve(*args)
+    signal.pause()
+def reject_shutdown(self, request):
+    if request.get('op') == 'shutdown':
+        raise owner.OwnershipError('fixture rejected shutdown')
+    return dispatch(self, request)
+if sys.argv.pop(1) == 'request_failed':
+    owner.Registry.dispatch = reject_shutdown
+owner.serve = stall
+raise SystemExit(owner.main())
+"""
+        for outcome, sampling_fails in (("closed", False), ("request_failed", False), ("closed", True)):
+            with (
+                self.subTest(shutdown=outcome, sampling_fails=sampling_fails),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                def start_stalled(argv, outcome=outcome, **kwargs):
+                    return actual_popen(
+                        [*argv[:3], "-c", stalled_supervisor, outcome, *argv[4:]], **kwargs
+                    )
+
+                with (
+                    patch.object(tempfile, "tempdir", directory),
+                    patch("ecu_tools.owner.subprocess.Popen", side_effect=start_stalled),
+                ):
+                    try:
+                        owner = Owner.start()
+                    except OwnershipError as error:
+                        logs = Path(directory).glob("ecu-owner-*/supervisor.log")
+                        self.fail(f"{error}\n" + "\n".join(log.read_text() for log in logs))
+                process = owner.process
+                self.assertIsNotNone(process)
+                try:
+                    stderr = StringIO()
+                    reason = f"supervisor_failed: shutdown timed out; {owner.directory}"
+                    sampling = (
+                        patch(
+                            "ecu_tools.owner._shutdown_snapshot",
+                            side_effect=RuntimeError("fixture sampling failed"),
+                        )
+                        if sampling_fails
+                        else nullcontext()
+                    )
+                    with (
+                        patch("ecu_tools.build.build", side_effect=lambda *_, owner=owner: owner.close()),
+                        patch.object(sys, "argv", [
+                            "ecu-tool", "build", "--project", directory,
+                            "--output", directory, "--mode", "host-batch",
+                        ]),
+                        sampling as sample,
+                        redirect_stderr(stderr),
+                    ):
+                        self.assertEqual(ecu_tool(), 1)
+                    if sampling_fails:
+                        sample.assert_called_once_with(process.pid)
+                        self.assertEqual(stderr.getvalue(), reason + "\n")
+                        self.assertEqual(process.returncode, -signal.SIGKILL)
+                        continue
+                    error_line, evidence = stderr.getvalue().splitlines()
+                    self.assertEqual(error_line, reason)
+                    self.assertTrue(evidence.startswith("shutdown evidence: "))
+                    receipt = json.loads(evidence.removeprefix("shutdown evidence: "))
+                    self.assertEqual(receipt["shutdown"], outcome)
+                    self.assertEqual(receipt["pid"], process.pid)
+                    self.assertEqual(receipt["exit_code"], -signal.SIGKILL)
+                    self.assertEqual(receipt["exit_code"], process.returncode)
+                    main = next(row for row in receipt["threads"] if row["tid"] == str(process.pid))
+                    self.assertIn(main["state"], {"R", "S", "D"})
+                    self.assertIn("wchan", main)
+                finally:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait()
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux shutdown evidence")
+    def test_shutdown_snapshot_reports_live_children_and_unreadable_tasks(self):
+        with subprocess.Popen(
+            [sys.executable, "-c", "import sys; sys.stdin.buffer.read(1)"],
+            stdin=subprocess.PIPE,
+        ) as child:
+            try:
+                snapshot = _shutdown_snapshot(os.getpid())
+                self.assertIn(snapshot["children"][str(child.pid)], {"R", "S", "D"})
+            finally:
+                child.stdin.close()
+
+        with patch.object(Path, "iterdir", side_effect=PermissionError(13, "fixture denied")):
+            snapshot = _shutdown_snapshot(os.getpid())
+        self.assertEqual(snapshot["tasks_errno"], 13)
+
     @unittest.skipUnless(sys.platform == "linux", "Linux proc status observation")
     def test_proc_status_disappearance_is_gone_but_other_errors_remain_visible(self):
         for failure in (FileNotFoundError(), ProcessLookupError()):
