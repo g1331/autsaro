@@ -292,7 +292,7 @@ def _configuration(root: Path, *, source_tree: bool = False) -> dict:
     metadata = _read(root / "meta/integration.json")
     plan = dict(metadata["plan"])
     if "runtimeSources" not in plan:
-        if metadata.get("format") == "autosar-ecu-integration-v2":
+        if metadata.get("format") in {"autosar-ecu-integration-v2", "autosar-ecu-integration-v3"}:
             raise ValueError("Runtime source provenance missing")
         return plan
     sources, origins = plan["runtimeSources"], metadata.get("originalBswSources")
@@ -334,6 +334,26 @@ def _configuration(root: Path, *, source_tree: bool = False) -> dict:
                                               if key not in {"rules.sha256", "definitions.sha256"}}
     plan["runtimeSources"] = selected
     return plan
+
+
+def _r11_baseline_plan(plan: dict) -> dict:
+    """Project V2's single-channel standard Classical selection into V3."""
+    if plan["formatVersion"] != 2:
+        raise ValueError("R11 baseline plan version differs")
+    signals = plan["signals"]
+    channels = {signal["trigger"].rsplit("/", 1)[0] for signal in signals}
+    if len(channels) != 1:
+        raise ValueError("R11 baseline physical channel is ambiguous")
+    runtime = plan["communicationRuntime"]
+    can = {**runtime["can"], "physicalChannel": channels.pop(),
+           "receiveIdType": "STANDARD", "transmitIdType": "STANDARD"}
+    result = {**plan, "formatVersion": 3, "communicationRuntime": {**runtime, "can": can},
+              "signals": [{**signal, "extended": False, "acceptsFd": False} for signal in signals]}
+    for name in ("diagnostic", "diagnosticTransport"):
+        if plan[name] is not None:
+            result[name] = {**plan[name], "requestExtended": False,
+                            "responseExtended": False, "requestAcceptsFd": False}
+    return result
 
 
 def compare(
@@ -401,8 +421,20 @@ def compare(
                     require_kernel_identity(path / "kernel", value["kernelSha256"])
                     value["kernelSha256"] = sorted(value["kernelSha256"])
             return value
-        if normalized(target_configuration(project, current["scope"])) != normalized(
-                mapped(target_configuration(old_root, previous["scope"]))):
+        current_target = target_configuration(project, current["scope"])
+        baseline_target = mapped(target_configuration(old_root, previous["scope"]))
+        r11_transition = source_tree and (baseline_target.get("format"), current_target.get("format")) == (
+            "autosar-build-target-v3", "autosar-build-target-v4",
+        )
+        if r11_transition:
+            # Compare the build configuration across the known protocol migration.
+            # The source seals retain each tree's exact protocol and format versions.
+            delivery = baseline_target["nativeDelivery"]
+            if delivery["format"] != "autosar-workbench-handoff-v4":
+                raise ValueError("R11 baseline delivery version differs")
+            delivery["format"] = "autosar-workbench-handoff-v5"
+            baseline_target.update(format="autosar-build-target-v4", hostBatchProtocol="HostBatchV2")
+        if normalized(current_target) != normalized(baseline_target):
             raise ValueError("Target/sample configuration differs")
         scope_fields = ("target", "profile", "entries", "compilerFlags", "includePaths",
                         "translationUnits", "supplemental")
@@ -417,6 +449,8 @@ def compare(
                 raise ValueError("Sample generation identity unavailable")
         plan = _configuration(project, source_tree=source_tree)
         previous_plan = mapped(_configuration(old_root, source_tree=source_tree))
+        if r11_transition:
+            previous_plan = _r11_baseline_plan(previous_plan)
         output_plan = _configuration(output / "project", source_tree=source_tree)
         if (normalized(plan) != normalized(previous_plan)
                 or normalized(plan) != normalized(output_plan)):

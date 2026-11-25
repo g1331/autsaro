@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 
-FORMAT = "autosar-workbench-handoff-v4"
+FORMAT = "autosar-workbench-handoff-v5"
 HANDOFF_PATH = "meta/handoff.json"
 OWNERS = {"configuration", "user-application", "product", "generated", "target", "build"}
 

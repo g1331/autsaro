@@ -1,5 +1,6 @@
-/** @file HostBatchV1 line parser and bounded staging, with no automotive state access. */
+/** @file HostBatchV2 line parser and bounded staging, with no automotive state access. */
 #include "Ecu_HostBatch.h"
+#include "Can_GeneralTypes.h"
 #include <string.h>
 
 typedef struct {
@@ -16,42 +17,65 @@ static int equals(Ecu_BatchToken token, const char *word, size_t length)
     return result;
 }
 
-static int digit(char value)
+static int hex_digit(char value)
 {
     int result = -1;
     if ((value >= '0') && (value <= '9')) {
         result = (int)value - (int)'0';
     } else if ((value >= 'a') && (value <= 'f')) {
         result = ((int)value - (int)'a') + 10;
-    } else if ((value >= 'A') && (value <= 'F')) {
-        result = ((int)value - (int)'A') + 10;
     } else {
-        /* No sign, Unicode digit or other encoding is accepted. */
+        /* Payload uses lowercase hexadecimal. */
     }
     return result;
 }
 
-static int number(Ecu_BatchToken token, unsigned base, uint64_t maximum, uint64_t *value)
+static boolean number(Ecu_BatchToken token, uint64_t maximum, uint64_t *value)
 {
     uint64_t result = UINT64_C(0);
-    size_t index = 0u;
-    if ((base == 16u) && (token.length > 2u) && (token.data[0] == '0') &&
-        ((token.data[1] == 'x') || (token.data[1] == 'X'))) {
-        index = 2u;
-    }
-    if (index == token.length) {
-        return 0;
-    }
-    for (; index < token.length; ++index) {
-        int next = digit(token.data[index]);
-        if ((next < 0) || ((unsigned)next >= base) || ((uint64_t)next > maximum) ||
-            (result > ((maximum - (uint64_t)next) / base))) {
-            return 0;
+    size_t index;
+    for (index = 0u; index < token.length; ++index) {
+        int next = (int)token.data[index] - (int)'0';
+        if ((next < 0) || (next > 9) || ((uint64_t)next > maximum) ||
+            (result > ((maximum - (uint64_t)next) / UINT64_C(10)))) {
+            return FALSE;
         }
-        result = (result * base) + (uint64_t)next;
+        result = (result * UINT64_C(10)) + (uint64_t)next;
     }
     *value = result;
-    return 1;
+    return TRUE;
+}
+
+static boolean decode_frame(const Ecu_BatchToken tokens[7], Ecu_BatchFrame *frame)
+{
+    boolean extended = equals(tokens[2], "EXTENDED", 8u) != 0;
+    uint64_t id;
+    uint64_t length;
+    size_t byte;
+    if ((equals(tokens[1], "0", 1u) == 0) || (equals(tokens[3], "0", 1u) == 0) ||
+        (!extended && (equals(tokens[2], "STANDARD", 8u) == 0)) ||
+        !number(tokens[4], extended ? CAN_ID_EXTENDED_MAX : CAN_ID_STANDARD_MAX, &id) ||
+        !number(tokens[5], UINT64_C(8), &length)) {
+        return FALSE;
+    }
+    if (length == UINT64_C(0)) {
+        if (equals(tokens[6], "-", 1u) == 0) {
+            return FALSE;
+        }
+    } else if (tokens[6].length != (2u * (size_t)length)) {
+        return FALSE;
+    }
+    frame->id = (uint32_t)id | (extended ? CAN_ID_EXTENDED_FLAG : 0u);
+    frame->dlc = (uint8_t)length;
+    for (byte = 0u; byte < (size_t)length; ++byte) {
+        int high = hex_digit(tokens[6].data[2u * byte]);
+        int low = hex_digit(tokens[6].data[(2u * byte) + 1u]);
+        if ((high < 0) || (low < 0)) {
+            return FALSE;
+        }
+        frame->data[byte] = (uint8_t)(((unsigned)high * 16u) + (unsigned)low);
+    }
+    return TRUE;
 }
 
 static StatusType reject(Ecu_HostBatch *batch, StatusType status)
@@ -68,7 +92,7 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
                               size_t length,
                               Ecu_BatchCommand *command)
 {
-    Ecu_BatchToken tokens[4];
+    Ecu_BatchToken tokens[7];
     unsigned count = 0u;
     size_t index = 0u;
     if ((batch == NULL) || (line == NULL) || (command == NULL)) {
@@ -86,7 +110,7 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
             ++index;
             continue;
         }
-        if (count == 4u) {
+        if (count == 7u) {
             return reject(batch, E_OS_VALUE);
         }
         start = index;
@@ -103,6 +127,15 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
     if (count == 0u) {
         return reject(batch, E_OS_VALUE);
     }
+    if (batch->negotiated == 0u) {
+        if ((count != 2u) || (equals(tokens[0], "PROTOCOL", 8u) == 0) ||
+            (equals(tokens[1], ECU_BATCH_PROTOCOL, sizeof(ECU_BATCH_PROTOCOL) - 1u) == 0)) {
+            return E_OS_VALUE;
+        }
+        batch->negotiated = 1u;
+        *command = ECU_BATCH_NEGOTIATE;
+        return E_OK;
+    }
     if (equals(tokens[0], "BEGIN", 5u) != 0) {
         uint64_t at;
         boolean parsed = count == 2u;
@@ -110,7 +143,7 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
             return reject(batch, E_OS_STATE);
         }
         if (parsed) {
-            parsed = number(tokens[1], 10u, UINT64_MAX, &at) != 0;
+            parsed = number(tokens[1], UINT64_MAX, &at);
         }
         if (!parsed) {
             return E_OS_VALUE;
@@ -149,12 +182,7 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
         return status;
     }
     if (equals(tokens[0], "RX", 2u) != 0) {
-        uint64_t id;
-        uint64_t dlc;
-        unsigned base = 10u;
         Ecu_BatchFrame frame = {0};
-        size_t byte;
-        boolean parsed = count == 4u;
         if (batch->open == 0u) {
             return E_OS_STATE;
         }
@@ -164,28 +192,8 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
         if (batch->count >= ECU_BATCH_CAPACITY) {
             return reject(batch, E_OS_LIMIT);
         }
-        if ((count == 4u) && (tokens[1].length > 2u) && (tokens[1].data[0] == '0') &&
-            ((tokens[1].data[1] == 'x') || (tokens[1].data[1] == 'X'))) {
-            base = 16u;
-        }
-        if (parsed) {
-            parsed = number(tokens[1], base, UINT64_C(2047), &id) != 0;
-        }
-        if (parsed) {
-            parsed = number(tokens[2], 10u, UINT64_C(8), &dlc) != 0;
-        }
-        if ((!parsed) || (dlc == UINT64_C(0)) || (tokens[3].length != (2u * (size_t)dlc))) {
+        if ((count != 7u) || !decode_frame(tokens, &frame)) {
             return reject(batch, E_OS_VALUE);
-        }
-        frame.id = (uint32_t)id;
-        frame.dlc = (uint8_t)dlc;
-        for (byte = 0u; byte < (size_t)dlc; ++byte) {
-            int high = digit(tokens[3].data[2u * byte]);
-            int low = digit(tokens[3].data[(2u * byte) + 1u]);
-            if ((high < 0) || (low < 0)) {
-                return reject(batch, E_OS_VALUE);
-            }
-            frame.data[byte] = (uint8_t)(((unsigned)high * 16u) + (unsigned)low);
         }
         batch->frames[batch->count] = frame;
         ++batch->count;

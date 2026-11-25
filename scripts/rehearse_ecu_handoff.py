@@ -11,9 +11,9 @@ from pathlib import Path
 
 # Match the independent component-pipeline receiver vector in test_offline_delivery.py.
 PIPELINE_TRACE = (
-    b"BEGIN 0\nRX 800 4 78563412\nRX 1792 8 0322123400000000\nCOMMIT\n"
-    b"BEGIN 1\nCOMMIT\nBEGIN 10\nRX 1792 8 0322123400000000\nCOMMIT\n"
-    b"BEGIN 10\nCOMMIT\nBEGIN 20\nRX 1792 8 0322123400000000\nCOMMIT\n"
+    b"PROTOCOL HostBatchV2\nBEGIN 0\nRX 0 STANDARD 0 800 4 78563412\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\n"
+    b"BEGIN 1\nCOMMIT\nBEGIN 10\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\n"
+    b"BEGIN 10\nCOMMIT\nBEGIN 20\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\n"
 )
 PIPELINE_BATCHES = [
     (0, 2, []),
@@ -31,7 +31,7 @@ COMMIT = re.compile(
     r" status=0 input_status=0 transport_status=0 transport_epoch=0 transport_count=0"
 )
 FRAME = re.compile(
-    r"OUT epoch=(\d+) sequence=\d+ ticket=\d+ pdu=\d+ id=(\d+) dlc=(\d+) data=([0-9a-f]+)"
+    r"OUT epoch=(\d+) sequence=\d+ ticket=\d+ pdu=\d+ channel=0 format=STANDARD fd=0 id=(\d+) length=(\d+) data=([0-9a-f]+)"
 )
 
 
@@ -87,14 +87,14 @@ def receiver_environment(receiver: Path) -> dict[str, str]:
 
 def check_batch(output: str, *, pipeline: bool) -> None:
     lines = output.splitlines()
-    if not lines or lines[0] != "READY HostBatchV1":
+    if lines[:2] != ["READY HostBatchV2", "PROTOCOL_OK HostBatchV2"]:
         raise ValueError("HostBatch did not become ready")
     expected = PIPELINE_BATCHES if pipeline else [(1, 0, [])]
     frames = []
     index = 0
     previous = 0
     closed = False
-    for line in lines[1:]:
+    for line in lines[2:]:
         kind = line.split(" ", 1)[0]
         if kind in {"REJECT", "COMMIT_ERROR"}:
             raise ValueError("HostBatch rejected a legal batch")
@@ -190,7 +190,7 @@ def rehearse(args: argparse.Namespace) -> None:
     batch_log = results / "host-batch.log"
     batch = run(
         [str(results / "host-batch" / f"ecu_host_batch{suffix}")],
-        batch_log, env, stdin=PIPELINE_TRACE if args.pipeline else b"BEGIN 1\nCOMMIT\n",
+        batch_log, env, stdin=PIPELINE_TRACE if args.pipeline else b"PROTOCOL HostBatchV2\nBEGIN 1\nCOMMIT\n",
     )
     try:
         check_batch(batch, pipeline=args.pipeline)

@@ -83,9 +83,65 @@ fn host_batch_project() -> Built {
     }
 }
 
+/// Verifies: SWS_CANIF_00281
+#[test]
+fn host_batch_mixed_can_preserves_width_and_exact_id_on_one_channel() {
+    let scratch = super::Scratch::new();
+    let plan =
+        super::build(&super::mixed_can_sources()).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let (project, _) =
+        super::single_component_project_from(&scratch.0, super::tooling::native_target(), &plan);
+    let binary = super::sealed_builds::host_batch(&project, &scratch.0.join("host-batch-build"));
+    let text = run(
+        &binary,
+        &scratch.0.join("mixed"),
+        b"BEGIN 10\nRX 0 STANDARD 0 2047 4 78563412\nRX 0 EXTENDED 0 2047 8 0322123400000000\nCOMMIT\n\
+          BEGIN 20\nRX 0 EXTENDED 0 801 4 ffffffff\nRX 0 EXTENDED 0 536870910 4 ffffffff\nCOMMIT\n\
+          BEGIN 30\nRX 0 STANDARD 0 2047 4 aaaaaaaa\nRX 0 EXTENDED 1 2047 8 0322123400000000\nCOMMIT\n\
+          BEGIN 30\nCOMMIT\n",
+    );
+    let outputs: Vec<_> = text
+        .lines()
+        .filter(|line| line.starts_with("OUT "))
+        .map(|line| {
+            (
+                field(line, "epoch="),
+                field(line, "pdu="),
+                field(line, "channel="),
+                field(line, "format="),
+                field(line, "fd="),
+                field(line, "id="),
+                field(line, "length="),
+                field(line, "data="),
+            )
+        })
+        .collect();
+    assert_eq!(
+        outputs,
+        [
+            ("10", "0", "0", "STANDARD", "0", "801", "4", "78563412"),
+            (
+                "10",
+                "1",
+                "0",
+                "EXTENDED",
+                "0",
+                "536870911",
+                "8",
+                "0762123412345678"
+            ),
+            ("20", "0", "0", "STANDARD", "0", "801", "4", "78563412"),
+            ("30", "0", "0", "STANDARD", "0", "801", "4", "78563412"),
+        ]
+    );
+    assert_eq!(text.matches("REJECT ").count(), 2, "{text}");
+    assert!(text.contains("COMMIT_OK batch=3 epoch=30 "), "{text}");
+}
+
 fn run(binary: &Path, directory: &Path, script: &[u8]) -> String {
     fs::create_dir_all(directory).unwrap();
-    fs::write(directory.join("stdin"), script).unwrap();
+    let script = [b"PROTOCOL HostBatchV2\n".as_slice(), script].concat();
+    fs::write(directory.join("stdin"), &script).unwrap();
     let mut child = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(fs::File::create(directory.join("stdout")).unwrap())
@@ -98,7 +154,7 @@ fn run(binary: &Path, directory: &Path, script: &[u8]) -> String {
         directory,
         binary.with_extension("capture").is_file().then_some(binary),
     );
-    child.stdin.take().unwrap().write_all(script).unwrap();
+    child.stdin.take().unwrap().write_all(&script).unwrap();
     let started = std::time::Instant::now();
     while child.try_wait().unwrap().is_none() {
         let exceeded = started.elapsed() > Duration::from_secs(30);
@@ -122,7 +178,10 @@ fn run(binary: &Path, directory: &Path, script: &[u8]) -> String {
     let text = fs::read_to_string(directory.join("stdout")).unwrap();
     let errors = fs::read_to_string(directory.join("stderr")).unwrap();
     assert!(status.success(), "{}\n{text}{errors}", directory.display());
-    assert!(text.starts_with("READY HostBatchV1\n"), "{text}");
+    assert!(
+        text.starts_with("READY HostBatchV2\nPROTOCOL_OK HostBatchV2\n"),
+        "{text}"
+    );
     assert!(
         text.contains("lifecycle=Closed state=Ready reason=0"),
         "{text}"
@@ -292,7 +351,11 @@ fn script(batches: &[(u64, &[(u64, &str)])]) -> String {
     for (at, rx) in batches {
         text.push_str(&format!("BEGIN {at}\n"));
         for (id, data) in *rx {
-            text.push_str(&format!("RX {id} {} {data}\n", data.len() / 2));
+            text.push_str(&format!(
+                "RX 0 STANDARD 0 {id} {} {}\n",
+                data.len() / 2,
+                data.to_ascii_lowercase()
+            ));
         }
         text.push_str("COMMIT\n");
     }
@@ -460,7 +523,11 @@ fn single_component_meets_independent_protocol_and_timing_vectors() {
             }
             text.push_str(&format!("BEGIN {replay}\n"));
             for (id, data) in rx {
-                text.push_str(&format!("RX {id} {} {data}\n", data.len() / 2));
+                text.push_str(&format!(
+                    "RX 0 STANDARD 0 {id} {} {}\n",
+                    data.len() / 2,
+                    data.to_ascii_lowercase()
+                ));
                 if *id == RECEIVE {
                     receives.push((replay, data.clone()));
                 }
@@ -777,13 +844,18 @@ fn live_output(binary: &Path) {
                     .recv_timeout(Duration::from_secs(7))
                     .map_err(|error| error.to_string())
             };
-            assert_eq!(next()?, "READY HostBatchV1");
+            assert_eq!(next()?, "READY HostBatchV2");
+            input.write_all(b"PROTOCOL HostBatchV2\n").unwrap();
+            assert_eq!(next()?, "PROTOCOL_OK HostBatchV2");
             input
-                .write_all(b"BEGIN 10\nRX 800 4 78563412\nCOMMIT\n")
+                .write_all(b"BEGIN 10\nRX 0 STANDARD 0 800 4 78563412\nCOMMIT\n")
                 .unwrap();
             let output = next()?;
             assert!(output.starts_with("OUT epoch=10 "), "{output}");
-            assert!(output.ends_with("id=801 dlc=4 data=78563412"), "{output}");
+            assert!(
+                output.ends_with("id=801 length=4 data=78563412"),
+                "{output}"
+            );
             let receipt = next()?;
             assert!(
                 receipt.starts_with("COMMIT_OK batch=1 epoch=10 "),
@@ -831,15 +903,15 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     let text = run(
         binary,
         &directory("basic"),
-        b"BEGIN 0\nRX 0x320 4 78563412\nCOMMIT\nBEGIN 10\nRX 0x700 8 0322123400000000\nCOMMIT\nBEGIN 10\nCOMMIT\nBEGIN 11\nRX 801 4 00000000\nCOMMIT\nBEGIN 11\nCOMMIT\n",
+        b"BEGIN 0\nRX 0 STANDARD 0 800 4 78563412\nCOMMIT\nBEGIN 10\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\nBEGIN 10\nCOMMIT\nBEGIN 11\nRX 0 STANDARD 0 801 4 00000000\nCOMMIT\nBEGIN 11\nCOMMIT\n",
     );
     assert_eq!(text.matches("COMMIT_OK ").count(), 4, "{text}");
     assert_eq!(text.matches("REJECT ").count(), 1, "{text}");
     assert_eq!(text.matches("OUT epoch=").count(), 2, "{text}");
     for expected in [
         "COMMIT_OK batch=1 epoch=0 sequence=2 input_first=1 inputs=1",
-        "OUT epoch=10 sequence=13 ticket=1 pdu=0 id=801 dlc=4 data=78563412",
-        "OUT epoch=10 sequence=14 ticket=2 pdu=1 id=1800 dlc=8 data=0762123412345678",
+        "OUT epoch=10 sequence=13 ticket=1 pdu=0 channel=0 format=STANDARD fd=0 id=801 length=4 data=78563412",
+        "OUT epoch=10 sequence=14 ticket=2 pdu=1 channel=0 format=STANDARD fd=0 id=1800 length=8 data=0762123412345678",
         "COMMIT_OK batch=2 epoch=10 sequence=16 input_first=12 inputs=1",
         "COMMIT_OK batch=3 epoch=10 sequence=17 input_first=0 inputs=0",
         "REJECT status=8 epoch=10 sequence=17",
@@ -851,7 +923,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     let text = run(
         binary,
         &directory("epoch-back"),
-        b"BEGIN 10\nCOMMIT\nBEGIN 9\nRX 800 4 78563412\nCOMMIT\nBEGIN 20\nCOMMIT\n",
+        b"BEGIN 10\nCOMMIT\nBEGIN 9\nRX 0 STANDARD 0 800 4 78563412\nCOMMIT\nBEGIN 20\nCOMMIT\n",
     );
     assert!(text.contains("REJECT status=8 epoch=10 "), "{text}");
     assert_eq!(text.matches("COMMIT_OK ").count(), 2, "{text}");
@@ -863,7 +935,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     let text = run(
         binary,
         &directory("diagnostic-dlc"),
-        b"BEGIN 10\nRX 800 4 78563412\nRX 1792 3 022212\nCOMMIT\nBEGIN 10\nCOMMIT\n",
+        b"BEGIN 10\nRX 0 STANDARD 0 800 4 78563412\nRX 0 STANDARD 0 1792 3 022212\nCOMMIT\nBEGIN 10\nCOMMIT\n",
     );
     assert_eq!(text.matches("REJECT ").count(), 1, "{text}");
     assert!(
@@ -877,14 +949,14 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     // 256 inputs fit one batch; the 257th refuses the batch.
     let mut bounded = String::from("BEGIN 0\n");
     for _ in 0..256 {
-        bounded.push_str("RX 800 4 78563412\n");
+        bounded.push_str("RX 0 STANDARD 0 800 4 78563412\n");
     }
     bounded.push_str("COMMIT\nBEGIN 10\nCOMMIT\n");
     let text = run(binary, &directory("capacity256"), bounded.as_bytes());
     assert_eq!(text.matches("COMMIT_OK ").count(), 2, "{text}");
     assert!(text.contains("inputs=256 status=0"), "{text}");
     assert!(text.contains("data=78563412"), "{text}");
-    let overflow = bounded.replacen("COMMIT\n", "RX 800 4 78563412\nCOMMIT\n", 1);
+    let overflow = bounded.replacen("COMMIT\n", "RX 0 STANDARD 0 800 4 78563412\nCOMMIT\n", 1);
     let text = run(binary, &directory("capacity257"), overflow.as_bytes());
     assert_eq!(text.matches("REJECT ").count(), 2, "{text}");
     assert_eq!(text.matches("COMMIT_OK ").count(), 1, "{text}");
@@ -912,7 +984,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     let text = run(
         binary,
         &directory("receive-deadline"),
-        b"BEGIN 10\nRX 1792 8 1008221234000000\nCOMMIT\nBEGIN 210\nRX 1792 8 2100000000000000\nCOMMIT\n",
+        b"BEGIN 10\nRX 0 STANDARD 0 1792 8 1008221234000000\nCOMMIT\nBEGIN 210\nRX 0 STANDARD 0 1792 8 2100000000000000\nCOMMIT\n",
     );
     assert!(!text.contains("COMMIT_ERROR "), "{text}");
     assert_eq!(
@@ -925,7 +997,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     let text = run(
         binary,
         &directory("busy-connection"),
-        b"BEGIN 1\nRX 1792 8 0322123400000000\nRX 1792 8 1009221234123412\nCOMMIT\nBEGIN 2\nRX 1792 8 0322123400000000\nCOMMIT\n",
+        b"BEGIN 1\nRX 0 STANDARD 0 1792 8 0322123400000000\nRX 0 STANDARD 0 1792 8 1009221234123412\nCOMMIT\nBEGIN 2\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\n",
     );
     assert!(!text.contains("COMMIT_ERROR "), "{text}");
     assert!(text.contains("COMMIT_OK batch=2 epoch=2 "), "{text}");
@@ -939,7 +1011,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
         ("embedded-nul", b"COMMIT\0suffix".as_slice()),
         ("utf8", b"COMMIT\xffsuffix".as_slice()),
     ] {
-        let mut script = b"BEGIN 0\nRX 800 4 78563412\n".to_vec();
+        let mut script = b"BEGIN 0\nRX 0 STANDARD 0 800 4 78563412\n".to_vec();
         script.extend_from_slice(bad);
         script.extend_from_slice(b"\nCOMMIT\nBEGIN 10\nCOMMIT\n");
         let text = run(binary, &directory(name), &script);
@@ -953,7 +1025,7 @@ fn single_component_host_batch_commits_refuses_and_closes_on_faults() {
     let text = run(binary, &directory("cr-eof"), b"BEGIN 0\r\nCOMMIT\r");
     assert_eq!(text.matches("COMMIT_OK ").count(), 1, "{text}");
     let mut oversized = b"BEGIN 0\n".to_vec();
-    oversized.extend(std::iter::repeat_n(b'X', 129));
+    oversized.extend(std::iter::repeat_n(b'X', 161));
     oversized.extend_from_slice(b"\nCOMMIT\nBEGIN 1\nCOMMIT\n");
     let text = run(binary, &directory("oversized-line"), &oversized);
     assert_eq!(text.matches("REJECT ").count(), 2, "{text}");
@@ -1131,7 +1203,7 @@ fn host_batch_refuses_invalid_output_fields_and_distinguishes_read_errors() {
             assert_eq!(text.lines().count(), 2, "{text}");
             assert_eq!(
                 text.lines().next().unwrap(),
-                "OUT epoch=18446744073709551615 sequence=18446744073709551615 ticket=18446744073709551615 pdu=0 id=2047 dlc=8 data=ffffffffffffffff"
+                "OUT epoch=18446744073709551615 sequence=18446744073709551615 ticket=18446744073709551615 pdu=0 channel=0 format=STANDARD fd=0 id=2047 length=8 data=ffffffffffffffff"
             );
             assert!(text.contains("COMMIT_OK batch=18446744073709551615 epoch=18446744073709551615 sequence=18446744073709551615 input_first=18446744073709551615 inputs=256 status=0 input_status=0 transport_status=0 transport_epoch=18446744073709551615 transport_count=65535\n"), "{text}");
         } else {
@@ -1140,7 +1212,7 @@ fn host_batch_refuses_invalid_output_fields_and_distinguishes_read_errors() {
                 Some(if mode == "read-error" { 7 } else { 0 }),
                 "{text}{errors}"
             );
-            assert!(text.starts_with("READY HostBatchV1\n"), "{text}");
+            assert!(text.starts_with("READY HostBatchV2\n"), "{text}");
             assert!(
                 text.contains(if mode == "read-error" {
                     "lifecycle=Closed state=Failed reason=7"
@@ -1348,7 +1420,7 @@ fn single_component_confirmation_timers_ignore_host_confirmation_order() {
     let text = run(
         &binary,
         &directory("on-deadline"),
-        b"BEGIN 10\nRX 1792 8 1008221234000000\nCOMMIT\nBEGIN 210\nRX 1792 8 2100000000000000\nCOMMIT\n",
+        b"BEGIN 10\nRX 0 STANDARD 0 1792 8 1008221234000000\nCOMMIT\nBEGIN 210\nRX 0 STANDARD 0 1792 8 2100000000000000\nCOMMIT\n",
     );
     assert!(!text.contains("COMMIT_ERROR "), "{text}");
     assert_eq!(
@@ -1359,7 +1431,7 @@ fn single_component_confirmation_timers_ignore_host_confirmation_order() {
     let text = run(
         &binary,
         &directory("late"),
-        b"BEGIN 10\nRX 1792 8 1008221234000000\nCOMMIT\nBEGIN 211\nRX 1792 8 2100000000000000\nCOMMIT\n",
+        b"BEGIN 10\nRX 0 STANDARD 0 1792 8 1008221234000000\nCOMMIT\nBEGIN 211\nRX 0 STANDARD 0 1792 8 2100000000000000\nCOMMIT\n",
     );
     assert!(
         text.contains("COMMIT_ERROR batch=2 epoch=211 ")
@@ -1413,7 +1485,7 @@ fn shared_host_batch_builds_isolate_mutating_consumers() {
         let text = run(
             &built.binary,
             &built.scratch.0.join("isolated"),
-            b"BEGIN 10\nRX 800 4 78563412\nCOMMIT\nBEGIN 20\nCOMMIT\n",
+            b"BEGIN 10\nRX 0 STANDARD 0 800 4 78563412\nCOMMIT\nBEGIN 20\nCOMMIT\n",
         );
         assert_eq!(
             frames(&text, TRANSMIT),

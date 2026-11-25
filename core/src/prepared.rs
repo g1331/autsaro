@@ -417,7 +417,7 @@ impl NativePreparation {
     }
 }
 
-pub(crate) const TARGET_FORMAT: &str = "autosar-build-target-v3";
+pub(crate) const TARGET_FORMAT: &str = "autosar-build-target-v4";
 /// Directories whose C files are the package's translation units.
 const SOURCE_ROOTS: [&str; 5] = [
     "bsw/src/",
@@ -652,6 +652,7 @@ fn finish<'a>(
     unique_include_names(files.keys(), &include_paths)?;
     let mut metadata = serde_json::to_vec_pretty(&serde_json::json!({
         "format": TARGET_FORMAT,
+        "hostBatchProtocol": "HostBatchV2",
         "target": spec.id,
         "abi": spec.abi,
         "toolchain": toolchain,

@@ -564,7 +564,7 @@ pub(super) fn files(
                     description
                         .diagnostic_transport
                         .as_ref()
-                        .map_or(u32::MAX, |transport| transport.request_can_id)
+                        .map_or(u32::MAX, |transport| transport.encoded_request_id())
                 ),
             ),
             (
@@ -836,13 +836,17 @@ pub(super) fn files(
             reception_timeout
         )));
         if signal.receive {
-            receive.push(row(&format!("{}u, {can_if}, 4u", signal.can_id)));
+            receive.push(row(&format!(
+                "{}u, {can_if}, 4u, {}",
+                signal.encoded_id(),
+                if signal.accepts_fd { "TRUE" } else { "FALSE" }
+            )));
             ls_rx.push(row(&format!(
                 "{ls_source}, {source}, &PduR_CanIfRxIndication"
             )));
             pd_rx.push(row(&format!("{source}, {pdu}, &Com_RxIndication")));
         } else {
-            transmit.push(row(&format!("{}u, {can_if}, 4u", signal.can_id)));
+            transmit.push(row(&format!("{}u, {can_if}, 4u", signal.encoded_id())));
             ls_tx.push(row(&format!(
                 "LSDUR_UP_PDUR, {ls_source}, {can_if}, &PduR_CanIfTxConfirmation, &PduR_CanIfTriggerTransmit"
             )));
@@ -889,8 +893,16 @@ pub(super) fn files(
         let pd_tx_destination = name("PduR", "PduRDestPdu", &tx_route.destination);
         let ls_rx_source = name("LSduR", "LSduRPathSourcePdu", &rx_route.source);
         let ls_tx_source = name("LSduR", "LSduRPathSourcePdu", &tx_route.source);
-        receive.push(row(&format!("{}u, {can_rx}, 8u", tp.request_can_id)));
-        transmit.push(row(&format!("{}u, {can_tx}, 8u", tp.response_can_id)));
+        receive.push(row(&format!(
+            "{}u, {can_rx}, 8u, {}",
+            tp.encoded_request_id(),
+            if tp.request_accepts_fd {
+                "TRUE"
+            } else {
+                "FALSE"
+            }
+        )));
+        transmit.push(row(&format!("{}u, {can_tx}, 8u", tp.encoded_response_id())));
         ls_rx.push(row(&format!(
             "{ls_rx_source}, {tp_rx}, &CanTp_RxIndication"
         )));
@@ -1458,7 +1470,7 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
     config.push_str(
         r#"RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc)
 {
-    if ((id > 0x7ffu) || (dlc > 8u)) {
+    if ((!Can_IsClassicalId(id)) || (dlc > 8u)) {
         return 0;
     }
 "#,
@@ -1469,7 +1481,7 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
         return {};
     }}
 "#,
-            signal.can_id,
+            signal.encoded_id(),
             if signal.receive { "dlc == 4u" } else { "0" }
         ));
     }
@@ -1482,7 +1494,8 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
         return 0;
     }}
 "#,
-            tp.request_can_id, tp.response_can_id
+            tp.encoded_request_id(),
+            tp.encoded_response_id()
         ));
     }
     config.push_str(
@@ -1553,7 +1566,7 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
     // emitter extended are generated outputs. The packaging tool is wrapped at delivery.
     let mut original_sources = outputs.original_assets();
     original_sources.remove("runtime/ecu-tool.py");
-    outputs.emit(ECU, super::outputs::INTEGRATION_PATH, format!("{:#}\n", serde_json::json!({"format": "autosar-ecu-integration-v2", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })))?;
+    outputs.emit(ECU, super::outputs::INTEGRATION_PATH, format!("{:#}\n", serde_json::json!({"format": "autosar-ecu-integration-v3", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })))?;
     let verification = super::handoff::verification_files(plan).map_err(|_| failure())?;
     let readme = format!(
         r#"# ECU integration source project

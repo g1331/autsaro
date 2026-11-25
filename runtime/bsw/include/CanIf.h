@@ -44,13 +44,14 @@ typedef enum {
 } CanIf_PduModeType;
 /** One software-filter route, generated from CanIfRxPduCfg and its referenced PDU. */
 typedef struct {
-    Can_IdType can_id;    /**< 11-bit acceptance ID (CanIfRxPduCanId). */
+    Can_IdType can_id;    /**< Encoded Classical acceptance ID (CanIfRxPduCanId). */
     PduIdType pdu;        /**< CanIf Rx handle (CanIfRxPduId), passed to LSduR. */
     uint8 minimum_length; /**< Minimum accepted DLC, bytes 0..8 (CanIfRxPduDataLength). */
+    boolean accepts_fd;   /**< TRUE for *_CAN, FALSE for *_NO_FD_CAN. */
 } CanIf_RxPduConfigType;
 /** One fixed-ID transmit route, generated from CanIfTxPduCfg and its referenced PDU. */
 typedef struct {
-    Can_IdType can_id;    /**< 11-bit transmitted ID (CanIfTxPduCanId). */
+    Can_IdType can_id;    /**< Encoded Classical transmitted ID (CanIfTxPduCanId). */
     PduIdType pdu;        /**< CanIf Tx handle (CanIfTxPduId), used for confirmations. */
     uint8 maximum_length; /**< Maximum payload bytes, 1..8, from the referenced PDU length. */
 } CanIf_TxPduConfigType;
@@ -185,7 +186,7 @@ CANIF_CODE Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType
  */
 CANIF_CODE Std_ReturnType CanIf_GetPduMode(uint8 ControllerId, CanIf_PduModeType *PduModePtr);
 /** Filter a received frame and synchronously route accepted data (SWS_CANIF_00006).
- * @param[in] Mailbox Non-NULL descriptor of the configured CanIf controller/HRH and 11-bit CAN ID.
+ * @param[in] Mailbox Non-NULL descriptor of the configured CanIf controller/HRH and encoded CAN ID.
  * @param[in] PduInfoPtr Non-NULL received descriptor and payload, 0 to 8 bytes; metadata is unused.
  * @par Return
  * None.

@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- CanIf now accepts standard and extended Classical CAN on one controller and filters by frame format and numeric ID. Regenerate ECU packages from ARXML for the HostBatchV2 handshake, typed CAN records, and updated delivery metadata. Update private CanIf Rx route initializers to supply the FD acceptance policy (#117)
+
 - Single-instance RTE handles now expand to pointers to shared const CDS objects. Regenerate all component headers, sources and BSW memory descriptions and rebuild consumers; the independent Rte_Inst_* pointer symbols are removed, and Rte_Instance_* CDS objects have external linkage (#195)
 
 - ComM service inputs now require per-user UR_/UM_ ports, the standard user-request interface and alphabetic ComMMode declarations. ComM_ConfigType appends immutable user/channel notification mappings; regenerate plans and contracts, update positional initializers and rebuild consumers (#195)

@@ -273,6 +273,7 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
                 ),
             ));
         }
+        let hardware_format = value(graph, hardware, "CanIdType", false);
         for pdu in graph.of_kind("ECUC-CONTAINER-VALUE") {
             if definition_is(
                 graph,
@@ -283,6 +284,26 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
                     "CanIfTxPduCfg"
                 },
             ) {
+                let receive = direction == "RECEIVE";
+                let compatible =
+                    super::can_id::pdu_id(graph, pdu, receive).is_some_and(|(id, _)| {
+                        match hardware_format {
+                            Some("MIXED") => true,
+                            Some("STANDARD") => id & super::can_id::EXTENDED == 0,
+                            Some("EXTENDED") => id & super::can_id::EXTENDED != 0,
+                            _ => false,
+                        }
+                    });
+                if !compatible {
+                    return Err(reject(
+                        graph,
+                        pdu,
+                        "CAN_ID_CONFLICT",
+                        crate::product_message!(
+                            "backend.integration.communication.canif_identifier_or_addressing_type_mismatch"
+                        ),
+                    ));
+                }
                 let actual = if direction == "RECEIVE" {
                     reference(graph, pdu, "CanIfRxPduHrhIdRef")?
                 } else {
@@ -698,12 +719,8 @@ fn inspect_with_catalog(
         ("CanTxProcessing", "POLLING"),
         ("CanWakeupProcessing", "POLLING"),
         ("CanHandleType", "BASIC"),
-        ("CanIdType", "STANDARD"),
         ("CanHwObjectCount", "1"),
         ("CanIfBufferSize", "0"),
-        // The classic-only controller never reports CAN FD frames (SWS_CANIF_00877).
-        ("CanIfRxPduCanIdType", "STANDARD_NO_FD_CAN"),
-        ("CanIfTxPduCanIdType", "STANDARD_CAN"),
         ("CanIfTxPduType", "STATIC"),
         ("ComTransferProperty", "PENDING"),
         ("ComRxDataTimeoutAction", "NONE"),
@@ -818,7 +835,9 @@ fn inspect_with_catalog(
         }
         for (definition, literals) in &record.parameters {
             let name = definition.rsplit('/').next().unwrap_or("");
-            if (name.ends_with("Id") || name.ends_with("HandleId"))
+            // CAN identifiers are bus values validated against the PDU format above.
+            if !matches!(name, "CanIfRxPduCanId" | "CanIfTxPduCanId")
+                && (name.ends_with("Id") || name.ends_with("HandleId"))
                 && graph.external.get(definition).map(String::as_str)
                     == Some("ECUC-INTEGER-PARAM-DEF")
                 && crate::definitions::unsigned_integer(&literals[0])

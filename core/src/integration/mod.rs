@@ -16,6 +16,7 @@
 mod arti;
 mod artifacts;
 mod c_layout;
+mod can_id;
 mod can_runtime;
 mod catalog;
 mod com;
@@ -105,7 +106,7 @@ pub(crate) fn retired_profile_of_slot(slot: &str) -> Option<&'static str> {
             .is_some_and(|rest| rest.starts_with(':'))
     })
 }
-pub const FORMAT_VERSION: u32 = 2;
+pub const FORMAT_VERSION: u32 = 3;
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

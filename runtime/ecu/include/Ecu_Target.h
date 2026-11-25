@@ -21,12 +21,12 @@
 
 /** One immutable copied output; acknowledgment includes both identity fields. */
 typedef struct {
-    uint64_t ticket; /**< Monotonic nonzero output or batch identity. */
-    uint64_t epoch;  /**< Owner logical time in milliseconds. */
-    uint32_t can_id; /**< Classical CAN identifier, 0..0x7ff. */
-    PduIdType pdu;   /**< Software PDU handle required for acknowledgment. */
-    uint8_t dlc;     /**< Valid payload bytes, 0..8. */
-    uint8_t data[8]; /**< Copied Classical CAN payload; unused bytes zero. */
+    uint64_t ticket;  /**< Monotonic nonzero output or batch identity. */
+    uint64_t epoch;   /**< Owner logical time in milliseconds. */
+    uint32_t can_id;  /**< Encoded Classical CAN identifier. */
+    PduIdType pdu;    /**< Software PDU handle required for acknowledgment. */
+    uint8_t dlc;      /**< Valid payload bytes, 0..8. */
+    uint8_t data[64]; /**< Copied payload; unused bytes zero. */
 } Ecu_OutputRecord;
 
 /** Immutable owner-published transport failure; ordinary timeouts recover. */
@@ -139,7 +139,7 @@ uint64_t Ecu_TargetNow(void);
 /** Copy a frame from native control into the existing OS input mailbox.
  * @param[in] at Last completed logical epoch or its successor, never below an
  * already accepted frame epoch. Frames refuse while a tick is unconfirmed.
- * @param[in] id Standard Classical CAN identifier.
+ * @param[in] id Encoded Classical CAN identifier.
  * @param[in] dlc Length, 1 through 8.
  * @param[in] data Caller-owned frame copied before acceptance.
  * @param[out] ticket Accepted mailbox ticket; unchanged on refusal.

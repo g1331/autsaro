@@ -24,7 +24,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
-pub const FORMAT: &str = "autosar-workbench-handoff-v4";
+pub const FORMAT: &str = "autosar-workbench-handoff-v5";
 pub(crate) const PROJECT_PATH: &str = "inputs/workbench-project.json";
 pub(crate) const OWNERSHIP_PATH: &str = "meta/workbench-ownership.json";
 pub const HANDOFF_PATH: &str = "meta/handoff.json";

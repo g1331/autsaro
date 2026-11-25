@@ -579,7 +579,7 @@ pub(super) fn configure_os(
         "hostTimeouts": [
             { "owner": "Os_TargetWaitTick", "clock": "native monotonic milliseconds",
                 "rangeMilliseconds": [1, 5000], "advancesAutomotiveTime": false },
-            { "owner": "HostBatchV1", "clock": "native monotonic milliseconds",
+            { "owner": "HostBatchV2", "clock": "native monotonic milliseconds",
                 "limitMilliseconds": 5000, "advancesAutomotiveTime": false }
         ],
         "scope": "Selected single-core controlled-logical-time target; no hardware timer claim."

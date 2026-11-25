@@ -50,7 +50,7 @@ FILE_LIST = "meta/files.list"
 FILE_HASHES = "meta/files.sha256"
 
 
-def sealed_sources(project: Path) -> tuple[list[str], dict]:
+def sealed_sources(project: Path, *, analysis_baseline: bool = False) -> tuple[list[str], dict]:
     refuse_links(project)
     project = project.resolve(strict=True)
     if (project / "files.list").is_file():
@@ -84,7 +84,12 @@ def sealed_sources(project: Path) -> tuple[list[str], dict]:
         if digest(project / name) != identity:
             raise ValueError(f"Source identity mismatch: {name}")
     target = json.loads((project / "target.json").read_text(encoding="utf-8"))
-    if target.get("format") != "autosar-build-target-v3" or target.get("target") not in TARGETS:
+    target_format = target.get("format")
+    if (target.get("target") not in TARGETS
+            or (target_format != "autosar-build-target-v4"
+                and not (analysis_baseline and target_format == "autosar-build-target-v3"))
+            or (target_format == "autosar-build-target-v4" and target.get("profile") == "ecu"
+                and target.get("hostBatchProtocol") != "HostBatchV2")):
         raise ValueError("Unsupported build target format or identity")
     return names, target
 

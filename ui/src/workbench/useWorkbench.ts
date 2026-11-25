@@ -662,7 +662,7 @@ export function useWorkbench(): Workbench {
     const ids: Record<string, number> = {};
     try {
       for (const [path, value] of Object.entries(state.integrationIds)) {
-        ids[path] = intInRange(value, 'CAN ID', 0, 2047);
+        ids[path] = intInRange(value, 'CAN ID', 0, 0x1fffffff);
       }
       const period = intInRange(
         state.integrationPeriod,

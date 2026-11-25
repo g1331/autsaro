@@ -76,7 +76,7 @@ static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config)
         for (i = 0u; i < config->receive_count; ++i) {
             uint16 j;
             const CanIf_RxPduConfigType *route = &config->receive[i];
-            if ((route->can_id > 0x7ffu) || (route->minimum_length > 8u)) {
+            if ((!Can_IsClassicalId(route->can_id)) || (route->minimum_length > 8u)) {
                 valid = FALSE;
             }
             for (j = 0u; j < i; ++j) {
@@ -89,7 +89,7 @@ static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config)
         for (i = 0u; i < config->transmit_count; ++i) {
             uint16 j;
             const CanIf_TxPduConfigType *route = &config->transmit[i];
-            if ((route->can_id > 0x7ffu) || (route->maximum_length == 0u) ||
+            if ((!Can_IsClassicalId(route->can_id)) || (route->maximum_length == 0u) ||
                 (route->maximum_length > 8u)) {
                 valid = FALSE;
             }
@@ -504,14 +504,15 @@ CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType 
     if ((canif_configuration != NULL_PTR) && (Mailbox != NULL_PTR) && (PduInfoPtr != NULL_PTR) &&
         (PduInfoPtr->SduDataPtr != NULL_PTR) &&
         (Mailbox->ControllerId == canif_configuration->controller) &&
-        /* Standard identifier without FD flag: STANDARD_NO_FD_CAN (SWS_CANIF_00877). */
-        (Mailbox->Hoh == canif_configuration->receive_hoh) && (Mailbox->CanId <= 0x7ffu) &&
+        (Mailbox->Hoh == canif_configuration->receive_hoh) &&
         (canif_controller_state == CAN_CS_STARTED) &&
         ((pdu_mode == CANIF_ONLINE) || (pdu_mode == CANIF_TX_OFFLINE))) {
         uint16 i;
         for (i = 0u; i < canif_configuration->receive_count; ++i) {
             const CanIf_RxPduConfigType *route = &canif_configuration->receive[i];
-            if (route->can_id == Mailbox->CanId) {
+            /* SWS_CANIF_00877: compare width and number, then apply the Rx FD policy. */
+            if ((route->can_id == (Mailbox->CanId & ~CAN_ID_FD_FLAG)) &&
+                (route->accepts_fd || ((Mailbox->CanId & CAN_ID_FD_FLAG) == 0u))) {
                 if ((PduInfoPtr->SduLength < route->minimum_length) ||
                     (PduInfoPtr->SduLength > 8u)) {
                     invalid_length = 1u;

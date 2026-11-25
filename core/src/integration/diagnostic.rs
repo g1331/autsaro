@@ -19,7 +19,10 @@ pub struct DiagnosticContract {
     pub rx_npdu: String,
     pub tx_npdu: String,
     pub request_can_id: u32,
+    pub request_extended: bool,
+    pub request_accepts_fd: bool,
     pub response_can_id: u32,
+    pub response_extended: bool,
     pub request_can_if_handle: u16,
     pub response_can_if_handle: u16,
     pub p2_ms: u32,
@@ -45,7 +48,10 @@ pub struct DiagnosticTransportContract {
     pub rx_npdu: String,
     pub tx_npdu: String,
     pub request_can_id: u32,
+    pub request_extended: bool,
+    pub request_accepts_fd: bool,
     pub response_can_id: u32,
+    pub response_extended: bool,
     pub request_can_if_handle: u16,
     pub response_can_if_handle: u16,
     pub p2_ms: u32,
@@ -66,6 +72,16 @@ pub struct DiagnosticTransportContract {
     pub dcm_transmit: u16,
     /// Configured DcmDspMaxDidToRead; `None` applies no request limit (SWS_Dcm_01335).
     pub max_did_to_read: Option<u16>,
+}
+
+impl DiagnosticTransportContract {
+    pub(super) fn encoded_request_id(&self) -> u32 {
+        super::can_id::encoded(self.request_can_id, self.request_extended)
+    }
+
+    pub(super) fn encoded_response_id(&self) -> u32 {
+        super::can_id::encoded(self.response_can_id, self.response_extended)
+    }
 }
 
 fn reject(
@@ -156,7 +172,11 @@ fn transport_timer(
     Ok(value)
 }
 
-fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<PlanDiagnostic>> {
+fn can_link(
+    graph: &Graph,
+    pdu: usize,
+    receive: bool,
+) -> Result<(u32, u16, bool), Vec<PlanDiagnostic>> {
     let prefix = if receive { "CanIfRxPdu" } else { "CanIfTxPdu" };
     let found: Vec<_> = graph
         .of_kind("ECUC-CONTAINER-VALUE")
@@ -178,19 +198,16 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
         ));
     }
     let can_if = found[0];
-    let id = value(graph, can_if, &format!("{prefix}CanId"), false)
-        .and_then(|value| value.parse::<u32>().ok())
-        .filter(|id| *id <= 0x7ff)
-        .ok_or_else(|| {
-            reject(
-                graph,
-                can_if,
-                "CAN_ID_CONFLICT",
-                crate::product_message!(
-                    "backend.integration.diagnostic.diagnostic_can_identifier_out_of_range"
-                ),
-            )
-        })?;
+    let (id, accepts_fd) = super::can_id::pdu_id(graph, can_if, receive).ok_or_else(|| {
+        reject(
+            graph,
+            can_if,
+            "CAN_ID_CONFLICT",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_can_identifier_out_of_range"
+            ),
+        )
+    })?;
     let handle = value(graph, can_if, &format!("{prefix}Id"), false)
         .and_then(|value| value.parse::<u16>().ok())
         .ok_or_else(|| {
@@ -203,14 +220,7 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
                 ),
             )
         })?;
-    let id_type = if receive {
-        "STANDARD_NO_FD_CAN"
-    } else {
-        "STANDARD_CAN"
-    };
-    if value(graph, can_if, &format!("{prefix}CanIdType"), false) != Some(id_type)
-        || value(graph, pdu, "PduLength", false) != Some("8")
-    {
+    if value(graph, pdu, "PduLength", false) != Some("8") {
         return Err(reject(
             graph,
             pdu,
@@ -223,12 +233,7 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
     let triggers: Vec<_> = graph
         .of_kind("CAN-FRAME-TRIGGERING")
         .into_iter()
-        .filter(|trigger| {
-            graph
-                .text(*trigger, "IDENTIFIER")
-                .and_then(|value| value.parse::<u32>().ok())
-                == Some(id)
-        })
+        .filter(|trigger| super::can_id::trigger_id(graph, *trigger) == Some(id))
         .collect();
     if triggers.len() != 1 {
         return Err(reject(
@@ -284,10 +289,7 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
     }
     check_trigger(graph, trigger, system_pdu, None, receive)?;
     let ports = graph.descendants(trigger, "FRAME-PORT-REF");
-    if ports.len() != 1
-        || graph.text(frame, "FRAME-LENGTH") != Some("8")
-        || graph.text(trigger, "CAN-ADDRESSING-MODE") != Some("STANDARD")
-    {
+    if ports.len() != 1 || graph.text(frame, "FRAME-LENGTH") != Some("8") {
         return Err(reject(
             graph,
             trigger,
@@ -322,7 +324,7 @@ fn can_link(graph: &Graph, pdu: usize, receive: bool) -> Result<(u32, u16), Vec<
             crate::product_message!("backend.integration.diagnostic.diagnostic_rx_dlc_required"),
         ));
     }
-    Ok((id, handle))
+    Ok((id, handle, accepts_fd))
 }
 
 pub(super) fn inspect_service(
@@ -480,7 +482,10 @@ pub(super) fn inspect_service(
         rx_npdu: transport.rx_npdu,
         tx_npdu: transport.tx_npdu,
         request_can_id: transport.request_can_id,
+        request_extended: transport.request_extended,
+        request_accepts_fd: transport.request_accepts_fd,
         response_can_id: transport.response_can_id,
+        response_extended: transport.response_extended,
         request_can_if_handle: transport.request_can_if_handle,
         response_can_if_handle: transport.response_can_if_handle,
         p2_ms: transport.p2_ms,
@@ -820,8 +825,8 @@ pub(super) fn inspect_transport(
             ),
         ));
     }
-    let (request_can_id, request_handle) = can_link(graph, rx_npdu, true)?;
-    let (response_can_id, response_handle) = can_link(graph, tx_npdu, false)?;
+    let (request_can_id, request_handle, request_accepts_fd) = can_link(graph, rx_npdu, true)?;
+    let (response_can_id, response_handle, _) = can_link(graph, tx_npdu, false)?;
     if request_can_id == response_can_id {
         return Err(reject(
             graph,
@@ -867,8 +872,11 @@ pub(super) fn inspect_transport(
         tx_sdu: graph.elements[tx_sdu].object.clone(),
         rx_npdu: graph.elements[rx_npdu].object.clone(),
         tx_npdu: graph.elements[tx_npdu].object.clone(),
-        request_can_id,
-        response_can_id,
+        request_can_id: request_can_id & super::can_id::EXTENDED_MAX,
+        request_extended: request_can_id & super::can_id::EXTENDED != 0,
+        request_accepts_fd,
+        response_can_id: response_can_id & super::can_id::EXTENDED_MAX,
+        response_extended: response_can_id & super::can_id::EXTENDED != 0,
         request_can_if_handle: request_handle,
         response_can_if_handle: response_handle,
         p2_ms,

@@ -452,7 +452,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         const canIds = Object.fromEntries(
           Object.entries(current.integrationIds).map(([path, value]) => [
             path,
-            intInRange(value, 'CAN ID', 0, 2047),
+            intInRange(value, 'CAN ID', 0, 0x1fffffff),
           ]),
         );
         const report = await call('edit_integration', {

@@ -20,7 +20,7 @@ fn overview(module: &str) -> (&'static str, &'static str) {
     match module {
         "Can" => (
             "Classical CAN controller and hardware-object access through the controlled host driver.",
-            "One controller, contiguous controller/HOH IDs, 11-bit Classical CAN identifiers and 8-byte payloads. Polling functions must be bound to their configured time bases; this driver provides no physical MCU or transceiver.",
+            "One controller, contiguous controller/HOH IDs, standard and extended Classical CAN identifiers and 8-byte payloads. Polling functions must be bound to their configured time bases; this driver provides no physical MCU or transceiver.",
         ),
         "CanIf" => (
             "CAN controller/PDU-mode management and configured CAN frame routing.",

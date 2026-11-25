@@ -15,8 +15,29 @@
 #error "Can_GeneralTypes.h -> ComStack_Types.h: incompatible AUTOSAR release"
 #endif
 
-/** SWS_Can_00416; the host profile accepts only 11-bit standard identifiers. */
+/** SWS_Can_00416; CAN identifier with width and FD flags. */
 typedef uint32 Can_IdType;
+
+/** Can_IdType layout (SWS_Can_00416). Bit 29 is reserved. */
+#define CAN_ID_EXTENDED_FLAG 0x80000000u
+#define CAN_ID_FD_FLAG       0x40000000u
+#define CAN_ID_EXTENDED_MAX  0x1fffffffu
+#define CAN_ID_STANDARD_MAX  0x7ffu
+
+/** Check an encoded Classical CAN identifier at a driver or host boundary.
+ * @param[in] id Encoded CAN identifier.
+ * @return TRUE for standard or extended Classical CAN, FALSE for other encodings.
+ * Preconditions: None.
+ * Context: Any.
+ * Reentrancy: Reentrant.
+ * Ownership: No shared state or retained references.
+ */
+static inline boolean Can_IsClassicalId(Can_IdType id)
+{
+    return ((id & CAN_ID_EXTENDED_FLAG) != 0u)
+               ? ((id & ~CAN_ID_EXTENDED_FLAG) <= CAN_ID_EXTENDED_MAX)
+               : (id <= CAN_ID_STANDARD_MAX);
+}
 /** SWS_Can_00429 */
 typedef uint16 Can_HwHandleType;
 

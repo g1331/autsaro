@@ -768,7 +768,7 @@ export async function openWorkbench(name, options) {
         );
     }
     const handoff = JSON.parse(await readFile(path.join(output, 'meta/handoff.json'), 'utf8'));
-    assert.equal(handoff.format, 'autosar-workbench-handoff-v4');
+    assert.equal(handoff.format, 'autosar-workbench-handoff-v5');
     assert.deepEqual(handoff.resourceIdentities.ruleSetIdentity, before.ruleSetIdentity);
     assert.deepEqual(handoff.resourceIdentities.requiredExtensionDefinitions, []);
     const ledger = JSON.parse(
