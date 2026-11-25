@@ -66,37 +66,29 @@ static uint32 mode_writes CANIF_VAR_CLEARED;      /**< PDU-mode generation; Init
 #include "CanIf_MemMap.h"
 static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config)
 {
-    boolean valid = FALSE;
-    if ((config != NULL_PTR) && (config->receive_count <= 32u) && (config->transmit_count <= 32u) &&
-        ((config->receive_count == 0u) || (config->receive != NULL_PTR)) &&
-        ((config->transmit_count == 0u) || (config->transmit != NULL_PTR)) &&
-        (config->controller_mode != NULL_PTR) && (config->bus_off != NULL_PTR)) {
+    boolean valid = (config != NULL_PTR) && (config->receive_count <= 32u) &&
+                    (config->transmit_count <= 32u) &&
+                    ((config->receive_count == 0u) || (config->receive != NULL_PTR)) &&
+                    ((config->transmit_count == 0u) || (config->transmit != NULL_PTR)) &&
+                    (config->controller_mode != NULL_PTR) && (config->bus_off != NULL_PTR);
+    if (valid) {
         uint16 i;
-        valid = TRUE;
         for (i = 0u; i < config->receive_count; ++i) {
             uint16 j;
             const CanIf_RxPduConfigType *route = &config->receive[i];
-            if ((!Can_IsClassicalId(route->can_id)) || (route->minimum_length > 8u)) {
-                valid = FALSE;
-            }
+            valid = valid && Can_IsClassicalId(route->can_id) && (route->minimum_length <= 8u);
             for (j = 0u; j < i; ++j) {
-                if ((route->can_id == config->receive[j].can_id) ||
-                    (route->pdu == config->receive[j].pdu)) {
-                    valid = FALSE;
-                }
+                valid = valid && (route->can_id != config->receive[j].can_id) &&
+                        (route->pdu != config->receive[j].pdu);
             }
         }
         for (i = 0u; i < config->transmit_count; ++i) {
             uint16 j;
             const CanIf_TxPduConfigType *route = &config->transmit[i];
-            if ((!Can_IsClassicalId(route->can_id)) || (route->maximum_length == 0u) ||
-                (route->maximum_length > 8u)) {
-                valid = FALSE;
-            }
+            valid = valid && Can_IsClassicalId(route->can_id) && (route->maximum_length != 0u) &&
+                    (route->maximum_length <= 8u);
             for (j = 0u; j < i; ++j) {
-                if (route->pdu == config->transmit[j].pdu) {
-                    valid = FALSE;
-                }
+                valid = valid && (route->pdu != config->transmit[j].pdu);
             }
         }
     }

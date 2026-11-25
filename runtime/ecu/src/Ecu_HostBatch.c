@@ -206,10 +206,10 @@ static StatusType stage_frame(Ecu_HostBatch *batch,
     return status;
 }
 
-static StatusType dispatch(Ecu_HostBatch *batch,
-                           unsigned count,
-                           const Ecu_BatchTokenType tokens[7],
-                           Ecu_BatchCommand *command)
+static StatusType dispatch_batch_command(Ecu_HostBatch *batch,
+                                         unsigned count,
+                                         const Ecu_BatchTokenType tokens[7],
+                                         Ecu_BatchCommand *command)
 {
     StatusType status = E_OS_VALUE;
     if (count == 0u) {
@@ -249,7 +249,7 @@ StatusType Ecu_HostBatchParse(Ecu_HostBatch *batch,
     } else {
         Ecu_BatchTokenType tokens[7];
         unsigned count = tokenize(line, length, tokens);
-        status = dispatch(batch, count, tokens, command);
+        status = dispatch_batch_command(batch, count, tokens, command);
     }
     return status;
 }
