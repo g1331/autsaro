@@ -37,7 +37,7 @@ pub(super) fn encoded(id: u32, extended: bool) -> u32 {
 }
 
 fn encode(value: Option<&str>, format: &str) -> Option<u32> {
-    let id = u32::try_from(crate::definitions::unsigned_integer(value?)?).ok()?;
+    let id = crate::definitions::unsigned_integer(value?)?;
     match format {
         "STANDARD" if id <= 0x7ff => Some(id),
         "EXTENDED" if id <= EXTENDED_MAX => Some(id | EXTENDED),

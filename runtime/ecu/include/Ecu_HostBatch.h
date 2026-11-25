@@ -25,9 +25,9 @@ typedef struct {
 /** HostBatchV2 command accepted by the bounded ASCII codec. */
 typedef enum {
     ECU_BATCH_NEGOTIATE, /**< Accept the exact protocol version. */
-    ECU_BATCH_BEGIN, /**< Open a batch at an explicit logical epoch. */
-    ECU_BATCH_RX,    /**< Append one copied input frame. */
-    ECU_BATCH_COMMIT /**< Close staging and request whole-batch execution. */
+    ECU_BATCH_BEGIN,     /**< Open a batch at an explicit logical epoch. */
+    ECU_BATCH_RX,        /**< Append one copied input frame. */
+    ECU_BATCH_COMMIT     /**< Close staging and request whole-batch execution. */
 } Ecu_BatchCommand;
 
 /** One native producer owns this staging state. Initialize before use.

@@ -60,7 +60,6 @@
 #define CAN_BUSOFF_POLLING STD_OFF
 #endif
 
-
 #define CAN_INDICATION_MODE   0u
 #define CAN_INDICATION_BUSOFF 1u
 

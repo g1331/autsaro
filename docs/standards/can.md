@@ -25,7 +25,6 @@
 | TriggerTransmit | 不适用（配置：ECUC_Can_00486=true）：SWS_Can_00503、00504、00506 |
 | 分区映射 | 不适用（配置：ECUC_Can_00491、ECUC_Can_00492）：SWS_Can_CONSTR_00509、SWS_Can_CONSTR_00510、SWS_Can_CONSTR_00511 |
 | 硬件对象负载长度 | 不适用（配置：ECUC_Can_00495）：SWS_Can_CONSTR_00512 |
-| 扩展 ID | 不适用（配置：ECUC_Can_00065=EXTENDED／MIXED）：SWS_Can_00423 |
 | 多个读写周期 | 不适用（配置：ECUC_Can_00437 多于一个）：SWS_Can_00441、00442 |
 | L-PDU callout | 不适用（配置：ECUC_Can_00434）：SWS_Can_00443、00444 |
 | 安全事件 | 不适用（配置：ECUC_Can_00496=true）：SWS_Can_91021、91022、91023、91024 |

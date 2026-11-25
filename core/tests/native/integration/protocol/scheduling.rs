@@ -396,7 +396,7 @@ fn run_failure_records_scene_and_diagnostics() {
         &binary,
         concat!(
             "#!/bin/sh\ncat >/dev/null\n",
-            "printf 'READY HostBatchV2\\nCOMMIT_OK batch=1 epoch=3\\n",
+            "printf 'READY HostBatchV2\\nPROTOCOL_OK HostBatchV2\\nCOMMIT_OK batch=1 epoch=3\\n",
             "COMMIT_OK batch=2 epoch=10\\nOUT epoch=12\\n'\n",
             "printf 'injected consumer failure\\n' >&2\nexit 7\n",
         ),
@@ -438,7 +438,10 @@ fn run_failure_records_scene_and_diagnostics() {
         assert!(output.contains(marker), "missing {marker}: {output}");
     }
     let scene = scratch.0.join("scene");
-    assert_eq!(fs::read(scene.join("stdin")).unwrap(), INPUT);
+    assert_eq!(
+        fs::read(scene.join("stdin")).unwrap(),
+        [b"PROTOCOL HostBatchV2\n".as_slice(), INPUT].concat(),
+    );
     assert!(
         read(&scene.join("stdout"))
             .unwrap()

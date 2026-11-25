@@ -84,6 +84,7 @@ fn host_batch_project() -> Built {
 }
 
 /// Verifies: SWS_CANIF_00281
+/// Verifies: SWS_Can_00423
 #[test]
 fn host_batch_mixed_can_preserves_width_and_exact_id_on_one_channel() {
     let scratch = super::Scratch::new();

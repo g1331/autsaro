@@ -62,7 +62,8 @@ class ActualCAnalysisTests(unittest.TestCase):
     def gate_project(self, root: Path, source: str, debug: bool) -> Path:
         root.mkdir()
         kernel = "/* Include-only kernel fixture. */\n"
-        producer = "core/src/prepared.rs"
+        # This fixture generates the synthetic package on both sides of the gate.
+        producer = Path(__file__).resolve().relative_to(c_baseline.ROOT).as_posix()
         project = self.project(root, source, extra_files={
             "kernel/kernel.h": kernel,
             "meta/integration.json": json.dumps({
@@ -306,7 +307,8 @@ int main(int argc, char **argv)
                 "patch.diff": "--- a/unit.c\n+++ b/unit.c\n@@ -1 +1 @@\n-int kernel(void) { return 0; }\n+" + delivered,
             })
             target = json.loads((project / "target.json").read_text())
-            target.update(profile="ecu", sources=["bsw/src/main.c"], kernelSources=["unit.c"],
+            target.update(profile="ecu", hostBatchProtocol="HostBatchV2",
+                          sources=["bsw/src/main.c"], kernelSources=["unit.c"],
                           entries={"host-batch": "host.c", "probe": "probe.c"},
                           kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}],
                           kernelSha256={"unit.c": hashlib.sha256(delivered.encode()).hexdigest()})
@@ -381,7 +383,7 @@ int main(int argc, char **argv)
                 target = json.loads((project / "target.json").read_text())
                 if stage == "patch-0":
                     target["compilerFlags"].append("-fexceptions")
-                    target.update(profile="ecu", kernelSources=["unit.c"],
+                    target.update(profile="ecu", hostBatchProtocol="HostBatchV2", kernelSources=["unit.c"],
                                   kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}])
                     (project / "target.json").write_text(json.dumps(target))
                     seal = project / "meta/files.sha256"
@@ -969,8 +971,8 @@ int main(int argc, char **argv)
             self.assertTrue(any(d["id"] == "autsaro-hostThreadInBsw" for d in before["diagnostics"]))
             original_prepare = c_check.prepare
             # The generated header is actually passed to Cppcheck, changing its diagnostics.
-            def modeled(*args):
-                copied, units, database, scope = original_prepare(*args)
+            def modeled(*args, **kwargs):
+                copied, units, database, scope = original_prepare(*args, **kwargs)
                 model = args[2] / "injected-model.h"
                 model.write_text("#define pthread_create() 0\n")
                 scope["platformModel"] = {"path": str(model), "sha256": hashlib.sha256(model.read_bytes()).hexdigest()}

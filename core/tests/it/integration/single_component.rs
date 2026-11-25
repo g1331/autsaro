@@ -20,12 +20,18 @@ fn mixed_can_configuration_validates_width_format_and_conflicts() {
         .find(|signal| signal.receive)
         .unwrap();
     let diagnostic = description.diagnostic.as_ref().unwrap();
-    assert_eq!(receive.can_id, 0x7ff);
-    assert!(!receive.extended && receive.accepts_fd);
-    assert_eq!(diagnostic.request_can_id, 0x7ff);
-    assert!(diagnostic.request_extended && !diagnostic.request_accepts_fd);
-    assert_eq!(diagnostic.response_can_id, 0x1fff_ffff);
-    assert!(diagnostic.response_extended);
+    // The analysis baseline compiles these test sources with the old generator.
+    // Check the new serialized fields without requiring them on its Rust types.
+    let receive = serde_json::to_value(receive).unwrap();
+    let diagnostic = serde_json::to_value(diagnostic).unwrap();
+    assert_eq!(receive["canId"], 0x7ff);
+    assert_eq!(receive["extended"], false);
+    assert_eq!(receive["acceptsFd"], true);
+    assert_eq!(diagnostic["requestCanId"], 0x7ff);
+    assert_eq!(diagnostic["requestExtended"], true);
+    assert_eq!(diagnostic["requestAcceptsFd"], false);
+    assert_eq!(diagnostic["responseCanId"], 0x1fff_ffff);
+    assert_eq!(diagnostic["responseExtended"], true);
 
     for (owner, key, invalid) in [
         ("RxValue", "CanIfRxPduCanId", "2048"),
@@ -85,12 +91,13 @@ fn mixed_can_configuration_validates_width_format_and_conflicts() {
             .iter()
             .all(|signal| signal.can_id == 800)
     );
-    assert!(
-        plan.description()
-            .signals
-            .iter()
-            .any(|signal| signal.extended && !signal.receive)
-    );
+    let transmit = plan
+        .description()
+        .signals
+        .iter()
+        .find(|signal| !signal.receive)
+        .unwrap();
+    assert_eq!(serde_json::to_value(transmit).unwrap()["extended"], true);
 
     let mut ambiguous = sources;
     parameter(
@@ -298,15 +305,31 @@ fn reference_shape_records_independent_verification_inputs() {
     // Configured endpoints of the fixture, not values read back from the plan.
     for (name, value) in [
         ("periodMs", 10),
-        ("receiveCanId", 0x320),
-        ("transmitCanId", 0x321),
-        ("requestCanId", 0x700),
-        ("responseCanId", 0x708),
         ("did", 0x1234),
         ("initialReceiveValue", 0),
         ("receiveTimeoutMs", 200),
     ] {
         assert_eq!(inputs[name], value, "{name}");
+    }
+    assert_eq!(
+        inputs["channels"],
+        serde_json::json!({"0": "/Extract/ReferenceCan/Channel"})
+    );
+    for (role, direction, handle, id, length) in [
+        ("receive", "RX", 0, 0x320, 4),
+        ("transmit", "TX", 0, 0x321, 4),
+        ("request", "RX", 1, 0x700, 8),
+        ("response", "TX", 1, 0x708, 8),
+    ] {
+        assert_eq!(
+            inputs["endpoints"][role],
+            serde_json::json!({
+                "module": "CanIf", "direction": direction, "handle": handle, "channel": 0,
+                "format": "STANDARD", "fdPolicy": "CLASSICAL", "id": id,
+                "logicalLength": length, "wireLength": length,
+            }),
+            "{role}"
+        );
     }
     assert_eq!(inputs["format"], "autosar-ecu-test-inputs-v2");
     let readme = std::fs::read_to_string(project.join("README.md")).unwrap();
