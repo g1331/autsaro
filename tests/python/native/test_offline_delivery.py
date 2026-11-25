@@ -19,11 +19,11 @@ PIPELINE_TRACE = (
     b"BEGIN 10\nCOMMIT\nBEGIN 20\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\n"
 )
 PIPELINE_OUTPUT = [
-    ("1", "1800", "8", "0762123400000000"),
-    ("10", "801", "4", "78563412"),
-    ("10", "1800", "8", "0762123412345678"),
-    ("20", "801", "4", "78563412"),
-    ("20", "1800", "8", "0762123412345678"),
+    ("1", "1", "0", "STANDARD", "0", "1800", "8", "0762123400000000"),
+    ("10", "0", "0", "STANDARD", "0", "801", "4", "78563412"),
+    ("10", "1", "0", "STANDARD", "0", "1800", "8", "0762123412345678"),
+    ("20", "0", "0", "STANDARD", "0", "801", "4", "78563412"),
+    ("20", "1", "0", "STANDARD", "0", "1800", "8", "0762123412345678"),
 ]
 
 
@@ -95,11 +95,13 @@ class OfflineDeliveryTests(unittest.TestCase):
                                 "host-batch", PIPELINE_TRACE if sample == "component-pipeline"
                                 else b"PROTOCOL HostBatchV2\nBEGIN 1\nCOMMIT\n")
                     self.assertIn("READY HostBatchV2", batch)
+                    self.assertIn("PROTOCOL_OK HostBatchV2", batch)
                     receipts = re.findall(r"^COMMIT_OK .*?\bepoch=(\d+)", batch, re.MULTILINE)
                     if sample == "component-pipeline":
                         self.assertEqual(receipts, ["0", "1", "10", "10", "20"], batch)
                         records = [tuple(dict(field.split("=", 1) for field in line.split()[1:])[key]
-                                         for key in ("epoch", "id", "dlc", "data"))
+                                         for key in ("epoch", "pdu", "channel", "format",
+                                                     "fd", "id", "length", "data"))
                                    for line in batch.splitlines() if line.startswith("OUT ")]
                         self.assertEqual(records, PIPELINE_OUTPUT, batch)
                     else:

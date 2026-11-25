@@ -22,6 +22,9 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 # Successful scans retain their diagnostic inputs. Full analysis receipts still
 # bind the actual driver hash; only this exact revision reuses the disposition identity.
 REJECTION_ONLY_DRIVER_REVISIONS = {
+    # R11 admits sealed V3 packages only for source-tree baseline analysis.
+    "0c512478462d5f65d405502f61f96135b223c591baabd2d15e02317d560e7418":
+        "0f933b3b794d240d3a97c674bec20c50dbe0634f9753b831fdbae942d437ebba",
     "a13646572c73a07345e658afb22a52c490894c97029a42e71aafdaef84ecb993":
         "0f933b3b794d240d3a97c674bec20c50dbe0634f9753b831fdbae942d437ebba",
 }

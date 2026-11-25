@@ -234,8 +234,10 @@ class CComparisonTests(unittest.TestCase):
             metadata["plan"].update(
                 formatVersion=2, communicationRuntime={"can": {}},
                 signals=[{"trigger": "/Network/Channel/Signal", "canId": 801}],
-                diagnostic=None, diagnosticTransport=None,
             )
+            metadata["plan"]["composition"] = {"networkEndpoints": [
+                {"transport": metadata["plan"]["signals"][0].copy()},
+            ]}
             old_target = json.loads((old_root / "target.json").read_text())
             old_target.update(format="autosar-build-target-v3",
                               nativeDelivery={"format": "autosar-workbench-handoff-v4"})
@@ -254,6 +256,8 @@ class CComparisonTests(unittest.TestCase):
                 signals=[{"trigger": "/Network/Channel/Signal", "canId": 801,
                           "extended": False, "acceptsFd": False}],
             )
+            transport = metadata["plan"]["composition"]["networkEndpoints"][0]["transport"]
+            transport.update(extended=False, acceptsFd=False)
             for root in (project, output / "project"):
                 target = {**old_target, "format": "autosar-build-target-v4",
                           "nativeDelivery": {"format": "autosar-workbench-handoff-v5"},
@@ -263,12 +267,15 @@ class CComparisonTests(unittest.TestCase):
             current["sourceSealSha256"] = digest(project / "meta/files.sha256")
             self.assertFalse(compare(current, project, output, baseline, source_tree=True)["new"])
 
-            metadata["plan"]["signals"][0]["extended"] = True
-            for root in (project, output / "project"):
-                self.seal(root, metadata)
-            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
-            with self.assertRaisesRegex(ValueError, "Sample generation configuration differs"):
-                compare(current, project, output, baseline, source_tree=True)
+            for record in (metadata["plan"]["signals"][0], transport):
+                with self.subTest(record=record):
+                    record["extended"] = True
+                    for root in (project, output / "project"):
+                        self.seal(root, metadata)
+                    current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+                    with self.assertRaisesRegex(ValueError, "Sample generation configuration differs"):
+                        compare(current, project, output, baseline, source_tree=True)
+                    record["extended"] = False
 
     def test_sealed_runtime_source_changes_reach_diagnostic_comparison(self):
         with tempfile.TemporaryDirectory() as temporary:

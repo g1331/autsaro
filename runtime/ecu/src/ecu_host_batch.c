@@ -159,6 +159,8 @@ static Os_HostThreadResultType host_batch_control(void *argument)
         } else if ((status == E_OK) && (command == ECU_BATCH_COMMIT)) {
             /* E_OK: the receipt is written. Otherwise nothing ran. */
             status = Ecu_HostBatchExecute(&batch, &write_output, NULL);
+        } else {
+            /* BEGIN and RX only stage data. Errors are reported below. */
         }
         if (status != E_OK) {
             if (write_rejection(&batch, status) == 0) {

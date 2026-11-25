@@ -175,7 +175,8 @@ class RetentionTests(unittest.TestCase):
         scope = {"profile": "ecu", "entries": {"host-batch": "batch.c", "probe": "probe.c"},
                  "cppcheckLibraries": {}}
 
-        def prepare(*args):
+        def prepare(project, target, output, *, analysis_baseline):
+            self.assertFalse(analysis_baseline)
             self.write(self.row)
             return root, units, database, scope
 

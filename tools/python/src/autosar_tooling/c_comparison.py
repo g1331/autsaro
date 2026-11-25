@@ -349,8 +349,13 @@ def _r11_baseline_plan(plan: dict) -> dict:
            "receiveIdType": "STANDARD", "transmitIdType": "STANDARD"}
     result = {**plan, "formatVersion": 3, "communicationRuntime": {**runtime, "can": can},
               "signals": [{**signal, "extended": False, "acceptsFd": False} for signal in signals]}
+    composition = plan["composition"]
+    result["composition"] = {**composition, "networkEndpoints": [
+        {**endpoint, "transport": {**endpoint["transport"], "extended": False, "acceptsFd": False}}
+        for endpoint in composition["networkEndpoints"]
+    ]}
     for name in ("diagnostic", "diagnosticTransport"):
-        if plan[name] is not None:
+        if plan.get(name) is not None:
             result[name] = {**plan[name], "requestExtended": False,
                             "responseExtended": False, "requestAcceptsFd": False}
     return result
