@@ -1,0 +1,468 @@
+import { composedMessage, message } from '../../i18n';
+import type { Text } from '../../i18n';
+import type { IntegrationInspection, WorkspaceView } from '../../ipc/types';
+import type { Stage, StageState } from './stages';
+import { distinct } from '../../shared/ui/forms';
+import type { RunOperation } from '../../app/operationRunner';
+import { rememberDialogOpener } from '../../shared/ui/Dialog';
+import { native } from '../../ipc/native';
+import type { WorkbenchSession } from '../../app/session';
+import { stageDefaults } from './stages';
+
+interface Dependencies {
+  run: RunOperation;
+  acceptView: (view: WorkspaceView) => void;
+  markStage: (key: Stage, state: StageState, detail: Text) => void;
+  continueReplacement: (saved: WorkspaceView, error: Text | null) => Promise<void>;
+  unapplied: boolean;
+  invalidateAfterEdit: () => void;
+  applyProject: (view: WorkspaceView) => void;
+  guardContext: (title: Text, action: () => void | Promise<void>) => Promise<void>;
+  replaceProject: (title: Text, action: () => void | Promise<void>) => Promise<void>;
+  acceptIntegration: (report: IntegrationInspection) => void;
+}
+
+export function createDeliveryActions(session: WorkbenchSession, dependencies: Dependencies) {
+  const {
+    run,
+    acceptView,
+    markStage,
+    continueReplacement,
+    unapplied,
+    acceptIntegration,
+    invalidateAfterEdit,
+    applyProject,
+    guardContext,
+    replaceProject,
+  } = dependencies;
+  const { call, stateRef, field, state, patchState, running } = session;
+  const {
+    savePreview,
+    workspace,
+    stages,
+    generationPreview,
+    generationKind,
+    generated,
+    buildDirectory,
+    built,
+  } = session.state;
+  const setSavePreview = session.field('savePreview');
+  const setPreviewPath = session.field('previewPath');
+  const setNotice = session.field('notice');
+  const setStages = session.field('stages');
+  const setGenerated = session.field('generated');
+  const setBuilt = session.field('built');
+  const setVirtualResult = session.field('virtualResult');
+  const setOperationIssues = session.field('operationIssues');
+  const setGenerationPreview = session.field('generationPreview');
+  const setGenerationPreviewPath = session.field('generationPreviewPath');
+
+  function saveProject() {
+    void run(
+      { kind: 'savePreview', label: message('activity.previewSave') },
+      () => call('preview_save_project'),
+      (preview) => {
+        if (!preview.files.some((file) => file.changed) && !stateRef.current.savingForReplacement) {
+          setNotice({ tone: 'info', text: message('workflow.save.noChanges') });
+          return;
+        }
+        setSavePreview(preview);
+        setPreviewPath(
+          preview.files.find((file) => file.changed)?.path ?? preview.files[0]?.path ?? '',
+        );
+      },
+    );
+  }
+
+  function confirmSave() {
+    if (
+      !savePreview ||
+      (!savePreview.files.some((file) => file.changed) && !stateRef.current.savingForReplacement)
+    )
+      return;
+    void run(
+      { kind: 'action', label: message('activity.save') },
+      () => call('save_project', { revision: savePreview.revision }),
+      (result) => {
+        acceptView(result.workspace);
+        if (result.error) {
+          markStage('save', 'failed', result.error);
+          setNotice({ tone: 'error', text: result.error });
+        } else if (result.workspace.dirty) {
+          markStage('save', 'failed', message('workflow.stage.backendUnsaved'));
+          setNotice({ tone: 'error', text: message('workflow.error.saveIncomplete') });
+        } else {
+          setStages({
+            ...stageDefaults,
+            save: { state: 'done', detail: message('workflow.stage.projectSaved') },
+          });
+          setNotice({
+            tone: 'success',
+            text: message('workflow.save.saved', {
+              count: savePreview.files.filter((file) => file.changed).length,
+            }),
+          });
+          setGenerated(null);
+          setBuilt(null);
+          setVirtualResult(null);
+        }
+        void continueReplacement(result.workspace, result.error);
+      },
+      'save',
+    );
+  }
+
+  function validateProject() {
+    void run(
+      { kind: 'action', label: message('activity.validate') },
+      async () => {
+        const view = await call('validate_project');
+        // Automatic diagnostics are only in the projection; count both sources.
+        const projection = await call('project_projection');
+        return { view, projection };
+      },
+      ({ view, projection }) => {
+        acceptView(view);
+        patchState({ projection });
+        setOperationIssues([]);
+        const found = [...distinct(projection.diagnostics), ...distinct(view.issues)];
+        const count = found.filter((issue) => issue.severity === 'error').length;
+        const warnings = found.filter((issue) => issue.severity === 'warning').length;
+        markStage(
+          'validate',
+          count ? 'failed' : 'done',
+          count
+            ? message('workflow.stage.blockingErrors', { count })
+            : message('workflow.stage.validationDone'),
+        );
+        if (count) {
+          markStage('generate', 'stale', message('workflow.stage.validationBlocked'));
+          markStage('build', 'stale', message('workflow.stage.validationBlocked'));
+          markStage('virtual', 'stale', message('workflow.stage.validationBlocked'));
+        }
+        setNotice({
+          tone: count ? 'error' : warnings ? 'warning' : 'success',
+          text: message('workflow.validation.summary', { errors: count, warnings }),
+        });
+        if (count || warnings) field('toolWindow')('problems');
+      },
+      'validate',
+    );
+  }
+
+  function previewIntegrationSave() {
+    void run(
+      { kind: 'savePreview', label: message('activity.previewSave') },
+      () => call('preview_integration_save'),
+      (preview) => {
+        if (!preview.files.some((file) => file.changed) && !stateRef.current.savingForReplacement) {
+          patchState({ integrationIssues: [] });
+          setNotice({ tone: 'info', text: message('workflow.save.noChanges') });
+          return;
+        }
+        patchState({
+          integrationPreview: preview,
+          integrationIssues: [],
+          integrationPreviewPath:
+            preview.files.find((file) => file.changed)?.path ?? preview.files[0]?.path ?? '',
+        });
+      },
+    );
+  }
+
+  function saveIntegration() {
+    const preview = state.integrationPreview;
+    if (!preview) return;
+    void run(
+      { kind: 'action', label: message('activity.save') },
+      () => call('save_integration', { revision: preview.revision }),
+      (result) => {
+        acceptView(result.workspace);
+        patchState({
+          integrationPreview: null,
+          generated: null,
+          built: null,
+          virtualResult: null,
+          stages: {
+            ...stageDefaults,
+            save: {
+              state: result.error || result.workspace.dirty ? 'failed' : 'done',
+              detail:
+                result.error ??
+                (result.workspace.dirty
+                  ? message('workflow.stage.projectUnsaved')
+                  : message('workflow.stage.integrationSaved')),
+            },
+          },
+          integrationNotice: result.error ?? message('workflow.integration.savedNotGenerated'),
+        });
+        if (result.error) setNotice({ tone: 'error', text: result.error });
+        else if (!result.workspace.dirty)
+          setNotice({
+            tone: 'success',
+            text: message('workflow.save.saved', {
+              count: preview.files.filter((file) => file.changed).length,
+            }),
+          });
+        void continueReplacement(result.workspace, result.error);
+      },
+      'save',
+    );
+  }
+
+  function changeEcuOutput(path: string) {
+    patchState({
+      ecuOutputDirectory: path,
+      generationPreview: null,
+      generated: null,
+      built: null,
+      virtualResult: null,
+      stages: {
+        ...stages,
+        generate: stageDefaults.generate,
+        build: stageDefaults.build,
+        virtual: stageDefaults.virtual,
+      },
+    });
+  }
+
+  function changeEcuBuildDirectory(path: string) {
+    patchState({
+      buildDirectory: path,
+      built: null,
+      virtualResult: null,
+      stages: { ...stages, build: stageDefaults.build, virtual: stageDefaults.virtual },
+    });
+  }
+
+  function previewEcu() {
+    if (
+      workspace?.dirty ||
+      state.projection?.dirty ||
+      unapplied ||
+      !state.ecuOutputDirectory.trim()
+    )
+      return;
+    void run(
+      { kind: 'action', label: message('activity.previewSource') },
+      async () => {
+        const inspection = await call('inspect_integration');
+        if (!inspection.description) throw inspection.diagnostics;
+        const preview = await call('preview_ecu_project', {
+          outputDirectory: state.ecuOutputDirectory,
+          handoff: generationKind === 'handoff',
+        });
+        return { inspection, preview };
+      },
+      ({ inspection, preview }) => {
+        acceptIntegration(inspection);
+        setGenerationPreview(preview);
+        setGenerationPreviewPath(preview.files[0]?.path ?? '');
+        markStage('validate', 'done', message('workflow.stage.integrationValidated'));
+      },
+    );
+  }
+
+  function generateEcu() {
+    // The preview dialog is the only confirmation; it names the files and directory.
+    if (!generationPreview) return;
+    void run(
+      { kind: 'action', label: message('activity.generate') },
+      () =>
+        call('generate_ecu_project', {
+          outputDirectory: generationPreview.outputDirectory,
+          handoff: generationKind === 'handoff',
+          revision: generationPreview.revision,
+        }),
+      (value) => {
+        setGenerated(value);
+        setGenerationPreview(null);
+        setBuilt(null);
+        setVirtualResult(null);
+        setOperationIssues(value.issues);
+        markStage(
+          'generate',
+          value.issues.some((issue) => issue.severity === 'error') ? 'failed' : 'done',
+          value.outputDirectory,
+        );
+        markStage('build', 'pending', message('workflow.stage.currentNotBuilt'));
+        markStage('virtual', 'pending', message('workflow.stage.currentNotVerified'));
+      },
+      'generate',
+    );
+  }
+
+  function preflightEcu() {
+    if (workspace?.dirty || state.projection?.dirty || unapplied) return;
+    void run(
+      { kind: 'action', label: message('activity.preflight') },
+      () => call('preflight_ecu', { handoff: generationKind === 'handoff' }),
+      (report) => {
+        field('preflight')(report);
+        setNotice({
+          tone: report.status === 'failed' ? 'error' : 'info',
+          text: composedMessage(
+            'workflow.preflight.result',
+            {
+              status: message(
+                report.status === 'not_run'
+                  ? 'workflow.preflight.notRun'
+                  : report.status === 'passed'
+                    ? 'workflow.preflight.passed'
+                    : 'workflow.preflight.failed',
+              ),
+              logs: report.logs,
+            },
+            { fingerprint: report.fingerprint },
+          ),
+        });
+      },
+    );
+  }
+
+  function buildEcu() {
+    if (!generated || stages.generate.state !== 'done' || !buildDirectory.trim()) return;
+    void run(
+      { kind: 'action', label: message('activity.build') },
+      () => {
+        setBuilt(null);
+        setVirtualResult(null);
+        markStage('virtual', 'stale', message('workflow.stage.rebuilding'));
+        return call('build_ecu', {
+          outputDirectory: generated.outputDirectory,
+          buildDirectory,
+        });
+      },
+      (value) => {
+        setBuilt(value);
+        setVirtualResult(null);
+        markStage('build', 'done', value.binaryPath);
+        markStage('virtual', 'pending', message('workflow.stage.buildNotVerified'));
+      },
+      'build',
+    );
+  }
+
+  function verifyEcu() {
+    if (!generated || !built || stages.build.state !== 'done') return;
+    void run(
+      { kind: 'action', label: message('activity.verifyHost') },
+      () => {
+        setVirtualResult(null);
+        return call('verify_ecu', { outputDirectory: generated.outputDirectory });
+      },
+      (value) => {
+        setVirtualResult(value);
+        markStage(
+          'virtual',
+          value.passed ? 'done' : 'failed',
+          value.passed
+            ? message('workflow.stage.ecuVerified')
+            : message('workflow.stage.ecuFailed'),
+        );
+      },
+      'virtual',
+    );
+  }
+  function importHandoff() {
+    if (!native || running.current) return;
+    rememberDialogOpener();
+    setNotice(null);
+    patchState({
+      handoffImportOpen: true,
+      ecuImportDirectory: '',
+      handoffImportDestination: '',
+    });
+  }
+
+  function importHandoffDirectory(directory: string) {
+    if (!native || running.current) return;
+    rememberDialogOpener();
+    setNotice(null);
+    patchState({
+      handoffImportOpen: true,
+      ecuImportDirectory: directory,
+      handoffImportDestination: '',
+    });
+  }
+
+  async function confirmHandoffImport() {
+    const current = stateRef.current;
+    const directory = current.ecuImportDirectory;
+    const newWorkspaceDirectory = current.handoffImportDestination;
+    if (!directory || !newWorkspaceDirectory) return;
+    await replaceProject(message('activity.replaceWithHandoff'), async () => {
+      field('handoffImportOpen')(false);
+      await run(
+        { kind: 'handoffImport', label: message('activity.importHandoff') },
+        () => call('open_handoff_project', { directory, newWorkspaceDirectory }),
+        (view) => {
+          field('handoffImportDestination')('');
+          applyProject(view);
+        },
+      );
+    });
+  }
+
+  async function previewApplicationInitialization() {
+    await guardContext(message('activity.initializeApplication'), () =>
+      run(
+        { kind: 'action', label: message('activity.previewApplication') },
+        () => call('preview_application_initialization'),
+        (applicationPreview) => field('applicationPreview')(applicationPreview),
+      ),
+    );
+  }
+
+  async function initializeApplicationPreviewed() {
+    const preview = stateRef.current.applicationPreview;
+    if (!preview) return;
+    await run(
+      { kind: 'action', label: message('activity.initializeApplication') },
+      async () => {
+        const outcome = await call('initialize_application_previewed', { preview });
+        // The member list now names the application; only the workspace view reports that.
+        return { outcome, view: await call('workspace_view') };
+      },
+      ({ outcome, view }) => {
+        patchState({
+          workspace: view,
+          applicationPreview: null,
+          projection: outcome.projection,
+          applicationWarnings: outcome.warnings,
+          applicationRecoveryFiles: outcome.retainedRecoveryFiles,
+        });
+        invalidateAfterEdit();
+        if (!outcome.projection.dirty)
+          markStage('save', 'done', message('workflow.stage.applicationWritten'));
+        setNotice({
+          tone: 'info',
+          text: message('workflow.application.initialized', {
+            warnings: outcome.warnings.length,
+            recoveryFiles: outcome.retainedRecoveryFiles.length,
+          }),
+        });
+      },
+    );
+  }
+
+  return {
+    importHandoff,
+    importHandoffDirectory,
+    confirmHandoffImport,
+    previewApplicationInitialization,
+    initializeApplicationPreviewed,
+    saveProject,
+    confirmSave,
+    validateProject,
+    previewIntegrationSave,
+    saveIntegration,
+    previewEcu,
+    generateEcu,
+    preflightEcu,
+    buildEcu,
+    verifyEcu,
+    changeEcuOutput,
+    changeEcuBuildDirectory,
+  };
+}

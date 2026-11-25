@@ -1,0 +1,58 @@
+/* The palette stays near the top, so filtering never moves the input. */
+.palette-backdrop {
+  align-items: flex-start;
+  padding-top: 20vh;
+}
+.workbench-dialog.command-palette {
+  width: min(560px, 96vw);
+  max-height: 60vh;
+}
+.command-palette [cmdk-root] {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.command-palette .search-field {
+  margin: 10px;
+}
+.command-palette .search-field input {
+  padding: 8px 0;
+  font-size: 13px;
+}
+.command-results {
+  overflow: auto;
+  padding: 0 5px 5px;
+  border-top: 1px solid var(--line);
+}
+.command-results [cmdk-list-sizer] {
+  padding-top: 5px;
+}
+.command-results [cmdk-item] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.command-results [cmdk-item] kbd {
+  grid-column: 2;
+  grid-row: 1;
+}
+/* Unavailable commands stay listed with their reason; ↑↓ and Enter skip them. */
+.command-results [cmdk-item][data-disabled='true'] {
+  color: var(--secondary);
+  cursor: default;
+}
+.command-results [cmdk-item] small {
+  grid-column: 1;
+  font-size: 11px;
+  color: var(--secondary);
+}
+.command-results [cmdk-item][data-selected='true'] {
+  background: var(--hover);
+}
+.command-results .empty-state {
+  padding: 14px 10px;
+}

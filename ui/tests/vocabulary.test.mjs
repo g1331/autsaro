@@ -14,9 +14,9 @@ import {
   translate,
 } from '../src/i18n';
 import { actionResources } from '../src/i18n/actions';
-import { NoticeBanner } from '../src/workbench/Dialog';
-import { headline } from '../src/workbench/forms';
-import App from '../src/App';
+import { NoticeBanner } from '../src/shared/ui/Dialog';
+import { headline } from '../src/shared/ui/forms';
+import App from '../src/app/App';
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), open: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true, invoke: native.invoke }));
@@ -107,12 +107,9 @@ test('each action has exactly one label key, and no other key relabels it', () =
 });
 
 test('every operation is named by an activity key, so busy and failure text stays grammatical', () => {
-  const sources = ['src/workbench', 'src']
-    .flatMap((directory) =>
-      readdirSync(directory)
-        .filter((file) => /\.tsx?$/.test(file))
-        .map((file) => readFileSync(`${directory}/${file}`, 'utf8')),
-    )
+  const sources = readdirSync('src', { recursive: true })
+    .filter((file) => /\.tsx?$/.test(file))
+    .map((file) => readFileSync(`src/${file}`, 'utf8'))
     .join('\n');
   const named = [
     ...sources.matchAll(/kind: '\w+', label: message\('([^']+)'\)/g),

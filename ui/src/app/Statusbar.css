@@ -1,0 +1,27 @@
+.owned-log pre {
+  max-height: 300px;
+}
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.statusbar {
+  height: 27px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 10px;
+  background: var(--shell);
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  flex: none;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.statusbar button {
+  font-size: 11px;
+  min-height: 24px;
+  padding: 2px 4px;
+}

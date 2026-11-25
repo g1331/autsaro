@@ -3,8 +3,8 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { message, previewLanguage, translate } from '../src/i18n';
-import { initialState } from '../src/workbench/state';
-import { WorkbenchMenubar } from '../src/workbench/menu';
+import { initialState } from './support/workbench-state.mjs';
+import { WorkbenchMenubar } from '../src/app/menu';
 import { withCommands } from './support/commands.mjs';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false, invoke: vi.fn() }));
@@ -17,8 +17,8 @@ vi.mock('@tauri-apps/api/window', () => ({
   }),
 }));
 let controller;
-vi.mock('../src/workbench/useWorkbench', () => ({ useWorkbench: () => controller }));
-const { default: App } = await import('../src/App');
+vi.mock('../src/app/useWorkbench', () => ({ useWorkbench: () => controller }));
+const { default: App } = await import('../src/app/App');
 
 const actions = [
   'setNotice',

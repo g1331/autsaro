@@ -1,17 +1,16 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { cleanup, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { message, previewLanguage, translate } from '../src/i18n';
-import { CommandPalette } from '../src/workbench/CommandPalette';
-import { Dialog } from '../src/workbench/Dialog';
-import { PreviewDialogs } from '../src/workbench/PreviewDialogs';
-import { IntegrationPanel } from '../src/IntegrationPanel';
-import { SettingsPage } from '../src/pages/SettingsPage';
-import { initialState } from '../src/workbench/state';
+import { CommandPalette } from '../src/app/CommandPalette';
+import { Dialog } from '../src/shared/ui/Dialog';
+import { PreviewDialogs } from '../src/app/PreviewDialogs';
+import { IntegrationPanel } from '../src/features/editing/IntegrationPanel';
+import { SettingsPage } from '../src/features/settings/SettingsPage';
+import { initialState } from './support/workbench-state.mjs';
 import { withCommands } from './support/commands.mjs';
+import { workbenchStyles } from './support/workbench-styles.mjs';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false, invoke: vi.fn() }));
 
@@ -185,7 +184,7 @@ test('the standard save preview renders only in its dialog, not inline in the pa
 
 test('modal ownership hides background native scrollbars and restores them on close', () => {
   const style = document.createElement('style');
-  style.textContent = readFileSync(path.join(import.meta.dirname, '../src/styles.css'), 'utf8');
+  style.textContent = workbenchStyles();
   document.head.append(style);
   const root = document.createElement('div');
   root.id = 'root';

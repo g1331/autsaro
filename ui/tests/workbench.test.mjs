@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { createBatchEditing } from '../src/workbench/batchEditing';
-import { createProjectActions } from '../src/workbench/projectActions';
-import { initialState } from '../src/workbench/state';
+import { createBatchEditing } from '../src/features/editing/batchEditing';
+import { createProjectActions } from '../src/features/project/projectActions';
+import { initialState } from './support/workbench-state.mjs';
 import { localize, previewLanguage } from '../src/i18n';
 
 afterEach(() => previewLanguage('system'));
@@ -22,7 +22,7 @@ function expectDistinctFeedback(committed, rejected, evidence) {
   expect(rendered[0]).not.toBe(rendered[1]);
 }
 
-vi.mock('../src/workbench/Dialog', () => ({ rememberDialogOpener: vi.fn() }));
+vi.mock('../src/shared/ui/Dialog', () => ({ rememberDialogOpener: vi.fn() }));
 
 function session(overrides = {}) {
   const stateRef = { current: { ...initialState(), ...overrides } };
