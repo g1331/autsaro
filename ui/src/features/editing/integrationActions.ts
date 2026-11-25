@@ -17,7 +17,7 @@ interface Dependencies {
 }
 
 export function createIntegrationActions(session: WorkbenchSession, dependencies: Dependencies) {
-  const { state, patchState, call, field } = session;
+  const { state, patchState, call, field, epoch } = session;
   const { run, markStage, acceptView, invalidateAfterEdit } = dependencies;
   const setNotice = field('notice');
   const setIntegrationNotice = field('integrationNotice');
@@ -86,17 +86,21 @@ export function createIntegrationActions(session: WorkbenchSession, dependencies
       void run(
         { kind: 'integrationEdit', label: message('activity.apply') },
         async () => {
+          const generation = epoch.current;
           const report = await call('edit_integration', {
             changes: { canIds: ids, applicationPeriodMs: period },
           });
-          const view = await call('workspace_view');
-          return { report, view };
-        },
-        ({ report, view }) => {
-          acceptView(view);
+          if (generation !== epoch.current) return;
+          patchState({ integrationSavePending: true });
           invalidateAfterEdit();
           acceptIntegration(report);
           setIntegrationNotice(message('controller.integration.modified'));
+          return call('workspace_view');
+        },
+        (view) => {
+          if (!view) return;
+          acceptView(view);
+          patchState({ integrationSavePending: false });
         },
       );
     } catch (error) {

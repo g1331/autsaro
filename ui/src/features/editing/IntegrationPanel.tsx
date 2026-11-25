@@ -13,6 +13,7 @@ export const integrationFields = [
   'integrationNotice',
   'integrationPeriod',
   'integrationUnapplied',
+  'integrationSavePending',
   'native',
   'previewIntegrationSave',
   'reopenIntegration',
@@ -209,7 +210,12 @@ export function IntegrationPanel({ controller }: { controller: IntegrationView }
                 </button>
                 <button
                   onClick={showPreview}
-                  disabled={busy || locked || changed || !workspace.dirty}
+                  disabled={
+                    busy ||
+                    locked ||
+                    changed ||
+                    (!workspace.dirty && !controller.integrationSavePending)
+                  }
                 >
                   {t('action.previewSave')}
                 </button>

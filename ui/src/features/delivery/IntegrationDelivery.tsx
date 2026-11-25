@@ -15,6 +15,7 @@ import { targetLabel } from '../../shared/ui/labels';
 import { displayPath } from '../../pathDisplay';
 import type { BuildTarget } from '../../ipc/types';
 import { iconSize } from '../../shared/ui/icons';
+import { projectNeedsSave } from '../project/state';
 import type { Workbench } from '../../app/useWorkbench';
 
 export const deliveryFields = [
@@ -33,6 +34,7 @@ export const deliveryFields = [
   'generated',
   'generationKind',
   'generationPreview',
+  'integrationSavePending',
   'native',
   'projection',
   'setGenerationKind',
@@ -67,7 +69,7 @@ export function IntegrationDelivery({
   } = controller;
   if (!workspace) return null;
   const busy = Boolean(controller.busy);
-  const sourceReady = !workspace.dirty && !controller.projection?.dirty && !controller.unapplied;
+  const sourceReady = !projectNeedsSave(controller) && !controller.unapplied;
   const command = (id: string) => commandById(controller, id);
   const handoff = controller.generationKind === 'handoff';
   const labels: Record<StageState, string> = {

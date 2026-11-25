@@ -6,6 +6,8 @@ import { fieldState } from './projectGroups';
 export type ProjectState = {
   workspace: WorkspaceView | null;
   projection: ProjectProjection | null;
+  /** An acknowledged integration edit whose save state has not been read yet. */
+  integrationSavePending: boolean;
   memberProjectPath: string | null;
   /** Field states of the last clean projection, by field ID. */
   savedValues: Record<string, string> | null;
@@ -34,6 +36,7 @@ export function initialProjectState(): ProjectState {
   return {
     workspace: null,
     projection: null,
+    integrationSavePending: false,
     memberProjectPath: null,
     savedValues: null,
     source: 'empty',
@@ -55,6 +58,14 @@ export function initialProjectState(): ProjectState {
     replacementReady: false,
     savingForReplacement: false,
   };
+}
+
+export function projectNeedsSave({
+  workspace,
+  projection,
+  integrationSavePending,
+}: Pick<ProjectState, 'workspace' | 'projection' | 'integrationSavePending'>): boolean {
+  return integrationSavePending || Boolean(workspace?.dirty || projection?.dirty);
 }
 
 /** A clean projection becomes the baseline for modified marks in the tree. */

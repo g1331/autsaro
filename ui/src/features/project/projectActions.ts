@@ -7,6 +7,7 @@ import { errorText, intInRange } from '../../shared/ui/forms';
 import { applicationPeriodDraft } from '../editing/applicationPeriod';
 import type { RunOperation } from '../../app/operationRunner';
 import type { DocumentTab } from './projectTypes';
+import { projectNeedsSave } from './state';
 import type { WorkbenchSession } from '../../app/session';
 import type { WorkbenchState } from '../../app/state';
 import { importedSaveStage, stageDefaults } from '../delivery/stages';
@@ -174,6 +175,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       activeDocument: { kind: keepIntegration ? 'integration' : 'configuration' },
       preflight: null,
       memberProjectPath: null,
+      integrationSavePending: false,
     });
     setStages({ ...stageDefaults, save: importedSaveStage(view) });
     setGenerated(null);
@@ -202,6 +204,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       }
       patchState({
         workspace: null,
+        integrationSavePending: false,
         savePreview: null,
         previewPath: '',
         generationPreview: null,
@@ -343,7 +346,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
   async function replaceProject(title: Text, action: () => void | Promise<void>) {
     if (running.current || stateRef.current.guard) return;
     rememberDialogOpener();
-    if (!hasDrafts() && !stateRef.current.workspace?.dirty && !stateRef.current.projection?.dirty) {
+    if (!hasDrafts() && !projectNeedsSave(stateRef.current)) {
       await action();
       return;
     }
@@ -378,11 +381,14 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
             ),
           },
         });
+        if (generation !== epoch.current) return false;
         applied = true;
+        patchState({ integrationSavePending: true });
         acceptIntegration(report);
         patchState({ integrationUnapplied: false });
         view = await call('workspace_view');
-        patchState({ workspace: view });
+        if (generation !== epoch.current) return false;
+        patchState({ workspace: view, integrationSavePending: false });
       }
       if (generation !== epoch.current) return false;
       if (view !== current.workspace) invalidateAfterEdit();

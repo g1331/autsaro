@@ -1,5 +1,6 @@
 import { composedMessage, message } from '../i18n';
 import type { Text } from '../i18n';
+import { projectNeedsSave } from '../features/project/state';
 import type { WorkbenchController } from './useWorkbench';
 
 export type Command = {
@@ -30,7 +31,7 @@ export function workbenchCommands(c: WorkbenchController): Command[] {
       : '';
   const sourceReason: Text =
     workspaceReason ||
-    (c.workspace?.dirty || c.projection?.dirty ? message('shell.reason.save') : '') ||
+    (projectNeedsSave(c) ? message('shell.reason.save') : '') ||
     (c.unapplied ? message('shell.reason.draft') : '');
   // Delivery compiles the user application; the backend rejects it with APPLICATION_UNINITIALIZED.
   const initializeReason = message('backend.prepared.application_initialization_required');

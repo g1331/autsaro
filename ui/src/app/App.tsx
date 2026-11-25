@@ -17,6 +17,7 @@ import {
   Settings,
   X,
 } from 'lucide-react';
+import { projectNeedsSave } from '../features/project/state';
 import { useWorkbench } from './useWorkbench';
 import { selectWorkbench, sameWorkbenchView, useWorkbenchView } from './workbenchView';
 import { IntegrationPanel, integrationFields } from '../features/editing/IntegrationPanel';
@@ -554,7 +555,7 @@ export default function App() {
         <span>
           {c.unapplied
             ? t('shell.app.unapplied')
-            : c.workspace?.dirty || c.projection?.dirty
+            : projectNeedsSave(c)
               ? t('shell.app.unsaved')
               : c.workspace
                 ? t('shell.stage.saved')

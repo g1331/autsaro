@@ -114,3 +114,114 @@ test('an invalid echoed fingerprint rejects the reply and refreshes capabilities
     text: message('controller.error.staleDelivery'),
   });
 });
+
+test.each(['project switch', 'integration panel'])(
+  'an applied edit from the %s still requires saving when its readback fails',
+  async (entry) => {
+    const result = await controller();
+    const workspace = {
+      name: 'Saved ECU',
+      dirty: false,
+      integrationCandidate: true,
+      applicationInitialized: true,
+      issues: [],
+    };
+    const projection = { dirty: false, diagnostics: [], fields: [], capabilities: [] };
+    const inspection = {
+      diagnostics: [],
+      description: {
+        signals: [{ port: 'Speed', canId: 100 }],
+        schedule: { entities: [{ application: true, periodMs: 20 }] },
+      },
+    };
+    const preview = { files: [{ path: 'ecu.arxml', changed: true }], revision: 'save-revision' };
+    const failedSave = message('workflow.error.saveIncomplete');
+    let current = capabilities;
+    let applied = false;
+    let saved = false;
+    native.invoke.mockImplementation(async (command, args) => {
+      if (command === 'workbench_capabilities') return current;
+      const respond = (value) => ({ ...reply(args.fingerprint, current), value });
+      switch (command) {
+        case 'open_project':
+          current = { ...capabilities, hasWorkspace: true, fingerprint: 'opened' };
+          return respond(workspace);
+        case 'inspect_integration':
+          return respond(inspection);
+        case 'edit_integration':
+          applied = true;
+          current = { ...current, fingerprint: 'edited' };
+          return respond({
+            ...inspection,
+            description: { ...inspection.description, signals: [{ port: 'Speed', canId: 101 }] },
+          });
+        case 'workspace_view':
+          throw new Error('workspace view unavailable');
+        case 'project_projection':
+          if (applied && !saved) throw new Error('projection unavailable');
+          return respond(projection);
+        case 'preview_integration_save':
+          return respond(preview);
+        case 'save_integration':
+          return respond({ workspace, error: saved ? null : failedSave });
+        case 'close_project':
+          current = capabilities;
+          return respond(null);
+        default:
+          throw new Error(`Unexpected command: ${command}`);
+      }
+    });
+
+    act(() => result.current.setImportPaths(['ecu.arxml']));
+    await act(async () => result.current.importProject());
+    expect(result.current.workspace).toBe(workspace);
+    expect(result.current.projection).toBe(projection);
+    expect(result.current.integrationInspection).toBe(inspection);
+    act(() => {
+      result.current.setIntegrationIds({ Speed: '101' });
+      result.current.setIntegrationUnapplied(true);
+    });
+
+    if (entry === 'project switch') {
+      await act(async () => result.current.startProject());
+      await act(async () => result.current.resolveGuard('apply'));
+      expect(native.invoke).toHaveBeenCalledWith('project_projection', { fingerprint: 'edited' });
+    } else {
+      await act(async () => result.current.applyIntegration());
+    }
+    expect(native.invoke).toHaveBeenCalledWith('workspace_view', { fingerprint: 'edited' });
+    expect(result.current.workspace.dirty).toBe(false);
+    expect(result.current.projection.dirty).toBe(false);
+    expect(result.current.integrationUnapplied).toBe(false);
+    expect(result.current.integrationIds).toEqual({ Speed: '101' });
+
+    const calls = (command) => native.invoke.mock.calls.filter(([name]) => name === command);
+    await act(async () => result.current.startProject());
+    expect(calls('close_project')).toHaveLength(0);
+    expect(result.current.guard?.kind).toBe('project');
+    await act(async () => result.current.resolveGuard('cancel'));
+
+    // Saving is also available from the ordinary save entry after the aborted switch.
+    await act(async () => result.current.requestSave());
+    expect(result.current.integrationPreview).toBe(preview);
+    await act(async () => result.current.saveIntegration());
+    expect(result.current.stages.save).toEqual({ state: 'failed', detail: failedSave });
+    expect(result.current.integrationSavePending).toBe(true);
+
+    await act(async () => result.current.startProject());
+    expect(result.current.guard?.kind).toBe('project');
+    expect(calls('close_project')).toHaveLength(0);
+    await act(async () => result.current.resolveGuard('apply'));
+    expect(result.current.integrationPreview).toBe(preview);
+    saved = true;
+    await act(async () => result.current.saveIntegration());
+    expect(calls('edit_integration')).toHaveLength(1);
+    expect(calls('save_integration')).toEqual([
+      ['save_integration', { fingerprint: 'edited', revision: 'save-revision' }],
+      ['save_integration', { fingerprint: 'edited', revision: 'save-revision' }],
+    ]);
+    expect(calls('close_project')).toHaveLength(1);
+    expect(result.current.workspace).toBeNull();
+    expect(result.current.integrationSavePending).toBe(false);
+  },
+);

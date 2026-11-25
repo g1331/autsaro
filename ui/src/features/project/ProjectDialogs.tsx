@@ -1,4 +1,5 @@
 import type { useLocale } from '../../i18n';
+import { projectNeedsSave } from './state';
 import type { Workbench } from '../../app/useWorkbench';
 import { displayPath } from '../../pathDisplay';
 import { Dialog, TextSnapshot } from '../../shared/ui/Dialog';
@@ -11,6 +12,7 @@ export function renderDraftGuard(
     | 'changes'
     | 'guard'
     | 'integrationUnapplied'
+    | 'integrationSavePending'
     | 'notice'
     | 'projection'
     | 'resolveGuard'
@@ -66,7 +68,7 @@ export function renderDraftGuard(
             : t('workflow.guard.contextExplanation')}
         </p>
         {unappliedCount ? <p>{t('workflow.guard.unapplied', { count: unappliedCount })}</p> : null}
-        {c.workspace?.dirty || c.projection?.dirty ? <p>{t('workflow.guard.unsaved')}</p> : null}
+        {projectNeedsSave(c) ? <p>{t('workflow.guard.unsaved')}</p> : null}
       </Dialog>
     );
   }

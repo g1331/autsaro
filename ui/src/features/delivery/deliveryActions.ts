@@ -8,6 +8,7 @@ import { rememberDialogOpener } from '../../shared/ui/Dialog';
 import { native } from '../../ipc/native';
 import type { WorkbenchSession } from '../../app/session';
 import { stageDefaults } from './stages';
+import { projectNeedsSave } from '../project/state';
 
 interface Dependencies {
   run: RunOperation;
@@ -38,7 +39,6 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
   const { call, stateRef, field, state, patchState, running } = session;
   const {
     savePreview,
-    workspace,
     stages,
     generationPreview,
     generationKind,
@@ -155,7 +155,11 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
       { kind: 'savePreview', label: message('activity.previewSave') },
       () => call('preview_integration_save'),
       (preview) => {
-        if (!preview.files.some((file) => file.changed) && !stateRef.current.savingForReplacement) {
+        if (
+          !preview.files.some((file) => file.changed) &&
+          !stateRef.current.savingForReplacement &&
+          !stateRef.current.integrationSavePending
+        ) {
           patchState({ integrationIssues: [] });
           setNotice({ tone: 'info', text: message('workflow.save.noChanges') });
           return;
@@ -180,6 +184,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
         acceptView(result.workspace);
         patchState({
           integrationPreview: null,
+          ...(!result.error && !result.workspace.dirty ? { integrationSavePending: false } : {}),
           generated: null,
           built: null,
           virtualResult: null,
@@ -236,13 +241,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
   }
 
   function previewEcu() {
-    if (
-      workspace?.dirty ||
-      state.projection?.dirty ||
-      unapplied ||
-      !state.ecuOutputDirectory.trim()
-    )
-      return;
+    if (projectNeedsSave(state) || unapplied || !state.ecuOutputDirectory.trim()) return;
     void run(
       { kind: 'action', label: message('activity.previewSource') },
       async () => {
@@ -293,7 +292,7 @@ export function createDeliveryActions(session: WorkbenchSession, dependencies: D
   }
 
   function preflightEcu() {
-    if (workspace?.dirty || state.projection?.dirty || unapplied) return;
+    if (projectNeedsSave(state) || unapplied) return;
     void run(
       { kind: 'action', label: message('activity.preflight') },
       () => call('preflight_ecu', { handoff: generationKind === 'handoff' }),

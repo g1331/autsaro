@@ -40,6 +40,7 @@ export const previewDialogsFields = [
   'initializeApplicationPreviewed',
   'integrationPreview',
   'integrationPreviewPath',
+  'integrationSavePending',
   'integrationUnapplied',
   'notice',
   'preparedChangeSet',

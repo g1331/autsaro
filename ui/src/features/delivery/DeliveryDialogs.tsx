@@ -143,6 +143,7 @@ export function renderSavePreview(
     | 'saveIntegration'
     | 'savePreview'
     | 'savingForReplacement'
+    | 'integrationSavePending'
     | 'setIntegrationPreviewPath'
     | 'setPreviewPath'
   >,
@@ -179,7 +180,9 @@ export function renderSavePreview(
               onClick={standard ? c.saveIntegration : c.confirmSave}
               disabled={
                 Boolean(c.busy) ||
-                (!save.files.some((file) => file.changed) && !c.savingForReplacement)
+                (!save.files.some((file) => file.changed) &&
+                  !c.savingForReplacement &&
+                  !(standard && c.integrationSavePending))
               }
             >
               {t('action.confirmSave')}
