@@ -34,13 +34,12 @@ static boolean number(Ecu_BatchTokenType token, uint64_t maximum, uint64_t *valu
 {
     uint64_t result = UINT64_C(0);
     size_t index = 0u;
-    boolean valid = TRUE;
+    boolean valid = token.length != 0u;
     while ((index < token.length) && valid) {
         int next = (int)token.data[index] - (int)'0';
-        if ((next < 0) || (next > 9) || ((uint64_t)next > maximum) ||
-            (result > ((maximum - (uint64_t)next) / UINT64_C(10)))) {
-            valid = FALSE;
-        } else {
+        valid = (next >= 0) && (next <= 9) && ((uint64_t)next <= maximum) &&
+                (result <= ((maximum - (uint64_t)next) / UINT64_C(10)));
+        if (valid) {
             result = (result * UINT64_C(10)) + (uint64_t)next;
         }
         ++index;
@@ -62,9 +61,8 @@ static boolean decode_payload(Ecu_BatchTokenType token, Ecu_BatchFrame *frame)
         while ((byte < (size_t)frame->dlc) && valid) {
             int high = hex_digit(token.data[2u * byte]);
             int low = hex_digit(token.data[(2u * byte) + 1u]);
-            if ((high < 0) || (low < 0)) {
-                valid = FALSE;
-            } else {
+            valid = (high >= 0) && (low >= 0);
+            if (valid) {
                 frame->data[byte] = (uint8_t)(((unsigned)high * 16u) + (unsigned)low);
             }
             ++byte;
@@ -98,21 +96,22 @@ static unsigned tokenize(const char *line, size_t length, Ecu_BatchTokenType tok
 {
     unsigned count = 0u;
     size_t index = 0u;
-    boolean valid = TRUE;
+    boolean valid = length != 0u;
     while ((index < length) && valid) {
         if (line[index] == ' ') {
             ++index;
-        } else if (count == 7u) {
-            valid = FALSE;
         } else {
             size_t start = index;
-            while ((index < length) && (line[index] != ' ') && valid) {
-                valid = (line[index] >= '!') && (line[index] <= '~');
-                ++index;
+            valid = count < 7u;
+            if (valid) {
+                while ((index < length) && (line[index] != ' ') && valid) {
+                    valid = (line[index] >= '!') && (line[index] <= '~');
+                    ++index;
+                }
+                tokens[count].data = &line[start];
+                tokens[count].length = index - start;
+                ++count;
             }
-            tokens[count].data = &line[start];
-            tokens[count].length = index - start;
-            ++count;
         }
     }
     return valid ? count : 0u;
@@ -191,8 +190,8 @@ static StatusType stage_frame(Ecu_HostBatch *batch,
     } else if (batch->count >= ECU_BATCH_CAPACITY) {
         status = reject(batch, E_OS_LIMIT);
     } else {
-        boolean valid = FALSE;
-        if (count == 7u) {
+        boolean valid = count == 7u;
+        if (valid) {
             valid = decode_frame(tokens, &frame);
         }
         if (valid) {
