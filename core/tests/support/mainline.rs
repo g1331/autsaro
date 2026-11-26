@@ -45,7 +45,6 @@ pub(crate) fn change(sources: &mut [InputSource], file: &str, before: &str, afte
 
 /// Fixture inputs with two simultaneous network receivers: the existing `RxValue` path
 /// (Com user handle 43) and a clone named `RxSecond` (handle 61, 50 ms timeout, CAN id 802).
-#[cfg(all(feature = "native-tests", any(windows, target_os = "linux")))]
 pub(crate) fn two_receiver_inputs() -> Vec<InputSource> {
     // (file, element, anchor, definition the anchor's DEFINITION-REF must end with, edits)
     // Each edit sets the first <element> after `anchor` (empty anchor: block start) to `value`.

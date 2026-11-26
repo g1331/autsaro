@@ -185,7 +185,7 @@ pub(super) fn implementation(
     let [mapping] = maps.as_slice() else {
         return Err(reject(
             graph,
-            mapping_context,
+            maps.get(1).copied().unwrap_or(mapping_context),
             "TYPE_MAP_MISSING",
             crate::product_message!(
                 "backend.integration.component.sr_unique_data_type_map_required",

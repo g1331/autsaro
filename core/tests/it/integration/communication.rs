@@ -726,30 +726,52 @@ fn actual_partition_owns_all_instances_and_all_com_producers() {
 fn com_integer_plan_keeps_two_levels_and_locates_invalid_fields() {
     let sources = integer_signal_sources();
     let plan = build(&sources).unwrap();
-    let channels = &plan.description().signals;
-    let rx = channels.iter().find(|channel| channel.receive).unwrap();
-    let tx = channels.iter().find(|channel| !channel.receive).unwrap();
-    assert_eq!(
-        (
-            rx.start_bit,
-            rx.big_endian,
-            rx.frame_start_bit,
-            rx.frame_offset
-        ),
-        (5, false, 8, 1)
+    // Assert the delivered plan fields through serialization. The current
+    // suite also compiles against the first-parent C-analysis generator.
+    let channels = serde_json::to_value(&plan.description().signals).unwrap();
+    let channels = channels.as_array().unwrap();
+    let rx = channels
+        .iter()
+        .find(|channel| channel["receive"] == true)
+        .unwrap();
+    let tx = channels
+        .iter()
+        .find(|channel| channel["receive"] == false)
+        .unwrap();
+    for (channel, big, start) in [(rx, false, 8), (tx, true, 15)] {
+        assert_eq!(channel["startBit"], 5);
+        assert_eq!(channel["bigEndian"], big);
+        assert_eq!(channel["frameStartBit"], start);
+        assert_eq!(channel["frameOffset"], 1);
+        assert_eq!(channel["bitLength"], 10);
+        assert_eq!(channel["pduLength"], 2);
+        assert_eq!(channel["dlc"], 4);
+    }
+    assert_eq!(tx["initialValue"], -7);
+
+    let mut inherited = sources.clone();
+    xml_edit(
+        &mut inherited,
+        "extract.arxml",
+        |node| named(node, "I-SIGNAL", "RxValueSignal"),
+        |block| {
+            let start = block.find("<NETWORK-REPRESENTATION-PROPS>").unwrap();
+            let end = block.find("</NETWORK-REPRESENTATION-PROPS>").unwrap()
+                + "</NETWORK-REPRESENTATION-PROPS>".len();
+            format!("{}{}", &block[..start], &block[end..])
+                .replace(">OVERRIDE<", ">NETWORK-REPRESENTATION-FROM-COM-SPEC<")
+        },
     );
+    let plan = build(&inherited).unwrap();
+    let channels = serde_json::to_value(&plan.description().signals).unwrap();
     assert_eq!(
-        (
-            tx.start_bit,
-            tx.big_endian,
-            tx.frame_start_bit,
-            tx.frame_offset
-        ),
-        (5, true, 15, 1)
-    );
-    assert_eq!(
-        (tx.bit_length, tx.pdu_length, tx.dlc, tx.initial_value),
-        (10, 2, 4, -7)
+        channels
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|channel| channel["receive"] == true)
+            .unwrap()["nativeType"],
+        "sint16"
     );
 
     for (tag, object, field, replacement, path) in [
@@ -866,5 +888,163 @@ fn com_integer_plan_keeps_two_levels_and_locates_invalid_fields() {
             && issue.file.as_deref() == Some("types.arxml")
             && issue.object.as_deref() == Some("/Types/ApplicationTypes")),
         "{issues:?}"
+    );
+}
+
+#[test]
+fn com_shared_pdu_refuses_different_monitored_port_deadlines() {
+    let mut sources = two_receiver_inputs();
+    for name in ["RxValueSignal", "RxSecondSignal"] {
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| named(node, "I-SIGNAL", name),
+            |block| block.replace("<LENGTH>32<", "<LENGTH>16<"),
+        );
+    }
+    parameter(&mut sources, "RxValue", "ComBitSize", "16");
+    parameter(&mut sources, "RxSecond", "ComBitSize", "16");
+    parameter(&mut sources, "RxSecond", "ComBitPosition", "16");
+
+    let extract = sources
+        .iter()
+        .find(|source| source.logical_path() == "extract.arxml")
+        .unwrap();
+    let source = std::str::from_utf8(extract.bytes()).unwrap();
+    let document = roxmltree::Document::parse(source).unwrap();
+    let second = document
+        .descendants()
+        .find(|node| named(*node, "I-SIGNAL-TO-I-PDU-MAPPING", "RxSecondMap"))
+        .unwrap();
+    let mapping = source[second.range()].replace("<START-POSITION>0<", "<START-POSITION>16<");
+    xml_edit(
+        &mut sources,
+        "extract.arxml",
+        |node| named(node, "I-SIGNAL-I-PDU", "RxValuePdu"),
+        |block| {
+            block.replace(
+                "</I-SIGNAL-TO-PDU-MAPPINGS>",
+                &format!("{mapping}</I-SIGNAL-TO-PDU-MAPPINGS>"),
+            )
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "extract.arxml",
+        |node| named(node, "PDU-TRIGGERING", "RxValuePduTrigger"),
+        |block| {
+            let reference = "<I-SIGNAL-TRIGGERING-REF-CONDITIONAL><I-SIGNAL-TRIGGERING-REF DEST=\"I-SIGNAL-TRIGGERING\">/Extract/ReferenceCan/Channel/RxSecondSignalTrigger</I-SIGNAL-TRIGGERING-REF></I-SIGNAL-TRIGGERING-REF-CONDITIONAL>";
+            block.replace(
+                "</I-SIGNAL-TRIGGERINGS>",
+                &format!("{reference}</I-SIGNAL-TRIGGERINGS>"),
+            )
+        },
+    );
+    for (tag, name) in [
+        ("I-SIGNAL-I-PDU", "RxSecondPdu"),
+        ("CAN-FRAME", "RxSecondFrame"),
+        ("CAN-FRAME-TRIGGERING", "RxSecondTrigger"),
+        ("PDU-TRIGGERING", "RxSecondPduTrigger"),
+    ] {
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| named(node, tag, name),
+            |_| String::new(),
+        );
+    }
+    replace_all(
+        &mut sources,
+        "/Extract/RxSecondPdu/RxSecondMap",
+        "/Extract/RxValuePdu/RxSecondMap",
+    );
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "RxValuePdu")
+                && node.children().any(|field| {
+                    field.has_tag_name("DEFINITION-REF")
+                        && field
+                            .text()
+                            .is_some_and(|value| value.ends_with("/ComIPdu"))
+                })
+        },
+        |block| {
+            let definition = "/AUTOSAR/EcucDefs/Com/ComConfig/ComIPdu/ComIPduSignalRef";
+            let reference = format!(
+                "<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"ECUC-REFERENCE-DEF\">{definition}</DEFINITION-REF><VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">/Configuration/Com/Config/RxSecond</VALUE-REF></ECUC-REFERENCE-VALUE>"
+            );
+            block.replace(
+                "</REFERENCE-VALUES>",
+                &format!("{reference}</REFERENCE-VALUES>"),
+            )
+        },
+    );
+    for (name, definition) in [
+        ("RxSecondPdu", "/EcucPduCollection/Pdu"),
+        ("RxSecondPdu", "/ComConfig/ComIPdu"),
+        ("RxSecond", "/CanIfInitCfg/CanIfRxPduCfg"),
+        ("RxSecondSource", "/PduRRoutingPaths/PduRSrcPdu"),
+        ("RxSecondDestination", "/PduRRoutingPaths/PduRDestPdu"),
+        ("RxSecond", "/PduRRoutingPaths/PduRRoutingPath"),
+    ] {
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                named(node, "ECUC-CONTAINER-VALUE", name)
+                    && node.children().any(|field| {
+                        field.has_tag_name("DEFINITION-REF")
+                            && field
+                                .text()
+                                .is_some_and(|value| value.ends_with(definition))
+                    })
+            },
+            |_| String::new(),
+        );
+    }
+
+    let issues = build(&sources)
+        .err()
+        .expect("shared PDU accepted divergent deadlines");
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "COM_SHARED_DEADLINE"
+                && issue.file.as_deref() == Some("ecuc.arxml")
+                && issue.object.as_deref() == Some("/Configuration/Com/Config/RxValue")),
+        "{issues:?}"
+    );
+
+    parameter(&mut sources, "RxSecond", "ComTimeout", "0.03");
+    xml_edit(
+        &mut sources,
+        "ingress.arxml",
+        |node| named(node, "R-PORT-PROTOTYPE", "RxSecond"),
+        |block| block.replace("<ALIVE-TIMEOUT>0.05<", "<ALIVE-TIMEOUT>0.03<"),
+    );
+    xml_edit(
+        &mut sources,
+        "extract.arxml",
+        |node| named(node, "I-SIGNAL-PORT", "RxSecondSignalPort"),
+        |block| block.replace("<TIMEOUT>0.05<", "<TIMEOUT>0.03<"),
+    );
+    let plan = build(&sources).unwrap();
+    assert_eq!(
+        plan.description()
+            .signals
+            .iter()
+            .filter(|signal| signal.receive)
+            .count(),
+        2
+    );
+    assert_eq!(
+        plan.description()
+            .routes
+            .iter()
+            .filter(|route| route.receive && !route.transport)
+            .count(),
+        1
     );
 }

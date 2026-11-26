@@ -150,7 +150,7 @@ static CANIF_CODE void CanIf_CancelAccepted(void)
 {
     uint16 i;
     ++stops;
-    for (i = 0u; i < canif_configuration->transmit_count; ++i) {
+    for (i = 0u; (i < CANIF_TX_CAPACITY) && (i < canif_configuration->transmit_count); ++i) {
         owed[i] += canif_accepted[i];
         canif_accepted[i] = 0u;
     }
@@ -166,7 +166,8 @@ static CANIF_CODE void CanIf_DeliverOwed(void)
         if (canif_configuration != NULL_PTR) {
             uint16 i;
             i = 0u;
-            while ((i < canif_configuration->transmit_count) && (more == 0u)) {
+            while ((i < CANIF_TX_CAPACITY) && (i < canif_configuration->transmit_count) &&
+                   (more == 0u)) {
                 if (owed[i] != 0u) {
                     --owed[i];
                     id = canif_configuration->transmit[i].pdu;
@@ -372,7 +373,7 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
     if ((canif_configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR) &&
         (PduInfoPtr->SduDataPtr != NULL_PTR)) {
         uint16 i;
-        for (i = 0u; i < canif_configuration->transmit_count; ++i) {
+        for (i = 0u; (i < CANIF_TX_CAPACITY) && (i < canif_configuration->transmit_count); ++i) {
             const CanIf_TxPduConfigType *route = &canif_configuration->transmit[i];
             if (route->pdu == TxPduId) {
                 if (pdu_mode == CANIF_OFFLINE) {
@@ -455,7 +456,7 @@ CANIF_CODE void CanIf_TxConfirmation(PduIdType CanTxPduId)
     SchM_Enter_CanIf_CANIF_STATE();
     if (canif_configuration != NULL_PTR) {
         uint16 i;
-        for (i = 0u; i < canif_configuration->transmit_count; ++i) {
+        for (i = 0u; (i < CANIF_TX_CAPACITY) && (i < canif_configuration->transmit_count); ++i) {
             if (canif_configuration->transmit[i].pdu == CanTxPduId) {
                 uint8 answered = 1u;
                 if (canif_accepted[i] != 0u) {

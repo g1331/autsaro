@@ -92,7 +92,8 @@ static COM_CODE uint16 Com_FindSignal(Com_SignalIdType id)
 static COM_CODE uint32 Com_Mask(uint8 width)
 {
     const uint32 mask = COM_UINT32_MAX;
-    const uint8 shift = COM_UINT32_BITS - width;
+    const uint8 distance = COM_UINT32_BITS - width;
+    const uint8 shift = distance % COM_UINT32_BITS;
     return mask >> shift;
 }
 
@@ -230,7 +231,7 @@ static COM_CODE boolean Com_LoadSignal(const Com_SignalConfigType *signal,
         case COM_SINT8: {
             sint8 value;
             (void)memcpy((void *)&value, data, sizeof(value));
-            signed_value = value;
+            signed_value = (sint32)value;
             break;
         }
         case COM_SINT16: {
@@ -536,8 +537,8 @@ COM_CODE uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataP
     if (com_configuration != NULL_PTR) {
         const uint16 index = Com_FindSignal(SignalId);
         result = E_NOT_OK;
-        if ((index < com_configuration->signal_count) && (SignalDataPtr != NULL_PTR) &&
-            (signal_receives[index] == FALSE)) {
+        if ((index < COM_SIGNAL_CAPACITY) && (index < com_configuration->signal_count) &&
+            (SignalDataPtr != NULL_PTR) && (signal_receives[index] == FALSE)) {
             if (Com_LoadSignal(&com_configuration->signals[index],
                                SignalDataPtr,
                                &signal_values[index]) == TRUE) {
@@ -555,8 +556,8 @@ COM_CODE uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr)
     if (com_configuration != NULL_PTR) {
         const uint16 index = Com_FindSignal(SignalId);
         result = E_NOT_OK;
-        if ((index < com_configuration->signal_count) && (SignalDataPtr != NULL_PTR) &&
-            (signal_receives[index] == TRUE)) {
+        if ((index < COM_SIGNAL_CAPACITY) && (index < com_configuration->signal_count) &&
+            (SignalDataPtr != NULL_PTR) && (signal_receives[index] == TRUE)) {
             Com_StoreSignal(
                 &com_configuration->signals[index], signal_values[index], SignalDataPtr);
             result = (receive_started == TRUE) ? E_OK : COM_SERVICE_NOT_AVAILABLE;
@@ -756,8 +757,8 @@ COM_CODE void Ecu_ComMainFunctionTx(void)
         Com_TransmitType transmit = NULL_PTR;
         Com_TxRejectionType observer = NULL_PTR;
         SchM_Enter_Com_COM_STATE();
-        more = ((com_configuration != NULL_PTR) && (index < com_configuration->pdu_count)) ? TRUE
-                                                                                           : FALSE;
+        more = ((index < COM_PDU_CAPACITY) && (com_configuration != NULL_PTR) &&
+                (index < com_configuration->pdu_count));
         if ((more == TRUE) && (com_configuration->pdus[index].receive == FALSE) &&
             (tx_mode_false[index] == FALSE)) {
             id = com_configuration->pdus[index].pdu;

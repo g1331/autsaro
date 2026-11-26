@@ -322,7 +322,14 @@ pub(super) fn inspect_ports(
             )]);
         }
         let implementation = SignalInteger::read(graph, graph.index(&port.implementation_type)?)?;
-        let network = SignalInteger::read(graph, signal)?;
+        // TPS_SYST_02001/02006 select the source before checking the representation.
+        // The selected ComSpecs have no network override. Their implementation type
+        // already comes from the owning InternalBehavior's DataTypeMap.
+        let network = match graph.text(signal, "DATA-TYPE-POLICY") {
+            Some("NETWORK-REPRESENTATION-FROM-COM-SPEC") => implementation,
+            None | Some("LEGACY" | "OVERRIDE") => SignalInteger::read(graph, signal)?,
+            _ => return Err(field(graph, signal, "TYPE_CONFLICT", "DATA-TYPE-POLICY")),
+        };
         if implementation != network {
             return Err(field(
                 graph,
@@ -701,8 +708,8 @@ pub(super) fn inspect_ports(
                     .collect(),
                 "SIGNAL_MAPPING",
             )?;
-            let unused = value(graph, tx, "ComTxIPduUnusedAreasDefault", false)
-                .and_then(|text| text.parse::<u8>().ok())
+            let unused = number(value(graph, tx, "ComTxIPduUnusedAreasDefault", false))
+                .and_then(|value| u8::try_from(value).ok())
                 .ok_or_else(|| field(graph, tx, "TYPE_CONFLICT", "ComTxIPduUnusedAreasDefault"))?;
             (Some(period_ms), unused)
         };
@@ -790,6 +797,7 @@ pub(super) fn validate_layouts(
         first: &'a SignalChannel,
         mapped: BTreeSet<&'a str>,
         members: BTreeSet<&'a str>,
+        deadline_ms: Option<u32>,
     }
     let mut pdus = BTreeMap::new();
     let mut owners = BTreeMap::new();
@@ -799,12 +807,14 @@ pub(super) fn validate_layouts(
             first,
             mapped,
             members,
+            deadline_ms,
         } = pdus
             .entry(signal.com_pdu.as_str())
             .or_insert_with(|| Layout {
                 first: signal,
                 mapped: BTreeSet::new(),
                 members: BTreeSet::new(),
+                deadline_ms: None,
             });
         if first.system_pdu != signal.system_pdu || first.receive != signal.receive {
             return Err(field(graph, index, "SIGNAL_MAPPING", "I-SIGNAL-REF"));
@@ -813,6 +823,19 @@ pub(super) fn validate_layouts(
             && previous != &signal.com_pdu
         {
             return Err(field(graph, index, "SIGNAL_MAPPING", "I-SIGNAL-REF"));
+        }
+        // SWS_Com_00291 uses the shortest nonzero deadline for all signals
+        // without update bits. Different monitored deadlines would make the
+        // RTE mark a port expired before its configured alive timeout.
+        if let Some(timeout) = signal.deadline_ms.filter(|timeout| *timeout != 0)
+            && *deadline_ms.get_or_insert(timeout) != timeout
+        {
+            return Err(field(
+                graph,
+                graph.index(&signal.com_signal)?,
+                "COM_SHARED_DEADLINE",
+                "ComTimeout",
+            ));
         }
         mapped.insert(signal.signal_mapping.as_str());
         members.insert(signal.com_signal.as_str());

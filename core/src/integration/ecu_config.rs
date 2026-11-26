@@ -449,6 +449,7 @@ pub(super) fn files(
                 .map(|signal| signal.pdu_length)
                 .max()
                 .unwrap_or(1);
+            body.push('\n');
             body.push_str(&c_layout::commented_defines(
                 &[
                     ("COM_PDU_CAPACITY", format!("{pdus}u")),

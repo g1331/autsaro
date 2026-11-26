@@ -8,10 +8,10 @@
 
 主线只接受 `VARIANT-PRE-COMPILE` 的 Com 配置。`ComGeneral` 的三个开关（安全事件、信号组数组 API、版本信息 API）均为 `false`，`ComSupportedIPduGroups` 为 1；其余 `ComGeneral` 参数不在所选目录中。
 
-- 非队列 S/R 支持 Intel／Motorola、1–32 位网络宽度、8／16／32 位有符号和无符号整数。I-PDU 可含多个 `PENDING` 信号，生成器按配置分配句柄和容量。仅接受恒等数值映射。越界发送返回 `E_NOT_OK`，保留旧值。
+- 非队列 S/R 支持 Intel／Motorola、1–32 位网络宽度、8／16／32 位有符号和无符号整数。I-PDU 可含多个 `PENDING` 信号，生成器按配置分配句柄和容量。仅接受恒等映射，越界发送返回 `E_NOT_OK` 并保留旧值。
 - 按实际位集合验证两级映射。LE 起点 8、BE 起点 15 均从 Frame 第 1 字节开始（图 6.11／6.12）。PDU 未用位取 `ComTxIPduUnusedAreasDefault`。
 - 0 位宽、64 位整数、布尔、浮点、数组、信号组、更新位和其它数值转换在生成前拒绝。
-- 全部 Rx I-PDU 属于唯一的 I-PDU group（句柄 0），接收时按 I-PDU 重装期限，取同一 PDU 内最小非零超时，只向该 PDU 内启用期限监控的信号发送超时通知：首次超时为 0、超时动作为 `NONE`，`ComTimeout` 等于接收端口的存活超时且是 Rx 主函数周期的整数倍。
+- 全部 Rx I-PDU 属于唯一的 I-PDU group（句柄 0），以最小非零期限计时。生成前拒绝同 PDU 不同非零期限，避免 R-Port 提前过期。首次超时为 0，动作 `NONE`，期限等于端口存活超时且是 Rx 主函数周期的整数倍。
 - Tx I-PDU 不属于任何 group，由 `Com_Init` 启动（SWS_Com_00840），`ComMinimumDelayTime` 为 0，只有 `ComTxModeTrue` 下周期等于 Tx 主函数周期的 `PERIODIC` 模式；没有 `ComTxModeFalse`，其缺省模式 NONE 只经 `Com_SwitchIpduTxMode(…, FALSE)` 选中。发送信号不做截止监控。
 - 唯一用户是 RTE：`ComUserModuleCnf` 位于 `Rte/RteComUser` 下，回调只有 `COM_RX_ACK`（`Rte_COMCbk`）与 `COM_RX_TOUT`（`Rte_COMCbkRxTOut`），按 `ComUserCbkHandleId` 区分接收信号；RTE 在 `Rte_Cfg.h` 唯一导出 `RteConf_ComUserSignal_*`，COM 配置与 RTE 回调使用该符号。
 - 各有一个 `ComMainFunctionRx` 与 `ComMainFunctionTx`，生成为 `Com_MainFunctionRx_<名>`／`Com_MainFunctionTx_<名>`（声明在 `SchM_Com.h`），每个 I-PDU 由其 `ComIPduMainFunctionRef` 引用的主函数处理。
@@ -25,7 +25,7 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 | 分组 | 处置与条目 |
 | --- | --- |
 | 总括与 ISO 17356 | 已核对（规范原文：总括条款，义务由本规范各条目展开并在本篇逐条处置）：SWS_Com_00010、00011、00012；已核对（源码：没有实现 ISO 17356-4 的可选特性）：SWS_Com_00013；已核对（配置模型：参数以 ECUC ARXML 提供）：SWS_Com_00006；已核对（规范原文：规范自身列出的不适用 SRS，没有实现义务）：SWS_Com_NA_00999 |
-| 数据类型与端序 | 已核对（源码：`Com_Pack` 按 Intel／Motorola 位图发送，`Com_Unpack` 先解码并扩展有符号值再登记通知）：SWS_Com_00007、00008、00352；已核对（源码：初值进入存储时符号扩展）：SWS_Com_00723；不适用（配置：布尔、浮点、64 位及字节数组未纳入）：SWS_Com_00675、00810、00472、00674、00579、00580 |
+| 数据类型与端序 | 已核对（源码：`Com_Pack` 按 Intel／Motorola 位图发送，`Com_Unpack` 先解码并扩展有符号值再登记通知）：SWS_Com_00007、00008、00352；已核对（源码：初值进入存储时符号扩展）：SWS_Com_00723；不适用（配置：ECUC_Com_00127=BOOLEAN／FLOAT32／FLOAT64／SINT64／UINT64／UINT8_N／UINT8_DYN）：SWS_Com_00675、00810、00472、00674、00579、00580 |
 | 信号组 | 不适用（配置：ECUC_Com_00345）：SWS_Com_00829、00741、00769、00742、00743、00770、00682、00683、00718、00575、00513、00876、00484、00050、00051、00821、00200、00635、00637、00201、00638、00639、00461、00557、00645、00860 |
 | 信号组数组访问 | 不适用（配置：ECUC_Com_10002=true）：SWS_Com_00841、00842、00843、00848、00844、00845、00850、00846、00847、00849、00851、00852、00853、00854、00855、00856、00857 |
 | 过滤与 TMS 计算 | 不适用（配置：ECUC_Com_00339）：SWS_Com_00694、00695、00602、00325、00380、00439、00764、00866、00273、00836、00132、00603、00604、00302、00303、00231、00793、00676、00678、00679、00763、00813、00245、00229、00495、00535；已核对（源码：没有过滤器，所有 I-PDU 的 TMS 恒为 true，只有 `Com_SwitchIpduTxMode` 显式改变发送模式）：SWS_Com_00677、00605 |

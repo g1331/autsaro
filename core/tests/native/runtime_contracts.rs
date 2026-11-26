@@ -380,6 +380,8 @@ fn strict_consumer(scratch: &Path, module: &str, fixture: &str, flags: &[&str]) 
         .arg(root.join("runtime/host/src"))
         .arg("-I")
         .arg(root.join("core/tests/fixtures/bsw-contracts"))
+        .arg("-I")
+        .arg(root.join("core/tests/fixtures/bsw-contracts/config"))
         .arg(root.join("runtime/host/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/host/src/Can_HostLock.c"))
         .arg(root.join(format!("runtime/bsw/src/{module}.c")))
@@ -546,8 +548,6 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     }
     for name in [
         "ComStack_Cfg.h",
-        "Com_Cfg.h",
-        "CanIf_Cfg.h",
         "Ecu_ProfileConfig.h",
         "SchM_CanIf.h",
         "SchM_ComM.h",
@@ -559,6 +559,14 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     ] {
         std::fs::copy(
             root.join("core/tests/fixtures/bsw-contracts").join(name),
+            include.join(name),
+        )
+        .unwrap();
+    }
+    for name in ["Com_Cfg.h", "CanIf_Cfg.h"] {
+        std::fs::copy(
+            root.join("core/tests/fixtures/bsw-contracts/config")
+                .join(name),
             include.join(name),
         )
         .unwrap();
