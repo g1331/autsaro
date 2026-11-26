@@ -8,7 +8,6 @@ use crate::target::BuildTarget;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::Path;
 
 const CONFIG_PRODUCER: &str = "autosar-workbench-config";
@@ -120,6 +119,7 @@ fn classification(
 fn application_slots(
     files: &BTreeMap<String, &[u8]>,
     metadata: &HandoffMetadata,
+    catalog: &crate::definitions::DefinitionCatalog,
 ) -> Result<Vec<super::ApplicationSlotDescriptor>, crate::LocalizedText> {
     if metadata.profile_id != crate::integration::PROFILE {
         return Ok(Vec::new());
@@ -187,15 +187,9 @@ fn application_slots(
         }
         crate::integration::InputSource::new(&input.logical_path, bytes.to_vec()).map_err(|issue| issue.message)
     }).collect::<Result<Vec<_>, crate::LocalizedText>>()?;
-    crate::arxml::resolve_manifest_sources(
-        &manifest,
-        &mut sources,
-        &crate::definitions::DefinitionCatalog::builtin()?,
-        "",
-    )
-    .map_err(|issues| {
-        crate::LocalizedText::messages(issues.into_iter().map(|issue| issue.message))
-    })?;
+    crate::arxml::resolve_manifest_sources(&manifest, &mut sources, catalog, "").map_err(
+        |issues| crate::LocalizedText::messages(issues.into_iter().map(|issue| issue.message)),
+    )?;
     let slots =
         crate::integration::ecu::application_slots_from_sources(&sources).map_err(|issues| {
             issues.into_iter().next().map_or_else(
@@ -226,12 +220,13 @@ fn application_slots(
 pub(crate) fn ledger<'a>(
     files: &BTreeMap<String, PreparedFile<'a>>,
     metadata: &HandoffMetadata,
+    catalog: &crate::definitions::DefinitionCatalog,
 ) -> Result<OwnershipLedger, crate::LocalizedText> {
     let payload = files
         .iter()
         .map(|(path, file)| (path.clone(), file.bytes.as_ref()))
         .collect();
-    let slots = application_slots(&payload, metadata)?;
+    let slots = application_slots(&payload, metadata, catalog)?;
     let mut entries = Vec::with_capacity(files.len());
     for (path, file) in files {
         if matches!(path.as_str(), OWNERSHIP_PATH | FILE_LIST | FILE_HASHES) {
@@ -261,8 +256,9 @@ pub(crate) fn ledger<'a>(
 pub(crate) fn add_ledger<'a>(
     files: &mut BTreeMap<String, PreparedFile<'a>>,
     metadata: &HandoffMetadata,
+    catalog: &crate::definitions::DefinitionCatalog,
 ) -> Result<(), crate::LocalizedText> {
-    let ledger = ledger(files, metadata)?;
+    let ledger = ledger(files, metadata, catalog)?;
     super::insert_file(
         files,
         OWNERSHIP_PATH.into(),
@@ -395,9 +391,10 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), crate:
 pub(crate) fn verify_ledger_bytes(
     files: &BTreeMap<String, &[u8]>,
     metadata: &HandoffMetadata,
+    catalog: &crate::definitions::DefinitionCatalog,
 ) -> Result<OwnershipLedger, crate::LocalizedText> {
     validate_metadata(metadata)?;
-    let slots = application_slots(files, metadata)?;
+    let slots = application_slots(files, metadata, catalog)?;
     let ledger: OwnershipLedger = serde_json::from_slice(
         files
             .get(OWNERSHIP_PATH)
@@ -484,37 +481,4 @@ pub(crate) fn verify_ledger_bytes(
         }
     }
     Ok(ledger)
-}
-
-pub(crate) fn verify_directory(
-    directory: &Path,
-    names: &[String],
-) -> Result<Option<HandoffMetadata>, crate::LocalizedText> {
-    if !names.iter().any(|path| path == OWNERSHIP_PATH) {
-        if fs::read(directory.join("target.json"))
-            .ok()
-            .map(|bytes| metadata_from_target(&bytes))
-            .transpose()?
-            .flatten()
-            .is_some()
-        {
-            return Err(crate::product_message!(
-                "backend.delivery.native_ledger_required"
-            ));
-        }
-        return Ok(None);
-    }
-    let target = super::read_source(&directory.join("target.json"))?;
-    let metadata = metadata_from_target(&target)?
-        .ok_or_else(|| crate::product_message!("backend.delivery.native_metadata_required"))?;
-    let mut owned_bytes = BTreeMap::new();
-    for path in names {
-        owned_bytes.insert(path.clone(), super::read_source(&directory.join(path))?);
-    }
-    let borrowed: BTreeMap<_, _> = owned_bytes
-        .iter()
-        .map(|(path, bytes)| (path.clone(), bytes.as_slice()))
-        .collect();
-    verify_ledger_bytes(&borrowed, &metadata)?;
-    Ok(Some(metadata))
 }

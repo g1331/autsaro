@@ -1,5 +1,8 @@
 //! The project manifest and native delivery are the entry points for layered inputs.
-use super::*;
+#![allow(dead_code)]
+
+#[path = "support/mod.rs"]
+mod support;
 use crate::support::generated_packages::{prepare, standard_named};
 use autosar_config_core::Workspace;
 use autosar_config_core::arxml::*;
@@ -7,6 +10,7 @@ use autosar_config_core::project_model::{TypedValue, ValueKind};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
+use support::{tooling, workspace::Scratch};
 
 const PRIORITY: &str = "/AUTOSAR/EcucDefs/Os/OsTask/OsTaskPriority";
 
@@ -119,6 +123,7 @@ fn fixture(path: &Path, priority_value: &str) -> Workspace {
         )]),
         selection: selection("platform"),
         conflicts: Vec::new(),
+        applied_migrations: Vec::new(),
     });
     write(path, &manifest);
     open(path)
@@ -601,6 +606,7 @@ fn pipeline_variants(path: &Path) -> Workspace {
             )]),
             selection: selection("complete"),
             conflicts: Vec::new(),
+            applied_migrations: Vec::new(),
         }),
     };
     write(path, &manifest);
@@ -743,6 +749,25 @@ fn base_upgrade_reports_new_inbound_reference_to_a_project_tombstone() {
     );
 
     let mut incoming = upgrade(&path, &workspace, "1");
+    let next_file = path.join("next").join(file);
+    fs::write(
+        &next_file,
+        original.replace(
+            "<SW-ADDR-METHOD><SHORT-NAME>Spare</SHORT-NAME></SW-ADDR-METHOD>",
+            "",
+        ),
+    )
+    .unwrap();
+    incoming.reference.source_sha256 = base_source_digest(
+        incoming
+            .members
+            .iter()
+            .map(|member| (member, fs::read(path.join(member)).unwrap())),
+    );
+    let agreement = workspace.preview_base_upgrade(incoming.clone()).unwrap();
+    assert_eq!(agreement.agreements, std::slice::from_ref(&removal.target));
+    assert!(agreement.conflicts.is_empty());
+
     fs::write(
         path.join("next").join(file),
         original.replace(
@@ -833,4 +858,146 @@ fn removing_did_and_route_dependencies_in_one_layer_keeps_the_effective_graph_cl
     let current = workspace.saved_integration_plan().unwrap();
     assert!(current.description().diagnostic.is_none());
     assert!(current.description().diagnostic_transport.is_none());
+}
+
+#[test]
+fn an_unselected_member_does_not_block_saving_the_active_variant() {
+    let scratch = Scratch::new();
+    let path = scratch.0.join("live");
+    pipeline_variants(&path);
+    let inactive = path.join("reduced/ecuc.arxml");
+    let before = fs::read_to_string(&inactive).unwrap().replacen(
+        "<SHORT-NAME>Configuration</SHORT-NAME>",
+        "<SHORT-NAME>Configuration</SHORT-NAME><SHORT-NAME>Duplicated</SHORT-NAME>",
+        1,
+    );
+    assert!(before.contains("<SHORT-NAME>Duplicated</SHORT-NAME>"));
+    fs::write(&inactive, &before).unwrap();
+    let mut workspace = open(&path);
+    workspace
+        .select_project_variants(selection("complete"))
+        .unwrap();
+    workspace.save().unwrap();
+    assert!(workspace.saved_integration_plan().is_ok());
+    assert_eq!(fs::read_to_string(inactive).unwrap(), before);
+}
+
+#[test]
+fn setting_the_inherited_reference_list_changes_origin_without_retargeting() {
+    let scratch = Scratch::new();
+    let mut workspace = fixture(&scratch.0.join("live"), "1");
+    let base = workspace.clone();
+    let target = task("/AUTOSAR/EcucDefs/Os/OsTask/OsTaskEventRef");
+    let rows = base.project_semantics().unwrap();
+    let values = rows[&target]
+        .values
+        .iter()
+        .map(|value| TypedValue {
+            kind: ValueKind::Reference,
+            lexeme: value.split_once(' ').unwrap().1.into(),
+        })
+        .collect();
+    workspace
+        .replace_layer_operations(
+            None,
+            vec![LayerOperation {
+                target: target.clone(),
+                action: LayerAction::Set {
+                    values,
+                    default_origin: None,
+                },
+            }],
+        )
+        .unwrap();
+    let difference = base.compare_project(&workspace).unwrap();
+    let row = difference
+        .semantics
+        .iter()
+        .find(|row| row.target == target)
+        .unwrap();
+    assert_eq!(row.changes, [SemanticChange::Origin, SemanticChange::State]);
+}
+
+#[test]
+fn a_layered_extension_field_survives_preparation_and_offline_reopen() {
+    use autosar_config_core::definitions::DefinitionCatalog;
+    use sha2::{Digest, Sha256};
+
+    let scratch = Scratch::new();
+    let path = scratch.0.join("live");
+    let workspace = fixture(&path, "1");
+    let authored = scratch.0.join("vendor");
+    fs::create_dir(&authored).unwrap();
+    let definitions = r#"<AUTOSAR xmlns="http://autosar.org/schema/r4.0"><AR-PACKAGES><AR-PACKAGE><SHORT-NAME>Vendor</SHORT-NAME><ELEMENTS>
+<ECUC-MODULE-DEF><SHORT-NAME>Lab</SHORT-NAME><CONTAINERS><ECUC-PARAM-CONF-CONTAINER-DEF><SHORT-NAME>Test</SHORT-NAME>
+<PARAMETERS><ECUC-INTEGER-PARAM-DEF><SHORT-NAME>Threshold</SHORT-NAME><MIN>0</MIN><MAX>10</MAX></ECUC-INTEGER-PARAM-DEF></PARAMETERS>
+</ECUC-PARAM-CONF-CONTAINER-DEF></CONTAINERS></ECUC-MODULE-DEF></ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>"#;
+    fs::write(authored.join("definitions.arxml"), definitions).unwrap();
+    let inventory = serde_json::json!({
+        "formatVersion": 1, "catalogId": "vendor-threshold", "release": "R24-11",
+        "version": "1.0", "files": [{"path": "definitions.arxml", "sha256": hex::encode(Sha256::digest(definitions))}],
+    });
+    let catalog_path = authored.join("catalog.json");
+    fs::write(&catalog_path, serde_json::to_vec(&inventory).unwrap()).unwrap();
+    let mut catalog = DefinitionCatalog::builtin().unwrap();
+    let identity = catalog
+        .accept_extension(&catalog_path, &scratch.0.join("cache"))
+        .unwrap();
+    let member = "vendor.arxml";
+    fs::write(path.join(member), r#"<AUTOSAR xmlns="http://autosar.org/schema/r4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00053.xsd">
+<AR-PACKAGES><AR-PACKAGE><SHORT-NAME>VendorConfig</SHORT-NAME><ELEMENTS>
+<ECUC-MODULE-CONFIGURATION-VALUES><SHORT-NAME>Lab</SHORT-NAME><DEFINITION-REF DEST="ECUC-MODULE-DEF">/Vendor/Lab</DEFINITION-REF>
+<CONTAINERS><ECUC-CONTAINER-VALUE><SHORT-NAME>Test</SHORT-NAME><DEFINITION-REF DEST="ECUC-PARAM-CONF-CONTAINER-DEF">/Vendor/Lab/Test</DEFINITION-REF>
+<PARAMETER-VALUES><ECUC-NUMERICAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-INTEGER-PARAM-DEF">/Vendor/Lab/Test/Threshold</DEFINITION-REF><VALUE>1</VALUE></ECUC-NUMERICAL-PARAM-VALUE></PARAMETER-VALUES>
+</ECUC-CONTAINER-VALUE></CONTAINERS></ECUC-MODULE-CONFIGURATION-VALUES></ELEMENTS></AR-PACKAGE></AR-PACKAGES></AUTOSAR>"#).unwrap();
+    let mut manifest = workspace.project_manifest().unwrap().clone();
+    manifest
+        .accepted_extension_definitions
+        .push(identity.clone());
+    manifest.inputs.push(ProjectInput {
+        path: member.into(),
+        role_hint: "source".into(),
+    });
+    let layers = manifest.layers.as_mut().unwrap();
+    layers.base.extensions.push(identity);
+    layers.project.members.push(member.into());
+    write(&path, &manifest);
+    let mut workspace =
+        Workspace::open_project_with_catalog(&path.join("workbench-project.json"), &catalog)
+            .unwrap();
+    let target = LayerTarget {
+        object: LayerObject {
+            release: "R24-11".into(),
+            definition_type: "/Vendor/Lab/Test".into(),
+            path: "/VendorConfig/Lab/Test".into(),
+            instance_context: Vec::new(),
+        },
+        field: Some("/Vendor/Lab/Test/Threshold".into()),
+    };
+    workspace
+        .replace_layer_operations(
+            None,
+            vec![LayerOperation {
+                target: target.clone(),
+                action: LayerAction::Set {
+                    values: vec![TypedValue {
+                        kind: ValueKind::Integer,
+                        lexeme: "7".into(),
+                    }],
+                    default_origin: None,
+                },
+            }],
+        )
+        .unwrap();
+    workspace.save().unwrap();
+    let package = scratch.0.join("sealed");
+    prepare(&workspace, true).generate(&package).unwrap();
+    let reopened = autosar_config_core::generator::delivery::open_handoff(
+        &package,
+        &scratch.0.join("reopened"),
+        &catalog,
+    )
+    .unwrap()
+    .workspace;
+    assert_eq!(reopened.project_semantics().unwrap()[&target].values, ["7"]);
 }

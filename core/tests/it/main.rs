@@ -15,5 +15,4 @@ mod integration;
 mod messages;
 mod protocol_oracles;
 mod rules;
-mod variants;
 mod workspace;

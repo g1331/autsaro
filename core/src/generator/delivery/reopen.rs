@@ -112,7 +112,7 @@ fn prepare_package(
         .iter()
         .map(|(path, bytes)| (path.clone(), bytes.as_slice()))
         .collect();
-    super::ownership::verify_ledger_bytes(&borrowed, &metadata)?;
+    super::ownership::verify_ledger_bytes(&borrowed, &metadata, &selected)?;
     let manifest_bytes = payload
         .get(PROJECT_PATH)
         .ok_or_else(|| crate::product_message!("backend.delivery.source_manifest_missing"))?;

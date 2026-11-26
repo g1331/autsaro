@@ -700,8 +700,12 @@ fn finish<'a>(
         Cow::Owned(cmake.into_bytes()),
         None,
     )?;
-    generator::delivery::tools::add(&mut files, &native.metadata)?;
-    generator::delivery::ownership::add_ledger(&mut files, &native.metadata)?;
+    generator::delivery::tools::add(&mut files, &native.metadata, &native.guard.catalog)?;
+    generator::delivery::ownership::add_ledger(
+        &mut files,
+        &native.metadata,
+        &native.guard.catalog,
+    )?;
     let mut digest = Sha256::new();
     for file in files.values() {
         digest.update((file.path.len() as u64).to_le_bytes());

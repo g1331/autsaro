@@ -765,9 +765,20 @@ impl Workspace {
                 }),
             });
         }
+        let layered = self
+            .project
+            .as_ref()
+            .and_then(|project| Some((project.path.parent()?, project.manifest.layers.as_ref()?)));
         let files: Vec<_> = self
             .files
             .iter()
+            .filter(|file| {
+                layered.is_none_or(|(root, layers)| {
+                    file.path.strip_prefix(root).is_ok_and(|path| {
+                        layers.member_is_selected(&path.to_string_lossy().replace('\\', "/"))
+                    })
+                })
+            })
             .map(|file| (file.path.as_path(), file.text.as_str()))
             .collect();
         let safety = ScopeValidation {

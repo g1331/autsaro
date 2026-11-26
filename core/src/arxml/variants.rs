@@ -55,6 +55,8 @@ pub struct ProjectLayers {
     pub selection: BTreeMap<String, BTreeSet<String>>,
     #[serde(default)]
     pub conflicts: Vec<UpgradeConflict>,
+    #[serde(default)]
+    pub applied_migrations: Vec<PathMigration>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -214,6 +216,24 @@ impl ProjectLayers {
             );
         }
         Ok(())
+    }
+
+    pub(super) fn member_is_selected(&self, path: &str) -> bool {
+        self.base
+            .members
+            .iter()
+            .chain(&self.project.members)
+            .any(|member| member == path)
+            || self.selection.iter().any(|(name, options)| {
+                self.groups.get(name).is_some_and(|group| {
+                    (!group.exactly_one || options.len() == 1)
+                        && options.iter().any(|option| {
+                            group.options.get(option).is_some_and(|layer| {
+                                layer.members.iter().any(|member| member == path)
+                            })
+                        })
+                })
+            })
     }
 
     fn active(&self) -> Result<Vec<(Vec<String>, &ProjectLayer)>, Vec<PlanDiagnostic>> {

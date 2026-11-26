@@ -102,6 +102,14 @@ pub(super) fn normalized(kind: Option<ValueKind>, lexeme: &str) -> String {
     }
 }
 
+pub(super) fn semantic_value(kind: Option<ValueKind>, lexeme: &str, dest: Option<&str>) -> String {
+    let value = normalized(kind, lexeme);
+    match dest {
+        Some(dest) => format!("{dest} {value}"),
+        None => value,
+    }
+}
+
 pub(super) fn within(path: &str, root: &str) -> bool {
     path == root
         || path
@@ -413,8 +421,25 @@ pub(super) fn resolve(
                     )?;
                     removals.extend(entries.iter().map(|entry| entry.node_range.clone()));
                     if first && let LayerAction::Set { values, .. } = action {
-                        row.values
-                            .extend(values.iter().map(|value| normalized(kind, &value.lexeme)));
+                        let dest = (kind == Some(ValueKind::Reference))
+                            .then(|| {
+                                entries
+                                    .first()
+                                    .and_then(|field| field.dest.as_deref())
+                                    .or_else(|| {
+                                        catalog
+                                            .get(&id)?
+                                            .reference_destinations
+                                            .first()
+                                            .map(String::as_str)
+                                    })
+                            })
+                            .flatten();
+                        row.values.extend(
+                            values
+                                .iter()
+                                .map(|value| semantic_value(kind, &value.lexeme, dest)),
+                        );
                         if kind == Some(ValueKind::Reference) {
                             inbound.extend(values.iter().map(|value| {
                                 (
@@ -430,13 +455,11 @@ pub(super) fn resolve(
                         row.sources.extend(operation_origin(&target));
                     }
                 } else {
-                    row.values.extend(entries.iter().map(|field| {
-                        let value = normalized(kind, &field.value);
-                        field
-                            .dest
-                            .as_ref()
-                            .map_or(value.clone(), |dest| format!("{dest} {value}"))
-                    }));
+                    row.values.extend(
+                        entries
+                            .iter()
+                            .map(|field| semantic_value(kind, &field.value, field.dest.as_deref())),
+                    );
                     row.sources
                         .extend(entries.iter().map(|field| origin(field.node_range.clone())));
                     if matches!(kind, Some(ValueKind::Integer | ValueKind::Boolean)) {
@@ -480,7 +503,7 @@ pub(super) fn resolve(
                     continue;
                 }
                 if layer[0] != "base"
-                    && let Some(current) = migrated_path(&target, &layers.base.migrations)
+                    && let Some(current) = migrated_path(&target, &layers.applied_migrations)
                 {
                     if node.tag_name().namespace() != Some(NS) || node.attribute("DEST").is_none() {
                         return Err(vec![diagnostic(

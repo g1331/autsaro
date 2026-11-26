@@ -1,5 +1,5 @@
 use super::{
-    resolve::{migrated_path, normalized, resolve, within},
+    resolve::{migrated_path, resolve, within},
     *,
 };
 use crate::arxml::{Document, path_of};
@@ -31,6 +31,7 @@ fn base_semantics(
         groups: BTreeMap::new(),
         selection: BTreeMap::new(),
         conflicts: Vec::new(),
+        applied_migrations: Vec::new(),
     };
     resolve(&base_only, sources, catalog).map(|resolution| resolution.semantics)
 }
@@ -80,6 +81,17 @@ fn incoming_refs(
         }
     }
     inbound
+}
+
+fn candidate_reference_is_opaque(
+    snapshot: &crate::arxml::projection::SourceSnapshot,
+    path: &str,
+) -> bool {
+    snapshot.opaque_values.iter().any(|value| value.contains(path))
+        || snapshot.fields.iter().any(|field| {
+            field.view.definition.kind.is_none() && field.view.reference.is_none()
+                && matches!(&field.view.current, crate::project_model::ValueState::Explicit { value } if value.lexeme.contains(path))
+        })
 }
 
 impl Workspace {
@@ -152,6 +164,11 @@ impl Workspace {
         let mut migration_sources = BTreeSet::new();
         let mut migration_targets = BTreeSet::new();
         for migration in &base.migrations {
+            if candidate_reference_is_opaque(&candidate.snapshot, &migration.previous.path) {
+                return Err(crate::product_message!(
+                    "backend.arxml.changes.opaque_extension_reference_impact_unknown"
+                ));
+            }
             let previous = LayerTarget {
                 object: migration.previous.clone(),
                 field: None,
@@ -173,6 +190,14 @@ impl Workspace {
                 .into());
             }
         }
+        for previous in &mut next.applied_migrations {
+            if let Some(path) = migrated_path(&previous.current.path, &base.migrations) {
+                previous.current.path = path;
+            }
+        }
+        next.applied_migrations
+            .extend(base.migrations.iter().cloned());
+        let layers_base = layers.base.clone();
         let mut conflicts = Vec::new();
         let mut agreements = Vec::new();
         let layers = std::iter::once((vec!["project".into()], &mut next.project)).chain(
@@ -188,6 +213,7 @@ impl Workspace {
                 .iter()
                 .map(|operation| operation.target.clone())
                 .collect();
+            let mut redundant = BTreeSet::new();
             for operation in &mut layer.operations {
                 let target = operation.target.clone();
                 let previous = old.get(&target);
@@ -206,22 +232,31 @@ impl Workspace {
                     }
                 }
                 let incoming = new.get(&updated);
-                let reason = if updated != target && occupied.contains(&updated)
+                let removes =
+                    matches!(operation.action, LayerAction::Delete | LayerAction::Exclude);
+                let new_inbound = removes
+                    && target.field.is_none()
+                    && !incoming_refs(&new_sources, &base, &updated).is_subset(&incoming_refs(
+                        &old_sources,
+                        &layers_base,
+                        &target,
+                    ));
+                if removes && previous.is_some() && incoming.is_none() && !new_inbound {
+                    redundant.insert(target);
+                    agreements.push(updated);
+                    continue;
+                }
+                let reason = if new_inbound {
+                    Some(UpgradeConflictKind::DeleteReferenced)
+                } else if updated != target && occupied.contains(&updated)
                     || previous.is_some()
                         && incoming.is_none()
                         && !new.contains_key(&LayerTarget {
                             object: updated.object.clone(),
                             field: None,
-                        }) {
-                    Some(UpgradeConflictKind::PathMigration)
-                } else if matches!(operation.action, LayerAction::Delete | LayerAction::Exclude)
-                    && !incoming_refs(&new_sources, &base, &updated).is_subset(&incoming_refs(
-                        &old_sources,
-                        &self.project_parts()?.1.base,
-                        &target,
-                    ))
+                        })
                 {
-                    Some(UpgradeConflictKind::DeleteReferenced)
+                    Some(UpgradeConflictKind::PathMigration)
                 } else if previous.map(|row| &row.values) == incoming.map(|row| &row.values)
                     && (target.field.is_some()
                         || descendants(&old, &target)
@@ -232,9 +267,19 @@ impl Workspace {
                 } else {
                     match &operation.action {
                         LayerAction::Set { values, .. } => {
+                            let destination = incoming
+                                .or(previous)
+                                .and_then(|entry| entry.values.first())
+                                .and_then(|value| value.split_once(' ').map(|(dest, _)| dest));
                             let new_values = values
                                 .iter()
-                                .map(|value| normalized(Some(value.kind), &value.lexeme))
+                                .map(|value| {
+                                    super::resolve::semantic_value(
+                                        Some(value.kind),
+                                        &value.lexeme,
+                                        destination.filter(|_| value.kind == ValueKind::Reference),
+                                    )
+                                })
                                 .collect::<Vec<_>>();
                             if incoming.is_some_and(|row| row.values == new_values) {
                                 agreements.push(updated.clone());
@@ -265,6 +310,9 @@ impl Workspace {
                     });
                 }
             }
+            layer
+                .operations
+                .retain(|operation| !redundant.contains(&operation.target));
         }
         next.conflicts = conflicts.clone();
         project.current = crate::arxml::project::render_manifest(&project.manifest)?;
