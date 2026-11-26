@@ -165,7 +165,7 @@ static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     assert(id == 0x321u && length == 1u && data[0] == 42u);
     return ECU_OK;
 }
-static const Can_ConfigType can = {sink};
+static const Can_ConfigType can = {.sink = sink};
 static void observed(void) {
     if (reenter) {
         reenter = 0u;

@@ -91,7 +91,7 @@ class ActualCAnalysisTests(unittest.TestCase):
         if ecu:
             entries = {"host-batch": "integration/src/ecu_host_batch.c", "probe": "integration/src/ecu_probe.c"}
             kernel_sources = [name for name in target["kernelSha256"] if name.endswith(".c")]
-            target.update(profile="ecu", hostBatchProtocol="HostBatchV2", entries=entries,
+            target.update(profile="ecu", hostBatchProtocol="HostBatchV2", canFrameProfile="classical-and-fd", entries=entries,
                           kernelSources=kernel_sources, kernelPatches=[])
             target["sources"] = [name for name in target["sources"]
                                  if name not in entries.values() and not name.startswith("kernel/")]
@@ -537,7 +537,7 @@ DWORD FixtureWait(HANDLE object)
                 "patch.diff": "--- a/unit.c\n+++ b/unit.c\n@@ -1 +1 @@\n-int kernel(void) { return 0; }\n+" + delivered,
             })
             target = json.loads((project / "target.json").read_text())
-            target.update(profile="ecu", hostBatchProtocol="HostBatchV2",
+            target.update(profile="ecu", hostBatchProtocol="HostBatchV2", canFrameProfile="classical-and-fd",
                           sources=["bsw/src/main.c"], kernelSources=["unit.c"],
                           entries={"host-batch": "integration/src/ecu_host_batch.c", "probe": "integration/src/ecu_probe.c"},
                           kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}],
@@ -616,7 +616,7 @@ DWORD FixtureWait(HANDLE object)
                 target = json.loads((project / "target.json").read_text())
                 if stage == "patch-0":
                     target["compilerFlags"].append("-fexceptions")
-                    target.update(profile="ecu", hostBatchProtocol="HostBatchV2", kernelSources=["unit.c"],
+                    target.update(profile="ecu", hostBatchProtocol="HostBatchV2", canFrameProfile="classical-and-fd", kernelSources=["unit.c"],
                                   kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}])
                     (project / "target.json").write_text(json.dumps(target))
                     seal = project / "meta/files.sha256"

@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 const SUPPORTED_PARAMETERS: &str = "
 DetVersionInfoApi DetForwardToDlt DetReportRuntimeErrorCallout DetErrorHook DetModuleId DetInstanceId
 CanBusoffProcessing CanControllerActivation CanControllerBaudRate CanControllerId
+CanControllerFdBaudRate CanControllerTxBitRateSwitch CanFdPaddingValue
 CanHwPnSupport CanRxProcessing CanTxProcessing CanWakeupProcessing CanWakeupSupport
 CanHandleType CanHwObjectCount CanIdType CanObjectId CanObjectType
 CanIfCtrlId CanIfBufferSize CanIfDispatchUserCtrlBusOffName CanIfDispatchUserCtrlBusOffUL

@@ -21,12 +21,14 @@
 
 /** One immutable copied output; acknowledgment includes both identity fields. */
 typedef struct {
-    uint64_t ticket;  /**< Monotonic nonzero output or batch identity. */
-    uint64_t epoch;   /**< Owner logical time in milliseconds. */
-    uint32_t can_id;  /**< Encoded Classical CAN identifier. */
-    PduIdType pdu;    /**< Software PDU handle required for acknowledgment. */
-    uint8_t dlc;      /**< Valid payload bytes, 0..8. */
-    uint8_t data[64]; /**< Copied payload; unused bytes zero. */
+    uint64_t ticket;           /**< Monotonic nonzero output or batch identity. */
+    uint64_t epoch;            /**< Owner logical time in milliseconds. */
+    uint32_t can_id;           /**< Encoded CAN identifier. */
+    PduIdType pdu;             /**< Software PDU handle required for acknowledgment. */
+    uint8_t dlc;               /**< Valid payload bytes, 0..64. */
+    uint8_t data[64];          /**< Copied payload; unused bytes zero. */
+    uint32 data_phase_bitrate; /**< Selected FD data phase rate in bit/s; zero for Classical. */
+    boolean brs;               /**< Bitrate switch selected for this FD frame. */
 } Ecu_OutputRecord;
 
 /** Immutable owner-published transport failure; ordinary timeouts recover. */
@@ -199,15 +201,22 @@ StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu);
 /** Publish a copy on the owner; called by the target Can Driver variant.
  * @param[in] pdu Software PDU handle retained by Can_Write.
  * @param[in] id CAN identifier.
- * @param[in] dlc Payload length, 0 through 8.
+ * @param[in] dlc Payload length, 0 through 64.
  * @param[in] data Payload copied before publication.
+ * @param[in] brs Whether the frame selects bitrate switching.
+ * @param[in] data_phase_bitrate Effective FD data phase rate in bit/s, zero for Classical.
  * @return ECU_OK for enqueue only; confirmation remains a separate message.
  * Preconditions: Owner required (else ECU_ERR_IO); bad shape/full queue/invalid token closes
  * target. Context: ECU initialization thread or generated owner task, outside exclusive areas.
  * Reentrancy: Not reentrant on the same process-local target.
  * Ownership: Copies payload and driver token before publication; no caller pointer retained.
  */
-EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8]);
+EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu,
+                                    uint32_t id,
+                                    uint8_t dlc,
+                                    const uint8_t *data,
+                                    boolean brs,
+                                    uint32 data_phase_bitrate);
 /** Generated sole extended Task entry.
  * @par Return
  * None.

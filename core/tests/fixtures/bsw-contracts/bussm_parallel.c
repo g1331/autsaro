@@ -90,7 +90,7 @@ static const CanIf_ConfigType canif = {receives,
                                        0u,
                                        0u,
                                        0u};
-static const Can_ConfigType can = {sink};
+static const Can_ConfigType can = {.sink = sink};
 static const Ecu_HostBusSM_ConfigType bussm = {0u, 0u};
 static const ComM_UserHandleType users[] = {1u};
 /* The Dcm notifications observe what ComM receives from the provider. */

@@ -105,7 +105,7 @@ class VerifierTests(unittest.TestCase):
                 ]
             }
             inputs = {"format": "autosar-ecu-test-inputs-v2", "periodMs": period,
-                      "channels": {"0": "/Network/Bus"}, "endpoints": endpoints,
+                      "canFd": False, "channels": {"0": "/Network/Bus"}, "endpoints": endpoints,
                       "did": 0x1234, "initialReceiveValue": 0, "receiveTimeoutMs": 200}
             (project / "meta/verification-inputs.json").write_text(json.dumps(inputs), encoding="utf-8")
             with (patch("ecu_tools.verify.sealed_sources", return_value=([], {

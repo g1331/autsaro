@@ -110,7 +110,7 @@ static const CanIf_ConfigType canif = {canif_rx,
                                        7u,
                                        11u,
                                        17u};
-static const Can_ConfigType can = {sink};
+static const Can_ConfigType can = {.sink = sink};
 static const ComM_UserHandleType users[] = {17u, 43u};
 static const ComM_ConfigType comm = {7u,
                                      users,

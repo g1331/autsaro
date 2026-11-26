@@ -120,7 +120,7 @@ static const CanIf_RxPduConfigType canif_rx[] = {{0x123u, 21u, 4u, FALSE}};
 static const CanIf_TxPduConfigType canif_tx[] = {{0x456u, 51u, 4u}};
 static const CanIf_ConfigType canif_config = {
     canif_rx, 1u, canif_tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u};
-static const Can_ConfigType can_config = {sink};
+static const Can_ConfigType can_config = {.sink = sink};
 int main(void)
 {
     /* Fixed signatures are independent of the implementation/inventory. */

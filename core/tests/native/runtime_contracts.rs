@@ -706,7 +706,11 @@ fn com_periodic_transmission_executes_real_lower_modules_and_can_busy() {
 #[test]
 fn canif_init_routing_pdu_modes_and_confirmations_follow_sws() {
     let scratch = Scratch::new();
-    let executable = chain_consumer(&scratch.0, "canif_contract.c", &[]);
+    let executable = chain_consumer(
+        &scratch.0,
+        "canif_contract.c",
+        &["-DCAN_TX_ID_TYPE=2u", "-DCAN_RX_ID_TYPE=2u"],
+    );
     let output = Command::new(executable).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
 }

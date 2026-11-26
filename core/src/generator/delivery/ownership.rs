@@ -288,6 +288,7 @@ pub(crate) fn metadata_from_target(
         .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
     if recorded_target != metadata.target_id
         || target["format"] != crate::prepared::TARGET_FORMAT
+        || target["canFrameProfile"] != crate::prepared::CAN_FRAME_PROFILE
         || target["profile"] != "ecu"
         || target["definitionFingerprint"]
             .as_str()

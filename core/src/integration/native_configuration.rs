@@ -6,7 +6,7 @@ use crate::project_model::{TypedValue, ValueKind};
 // not add a runtime implementation to the controlled virtual ECU target.
 pub(super) const DESCRIPTOR_PARAMETERS: &str = "
 CanControllerBaseAddress CanControllerBaudRateConfigID CanControllerPropSeg
-CanControllerSeg1 CanControllerSeg2 CanControllerSyncJumpWidth
+CanControllerSeg1 CanControllerSeg2 CanControllerSyncJumpWidth CanControllerSspOffset
 CanMainFunctionModePeriod CanTimeoutDuration CanIfInitCfgSet
 PduIdTypeEnum PduLengthTypeEnum DcmDspDataDefaultEndianness";
 

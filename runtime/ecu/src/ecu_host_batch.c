@@ -59,7 +59,8 @@ static int write_output(const Ecu_OutputRecord *output,
     (void)context;
     if (output == NULL) {
         receipt(&text, state, status);
-    } else if ((output->dlc > 8u) || (!Can_IsClassicalId(output->can_id))) {
+    } else if ((!Can_IsWireLength(output->can_id, output->dlc)) ||
+               (!Can_IsValidId(output->can_id))) {
         text.failed = 1;
     } else {
         size_t index;
@@ -69,8 +70,9 @@ static int write_output(const Ecu_OutputRecord *output,
         Os_HostTextField(&text, " pdu=", output->pdu);
         Os_HostTextAppend(&text,
                           ((output->can_id & CAN_ID_EXTENDED_FLAG) != 0u)
-                              ? " channel=0 format=EXTENDED fd=0"
-                              : " channel=0 format=STANDARD fd=0");
+                              ? " channel=0 format=EXTENDED"
+                              : " channel=0 format=STANDARD");
+        Os_HostTextField(&text, " fd=", ((output->can_id & CAN_ID_FD_FLAG) != 0u) ? 1u : 0u);
         Os_HostTextField(&text, " id=", output->can_id & CAN_ID_EXTENDED_MAX);
         Os_HostTextField(&text, " length=", output->dlc);
         Os_HostTextAppend(&text, " data=");

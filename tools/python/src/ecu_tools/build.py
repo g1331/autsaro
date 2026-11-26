@@ -90,7 +90,10 @@ def sealed_sources(project: Path, *, analysis_baseline: bool = False) -> tuple[l
                 and not (analysis_baseline and target_format == "autosar-build-target-v3"))
             or (target_format == "autosar-build-target-v4" and target.get("profile") == "ecu"
                 and target.get("hostBatchProtocol") != "HostBatchV2")):
-        raise ValueError("Unsupported build target format or identity")
+        raise ValueError("Unsupported build target format or identity. Regenerate from the original ARXML.")
+    if (not analysis_baseline and target.get("profile") == "ecu"
+            and target.get("canFrameProfile") != "classical-and-fd"):
+        raise ValueError("Unsupported CAN frame profile in this ECU package. Regenerate from the original ARXML.")
     return names, target
 
 
