@@ -516,6 +516,7 @@ _ANONYMOUS_ENUM_REPORTS = {
         30, "PduR_StateType", (
             "e82cb7e0ac64c8ef2d0fc63cb40efe8c95f31a4acced6c60a0563e9b56e48712",
             "345650a865f01f0eb0e162b62dbc82636ffc21645eaccb3d309d42b4023774ae",
+            "81ca747078df15b00fd79ba6c2cc6d807e144a7e2d8050e41ce26ced0f1c6868",
         ),
     ),
 }

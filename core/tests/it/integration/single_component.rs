@@ -3279,7 +3279,7 @@ fn pdur_mandatory_general_and_configuration_id_are_required_and_generated() {
 }
 
 #[test]
-fn pdur_fan_out_fan_in_and_gateway_routes_are_refused_at_their_source() {
+fn pdur_fan_out_fan_in_and_reused_local_pdus_are_refused_at_their_source() {
     // Rejects: ECUC_PduR_00354
     let mut sources = single_component_sources();
     xml_edit(
@@ -3330,7 +3330,7 @@ fn pdur_fan_out_fan_in_and_gateway_routes_are_refused_at_their_source() {
         "ecuc.arxml",
         "/Configuration/PduR/Routes/RxValueSource",
     );
-    // Rejects: ECUC_PduR_00291
+    // Rejects: ECUC_PduR_00291 when the target PDU already belongs to a local route.
     let mut sources = single_component_sources();
     xml_edit(
         &mut sources,

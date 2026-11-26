@@ -1177,3 +1177,94 @@ fn com_shared_pdu_refuses_different_monitored_port_deadlines() {
         1
     );
 }
+
+#[test]
+fn gateway_routes_keep_typed_channels_and_independent_handles() {
+    for count in [2, 4, 6] {
+        let sources = crate::support::multichannel::gateway_sources(count);
+        let plan = build(&sources).unwrap_or_else(|issues| panic!("{count}: {issues:#?}"));
+        let routes = &plan.description().routes;
+        for channel in 0..count {
+            let next = (channel + 1) % count;
+            let route = routes
+                .iter()
+                .find(|route| route.path.ends_with(&format!("/Gateway{channel}")))
+                .unwrap();
+            let gateway = route.gateway.as_ref().unwrap();
+            assert!(
+                gateway
+                    .receive
+                    .can_if_pdu
+                    .ends_with(&format!("/RxGateway{channel}"))
+            );
+            assert!(
+                gateway
+                    .transmit
+                    .can_if_pdu
+                    .ends_with(&format!("/TxGateway{next}"))
+            );
+            assert_ne!(gateway.receive.channel, gateway.transmit.channel);
+            assert_eq!(usize::from(route.source_handle), 120 + channel);
+            assert_eq!(usize::from(route.destination_handle), 140 + next);
+            assert_eq!(usize::from(gateway.receive.handle), 2 * count + 1 + channel);
+            assert_eq!(usize::from(gateway.transmit.handle), count + 1 + next);
+        }
+    }
+}
+
+#[test]
+fn gateway_rejects_bad_endpoint_handle_and_bus_identity_at_their_sources() {
+    use super::single_component::rejected_at;
+    let sources = crate::support::multichannel::gateway_sources(2);
+    for (endpoint, from, to) in [
+        ("RxGateway0Source", "/RxGateway0Pdu<", "/TxGateway0Pdu<"),
+        (
+            "TxGateway1Destination",
+            "/TxGateway1Pdu<",
+            "/RxGateway1Pdu<",
+        ),
+    ] {
+        let mut invalid = sources.clone();
+        xml_edit(
+            &mut invalid,
+            "ecuc.arxml",
+            |node| named(node, "ECUC-CONTAINER-VALUE", endpoint),
+            |xml| xml.replace(from, to),
+        );
+        rejected_at(
+            &invalid,
+            "PDU_ROUTE_UNSUPPORTED",
+            "ecuc.arxml",
+            &format!("/Configuration/PduR/Routes/{endpoint}"),
+        );
+    }
+
+    let mut duplicate = sources.clone();
+    parameter(
+        &mut duplicate,
+        "RxGateway1Source",
+        "PduRSourcePduHandleId",
+        "120",
+    );
+    rejected_at(
+        &duplicate,
+        "PDU_ROUTE_HANDLE",
+        "ecuc.arxml",
+        "/Configuration/PduR/Routes/RxGateway1Source",
+    );
+
+    let mut ambiguous = sources;
+    parameter(&mut ambiguous, "RxGateway0", "CanIfRxPduCanId", "800");
+    xml_edit(
+        &mut ambiguous,
+        "extract.arxml",
+        |node| named(node, "CAN-FRAME-TRIGGERING", "RxGateway0Trigger"),
+        |xml| xml.replace("<IDENTIFIER>933", "<IDENTIFIER>800"),
+    );
+    rejected_at(
+        &ambiguous,
+        "CAN_ID_CONFLICT",
+        "ecuc.arxml",
+        "/Configuration/CanIf/Config/RxGateway0",
+    );
+}

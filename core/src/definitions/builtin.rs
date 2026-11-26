@@ -1212,6 +1212,7 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
     a.reference(source, "PduRSrcPduRef", PDU, 1, Some(1))?;
     a.integers(destination, "PduRDestPduHandleId", "0", U16, 0)?;
     a.booleans(destination, "PduRTransmissionConfirmation", 1)?;
+    a.enumeration(destination, "PduRDestPduDataProvision", "PDUR_DIRECT", 0)?;
     a.reference(destination, "PduRDestPduRef", PDU, 1, Some(1))?;
     a.reference(route, "PduRDestPduRRef", destination, 1, Some(1))?;
     a.reference(route, "PduRSrcPduRRef", source, 1, Some(1))?;

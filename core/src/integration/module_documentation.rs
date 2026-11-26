@@ -47,8 +47,8 @@ fn overview(module: &str) -> (&'static str, &'static str) {
             "Only supported immediate requests, conditions and action lists are accepted. References, indices, initial modes and action targets must resolve. The delivered deferred main has no work in this all-IMMEDIATE configuration.",
         ),
         "PduR" => (
-            "Configured IF/TP routes, routing groups and configuration identity.",
-            "Source/destination module, API, direction, handle and PDU lengths must agree along each route. No zero-cost operation or metadata support. Routing group membership and default enable state are fixed at generation.",
+            "Configured IF/TP routes, direct cross-channel CAN I-PDU gateways and configuration identity.",
+            "Direct gateways use an explicit CanIf receive source and transmit destination on separate physical channels, with matching complete I-PDU lengths and PDUR_DIRECT. Generated tables keep Rx, Tx and transport handles in their API domains. The gateway confirms only in the lower chain.",
         ),
         "LSduR" => (
             "Fixed target lower-layer dispatch between CanIf, PduR and CanTp.",

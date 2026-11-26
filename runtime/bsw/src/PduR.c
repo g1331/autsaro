@@ -1,4 +1,4 @@
-/** @file Standard PduR with immutable one-to-one routes between Com, Dcm and lower layers. */
+/** @file Standard PduR with immutable one-to-one local and direct IF gateway routes. */
 #include "PduR.h"
 #include "SchM_PduR.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -44,7 +44,9 @@ static PDUR_CODE boolean PduR_Valid(const PduR_PBConfigType *config)
         valid = TRUE;
         for (i = 0u; i < config->receive_count; ++i) {
             uint16 j;
-            if (config->receive[i].indication == NULL_PTR) {
+            const PduR_RxRouteType *route = &config->receive[i];
+            if (((route->indication == NULL_PTR) == (route->forward == NULL_PTR)) ||
+                ((route->forward != NULL_PTR) && (route->maximum == 0u))) {
                 valid = FALSE;
             }
             for (j = 0u; j < i; ++j) {
@@ -216,6 +218,16 @@ PDUR_CODE Std_ReturnType PduR_DcmTransmit(PduIdType TxPduId, const PduInfoType *
 {
     return PduR_Transmit(PDUR_UP_DCM, TxPduId, PduInfoPtr);
 }
+static PDUR_CODE void PduR_Forward(const PduR_RxRouteType *route, const PduInfoType *info)
+{
+    PduInfoType outgoing = *info;
+    /* SWS_PduR_00783: only the descriptor is shortened. */
+    if (outgoing.SduLength > route->maximum) {
+        outgoing.SduLength = route->maximum;
+    }
+    /* SWS_PduR_00256: direct IF gateway requests are never retried. */
+    (void)route->forward(route->destination, &outgoing);
+}
 PDUR_CODE void PduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
 {
     const PduR_PBConfigType *config = PduR_Configuration();
@@ -224,7 +236,11 @@ PDUR_CODE void PduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduI
         for (i = 0u; i < config->receive_count; ++i) {
             const PduR_RxRouteType *route = &config->receive[i];
             if (route->lower == RxPduId) {
-                route->indication(route->upper, PduInfoPtr);
+                if (route->forward != NULL_PTR) {
+                    PduR_Forward(route, PduInfoPtr);
+                } else {
+                    route->indication(route->destination, PduInfoPtr);
+                }
                 break;
             }
         }
@@ -232,6 +248,7 @@ PDUR_CODE void PduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduI
 }
 PDUR_CODE void PduR_CanIfTxConfirmation(PduIdType TxPduId, Std_ReturnType result)
 {
+    /* The direct gateway has no upper completion callback (SWS_PduR_00640). */
     const PduR_PBConfigType *config = PduR_Configuration();
     if (config != NULL_PTR) {
         uint16 i;

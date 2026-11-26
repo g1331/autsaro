@@ -134,6 +134,7 @@ Cppcheck 绑定。保留 `activations`，待两侧证据覆盖该测试分支并
 在 `LSduR.h:14:14`（`LSduR_StateType`）和 `PduR.h:30:14`（`PduR_StateType`），
 实际声明均以 `typedef enum {` 开始，因此没有 tag 声明。该误报与类型别名的 R2.3
 记录分别裁决。验收按封存原件、诊断位置、程序实际头文件依赖和逐程序指纹归档，保留原报告。
+#489 扩展了 `PduR_RxRouteType`，匿名枚举及其预处理前置内容逐字保持，验收继续核对第 30 行第 14 列并识别本次完整头文件摘要。
 双目标四 profile 的 RTE CDS tag 均由独立 typedef 引用。`Os_NativeStackType` 由
 `Os_ArtiTaskStacks` 的声明和定义直接引用。队列及内核原件见[采用篇](../../os/adoption.md#r24-内核-tag)。
 

@@ -481,3 +481,202 @@ pub(crate) fn multichannel_sources(count: usize) -> Vec<InputSource> {
     );
     inputs
 }
+
+/// A ring of dedicated I-PDUs. Each local COM path remains separately configured.
+pub(crate) fn gateway_sources(count: usize) -> Vec<InputSource> {
+    let mut sources = multichannel_sources(count);
+    let pdu_definition = "/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu";
+    for source in &mut sources {
+        let path = source.logical_path();
+        let input = std::str::from_utf8(source.bytes()).unwrap();
+        if !matches!(path, "ecuc.arxml" | "extract.arxml") {
+            continue;
+        }
+        let doc = Document::parse(input).unwrap();
+        let mut edits = Edits::new();
+        for channel in 0..count {
+            let suffix = if channel == 0 {
+                String::new()
+            } else {
+                channel.to_string()
+            };
+            let previous = (channel + count - 1) % count;
+            for (direction, id) in [("Rx", 933), ("Tx", 934)] {
+                let original_name = format!("{direction}Value{suffix}");
+                let gateway = format!("{direction}Gateway{channel}");
+                let is_rx = direction == "Rx";
+                let fd = (if is_rx { channel } else { previous }) % 2 != 0;
+                let extended = !is_rx || fd;
+                let length = if fd { 12 } else { 4 };
+                let format = if extended { "EXTENDED" } else { "STANDARD" };
+                let can_type = if fd {
+                    format!("{format}_FD_CAN")
+                } else if is_rx {
+                    format!("{format}_NO_FD_CAN")
+                } else {
+                    format!("{format}_CAN")
+                };
+                let triggers = if path == "extract.arxml" {
+                    [
+                        "CAN-FRAME-TRIGGERING",
+                        "PDU-TRIGGERING",
+                        "CAN-FRAME",
+                        "I-SIGNAL-I-PDU",
+                        "FRAME-PORT",
+                        "I-PDU-PORT",
+                    ]
+                    .into_iter()
+                    .zip([
+                        "Trigger",
+                        "PduTrigger",
+                        "Frame",
+                        "Pdu",
+                        "FramePort",
+                        "PduPort",
+                    ])
+                    .collect::<Vec<_>>()
+                } else {
+                    vec![
+                        (
+                            if is_rx {
+                                "CanIfRxPduCfg"
+                            } else {
+                                "CanIfTxPduCfg"
+                            },
+                            "",
+                        ),
+                        ("Pdu", "Pdu"),
+                        (
+                            if is_rx { "PduRSrcPdu" } else { "PduRDestPdu" },
+                            if is_rx { "Source" } else { "Destination" },
+                        ),
+                    ]
+                };
+                for (kind, tail) in triggers {
+                    let name = format!("{original_name}{tail}");
+                    let node = doc
+                        .descendants()
+                        .find(|node| {
+                            text(*node, "SHORT-NAME") == Some(name.as_str())
+                                && (node.has_tag_name(kind) || definition(*node, kind))
+                        })
+                        .unwrap_or_else(|| panic!("{kind}/{name}"));
+                    let mut xml = input[node.range()].replace(&original_name, &gateway);
+                    if path == "extract.arxml" {
+                        xml = xml
+                            .replace(
+                                "<CAN-ADDRESSING-MODE>STANDARD",
+                                &format!("<CAN-ADDRESSING-MODE>{format}"),
+                            )
+                            .replace("<IDENTIFIER>800<", &format!("<IDENTIFIER>{id}<"))
+                            .replace("<IDENTIFIER>801<", &format!("<IDENTIFIER>{id}<"))
+                            .replace("<FRAME-LENGTH>4<", &format!("<FRAME-LENGTH>{length}<"))
+                            .replace("<LENGTH>4<", &format!("<LENGTH>{length}<"));
+                        let signal_members = match kind {
+                            "I-SIGNAL-I-PDU" => Some("I-SIGNAL-TO-PDU-MAPPINGS"),
+                            "PDU-TRIGGERING" => Some("I-SIGNAL-TRIGGERINGS"),
+                            _ => None,
+                        };
+                        if let Some(tag) = signal_members {
+                            let close = format!("</{tag}>");
+                            let start = xml.find(&format!("<{tag}>")).unwrap();
+                            let end = xml.find(&close).unwrap() + close.len();
+                            xml.replace_range(start..end, "");
+                        }
+                        if fd {
+                            xml = xml.replace(
+                                "<CAN-FD-FRAME-SUPPORT>false",
+                                "<CAN-FD-FRAME-SUPPORT>true",
+                            );
+                        }
+                    } else if kind == "Pdu" {
+                        let network = if channel == 0 {
+                            "ReferenceCan".into()
+                        } else {
+                            format!("ReferenceCan{channel}")
+                        };
+                        xml = set(&xml, "PduLength", length).replace("</ECUC-CONTAINER-VALUE>", &format!(
+                            r#"<REFERENCE-VALUES><ECUC-REFERENCE-VALUE><DEFINITION-REF DEST="ECUC-FOREIGN-REFERENCE-DEF">{pdu_definition}/SysTPduToFrameTriggeringRef</DEFINITION-REF><VALUE-REF DEST="CAN-FRAME-TRIGGERING">/Extract/{network}/Channel/{gateway}Trigger</VALUE-REF></ECUC-REFERENCE-VALUE></REFERENCE-VALUES></ECUC-CONTAINER-VALUE>"#
+                        ));
+                    } else if kind.starts_with("CanIf") {
+                        let prefix = format!("CanIf{direction}Pdu");
+                        let handle = if is_rx { 2 * count + 1 } else { count + 1 } + channel;
+                        xml = set(&xml, &format!("{prefix}Id"), handle);
+                        xml = set(&xml, &format!("{prefix}CanId"), id);
+                        xml = xml.replace("STANDARD_NO_FD_CAN", &can_type).replace(
+                            "<VALUE>STANDARD_CAN</VALUE>",
+                            &format!("<VALUE>{can_type}</VALUE>"),
+                        );
+                        if is_rx {
+                            xml = set(&xml, "CanIfRxPduDataLength", length);
+                        }
+                    } else if is_rx {
+                        xml = set(&xml, "PduRSourcePduHandleId", 120 + channel)
+                            .replace("<VALUE>true</VALUE>", "<VALUE>false</VALUE>");
+                    } else {
+                        xml = set(&xml, "PduRDestPduHandleId", 140 + channel).replace("</PARAMETER-VALUES>",
+                            r#"<ECUC-TEXTUAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-ENUMERATION-PARAM-DEF">/AUTOSAR/EcucDefs/PduR/PduRRoutingPaths/PduRDestPdu/PduRDestPduDataProvision</DEFINITION-REF><VALUE>PDUR_DIRECT</VALUE></ECUC-TEXTUAL-PARAM-VALUE></PARAMETER-VALUES>"#);
+                    }
+                    add(&mut edits, node, xml);
+                }
+            }
+            if path == "ecuc.arxml" {
+                let node = doc
+                    .descendants()
+                    .find(|node| definition(*node, "PduRRoutingPath"))
+                    .unwrap();
+                let next = (channel + 1) % count;
+                let xml = input[node.range()]
+                    .replace(
+                        "<SHORT-NAME>RxValue<",
+                        &format!("<SHORT-NAME>Gateway{channel}<"),
+                    )
+                    .replace("/RxValueSource<", &format!("/RxGateway{channel}Source<"))
+                    .replace(
+                        "/RxValueDestination<",
+                        &format!("/TxGateway{next}Destination<"),
+                    );
+                add(&mut edits, node, xml);
+            }
+        }
+        *source = InputSource::new(path, apply(input, edits).into_bytes()).unwrap();
+    }
+    for channel in 0..count {
+        let suffix = if channel == 0 {
+            String::new()
+        } else {
+            channel.to_string()
+        };
+        parameter(
+            &mut sources,
+            &format!("Transmit{suffix}"),
+            "CanIdType",
+            "MIXED",
+        );
+    }
+    let fd_input = super::mainline::fd_can_sources();
+    let fd = super::mainline::subtree(&fd_input, "ecuc.arxml", "ECUC-CONTAINER-VALUE", "Fd");
+    let source = sources
+        .iter_mut()
+        .find(|source| source.logical_path() == "ecuc.arxml")
+        .unwrap();
+    let xml = std::str::from_utf8(source.bytes()).unwrap();
+    let doc = Document::parse(xml).unwrap();
+    let mut edits = Edits::new();
+    for baudrate in doc
+        .descendants()
+        .filter(|node| definition(*node, "CanControllerBaudrateConfig"))
+    {
+        let parameters = baudrate
+            .children()
+            .find(|node| node.has_tag_name("PARAMETER-VALUES"))
+            .unwrap();
+        add(
+            &mut edits,
+            parameters,
+            format!("<SUB-CONTAINERS>{fd}</SUB-CONTAINERS>"),
+        );
+    }
+    *source = InputSource::new("ecuc.arxml", apply(xml, edits).into_bytes()).unwrap();
+    sources
+}

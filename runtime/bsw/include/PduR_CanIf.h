@@ -7,8 +7,8 @@
 #include "PduR_MemMap.h"
 /** Synchronously route a matching CanIf reception (SWS_PduR_00362).
  * @param[in] RxPduId A configured lower Rx handle.
- * @param[in] PduInfoPtr Non-NULL borrowed receive descriptor and payload; the upper callback
- * validates its length.
+ * @param[in] PduInfoPtr Non-NULL borrowed receive descriptor and payload. The upper callback
+ * validates local receptions. Direct gateways bound the length to the configured destination.
  * @par Return
  * None.
  * Preconditions: Initialized and a matching route; otherwise no action.
@@ -18,6 +18,7 @@
  */
 PDUR_CODE void PduR_CanIfRxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr);
 /** Forward a lower result using the configured upper handle (SWS_PduR_00365).
+ * A direct gateway has no upper confirmation (SWS_PduR_00640).
  * @param[in] TxPduId A configured lower Tx handle.
  * @param[in] result E_OK for a successful frame, E_NOT_OK for failure.
  * @par Return

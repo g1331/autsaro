@@ -123,7 +123,15 @@ impl Names {
         // LSduR owns the synthesized entry IDs. Outgoing IDs belong to the
         // actual destination modules and are imported from their headers.
         for route in &plan.routes {
-            let handle = if route.transport {
+            let handle = if let Some(gateway) = &route.gateway {
+                result.add(
+                    "LSduR",
+                    "LSduRPathDestPdu",
+                    &route.destination,
+                    u32::from(route.destination_handle),
+                );
+                gateway.receive.handle
+            } else if route.transport {
                 let tp = plan
                     .diagnostic_transport
                     .as_ref()

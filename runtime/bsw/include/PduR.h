@@ -82,12 +82,13 @@ typedef struct {
     PduR_CopyTxType copy_tx;            /**< Dcm transmit-buffer callback. */
     PduR_ConfirmationType confirmation; /**< Dcm transmission-result callback. */
 } PduR_TpRouteType;
-/** Generated one-to-one receive route. Handle fields come from the route PDU references; callbacks
- * are implementation bindings, not independent ECUC parameters. */
+/** Generated one-to-one receive route. Exactly one destination callback is configured. */
 typedef struct {
-    PduIdType lower;             /**< Lower source handle, in that module's Rx namespace. */
-    PduIdType upper;             /**< Mapped upper destination handle, in its Rx namespace. */
-    PduR_ReceiveType indication; /**< Required synchronous upper receive callback. */
+    PduIdType lower;             /**< Lower source handle, in the LSduR Rx namespace. */
+    PduIdType destination;       /**< COM Rx or LSduR Tx handle, selected by the callback. */
+    PduR_ReceiveType indication; /**< Synchronous upper receive callback, or NULL. */
+    PduR_TransmitType forward;   /**< Direct gateway transmit callback, or NULL. */
+    PduLengthType maximum;       /**< Configured destination length for a direct gateway. */
 } PduR_RxRouteType;
 /** Generated one-to-one transmit route. Handles come from source/destination PDU references; module
  * tags and callbacks are derived implementation bindings. */

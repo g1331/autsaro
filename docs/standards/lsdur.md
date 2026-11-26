@@ -9,7 +9,7 @@
 主线不接受 LSduR 的 ECUC 模块（`ECUC_LSduR_00001`，生成前以 `MODULE_UNSUPPORTED` 拒绝）。LSduR 的路由由同一计划从 PduR、CanIf 与 CanTp 的配置推导，生成到 `LSduR_PBcfg.c`：
 
 - 上层为 PduR 与 CanTp，下层为 CanIf；
-- 路由一对一、同一分区，不带 metadata；
+- 路由一对一、同一分区，不带 metadata。直通网关生成独立的 Rx、Tx 两行，前者映射到 PduR 源句柄，后者从 PduR 目标句柄发往目标 CanIf，并按同一条目返回确认；
 - 不做开发错误检测；版本 API 选为 `ECUC_LSduR_00004=false`，由现有 `LSduR_Cfg.h` producer 发布 `LSDUR_VERSION_INFO_API=STD_OFF`，不交付 `LSduR_GetVersionInfo`；
 - 不提供 ReleaseRxBuffer 与 CancelTransmit，也不支持 zero cost operation；
 - 只有预编译配置，没有 post-build 更新。

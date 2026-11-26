@@ -91,7 +91,7 @@ static void rejection(PduIdType id, Std_ReturnType result)
 }
 static const Com_ConfigType com = {
     pdus, 2u, signals, 2u, 0u, receive, timeout, PduR_ComTransmit, rejection};
-static const PduR_RxRouteType pdur_rx[] = {{31u, 1u, Com_RxIndication}};
+static const PduR_RxRouteType pdur_rx[] = {{31u, 1u, Com_RxIndication, NULL_PTR, 0u}};
 static const PduR_TxRouteType pdur_tx[] = {{PDUR_UP_COM,
                                             2u,
                                             PDUR_LO_LSDUR,
