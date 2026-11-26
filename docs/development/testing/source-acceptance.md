@@ -39,7 +39,7 @@ checkout 日志核对实际提交及父提交，按该树导出目标换行副�
 
 PR 双树门按 [ADR 0033](../../adr/0033-c-diagnostic-fingerprints.md) 核对范围内指纹。
 逐位置验证原技术和批准记录，再消费 `docs/standards/c-dispositions/` 中的登记。
-Windows 按分析器 SHA-256 选择登记。
+Windows 按分析器 SHA-256 读取登记。未登记的二进制照常扫描。
 每个键是一份处置依据摘要，值是该依据覆盖的诊断指纹。修复诊断时删去失效指纹。
 `fingerprintDispositions.candidates` 给出待复核的指纹及依据摘要。新增绑定沿用
 [ADR 0025](../../adr/0025-misra-layered-scope.md) 的批准流程。
