@@ -172,6 +172,7 @@ pub(super) fn inspect_composition(
         .iter()
         .map(|endpoint| endpoint.transport.clone())
         .collect();
+    super::signals::validate_layouts(graph, &signals)?;
     let data = graph
         .of_kind("ECUC-CONTAINER-VALUE")
         .into_iter()
@@ -476,6 +477,14 @@ pub(super) fn inspect_composition(
     ] {
         let paths: BTreeSet<String> = paths.into_iter().collect();
         for (handle, path) in paths.into_iter().enumerate() {
+            if domain == "com_signal" && handle >= usize::from(u16::MAX) {
+                return Err(super::signals::field(
+                    graph,
+                    graph.index(&path)?,
+                    "COM_SIGNAL_HANDLE_WIDTH",
+                    "ComHandleId",
+                ));
+            }
             let native = if domain == "com_signal" {
                 super::com::symbolic_name(&path)
             } else {
@@ -504,8 +513,7 @@ pub(super) fn inspect_composition(
     }
     let mut can_ids = BTreeSet::new();
     let mut can_handles = BTreeSet::new();
-    let signal_endpoints = signals
-        .iter()
+    let signal_endpoints = super::signals::pdus(&signals)
         .map(|signal| {
             let trigger = graph.index(&signal.trigger)?;
             let channel = graph
@@ -603,8 +611,7 @@ fn can_if_handle_sequence(
     transport: Option<&super::diagnostic::DiagnosticTransportContract>,
 ) -> Result<(), Vec<PlanDiagnostic>> {
     for receive in [true, false] {
-        let mut handles: Vec<(u16, &str)> = signals
-            .iter()
+        let mut handles: Vec<(u16, &str)> = super::signals::pdus(signals)
             .filter(|signal| signal.receive == receive)
             .map(|signal| (signal.can_if_handle, signal.can_if_pdu.as_str()))
             .collect();

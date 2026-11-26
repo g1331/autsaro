@@ -4,9 +4,11 @@
 
 ### Breaking
 
-- Regenerate ECU packages for configured CAN controller and HOH tables, channel-scoped CanIf routes and confirmations, and ComM/BswM/Dcm channel bindings. Update direct initializers of `Can_ConfigType`, `CanIf_ConfigType` and its route types. HostBatchV2 uses the configured driver channel in frame and mode records, and the probe reports the channel with each output. PduR and LSduR use the generated route counts (#486)
+- Regenerate ECU packages for configured CAN controller and HOH tables, channel-scoped CanIf routes and confirmations, and ComM/BswM/Dcm channel bindings. Update direct initializers of `Can_ConfigType`, `CanIf_ConfigType` and its route types for the controller, HOH and PDU-to-frame mapping. HostBatchV2 uses the configured driver channel in frame and mode records, and the probe reports the channel with each output. PduR and LSduR use the generated route counts (#486)
 
 - ComM, BswM and the host BusSM use immutable channel tables. ComM also stores each user's channel relations. Regenerate ECU packages and update direct initializers of `ComM_ConfigType`, `BswM_ConfigType` and `Ecu_HostBusSM_ConfigType` before rebuilding consumers (#464)
+
+- COM now packs and unpacks signed and unsigned fixed-width signals in Intel or Motorola order. Regenerate and rebuild COM and CanIf configurations for separate signal and PDU tables and byte-aligned PDU-to-frame mappings. (#665)
 
 - Host CAN supports standard and extended FD frames, explicit receive policies and driver padding through 64 wire bytes. Regenerate ECU packages from ARXML for the FD-capable HostBatchV2 tools. Rebuild native consumers and update private `Can_ConfigType` initializers for bitrates, BRS and HTH padding. Rebuild host output consumers for the probe’s FD timing fields. CanTp continues to use Classical CAN (#485)
 
@@ -87,6 +89,8 @@
 - `quality` checks repository documentation links and anchors, paired root-language edits, new changelog entries and accidental official AUTOSAR files; optional clang-tidy JSON reports retain raw diagnostics for CI reporting (#295)
 
 ### Fixed
+
+- The Linux x64 controlled ECU delivery can now compile `Arti.h`, `Os.h`, `Os_Arti.h`, and `Os_Host.h` as the first or a repeated include in a C++17 translation unit (#434)
 
 - Generated BswM actions confirm the actual mode and reject stale indications without overwriting CAN directions. Update the three legacy `BswMUserCalloutFunction` values from `Ecu_HostBusSM_ApplyMode` to `Ecu_HostBusSM_ConfirmMode` as directed by validation, then regenerate and rebuild the ECU project (#660)
 

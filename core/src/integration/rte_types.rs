@@ -97,6 +97,32 @@ pub struct RteDataType {
     pub array_length: Option<u32>,
 }
 
+/// Resolve a scalar base type using the same representation for all RTE consumers.
+pub(super) fn scalar_base(
+    graph: &super::graph::Graph,
+    base: usize,
+) -> Option<(&str, &'static str, &'static str)> {
+    let native = graph.text(base, "NATIVE-DECLARATION")?;
+    let (bits, encoding) = match native {
+        "uint8" => ("8", "NONE"),
+        "uint16" => ("16", "NONE"),
+        "uint32" => ("32", "NONE"),
+        "uint64" => ("64", "NONE"),
+        "sint8" => ("8", "2C"),
+        "sint16" => ("16", "2C"),
+        "sint32" => ("32", "2C"),
+        "sint64" => ("64", "2C"),
+        "boolean" => ("8", "BOOLEAN"),
+        "float32" => ("32", "IEEE754"),
+        "float64" => ("64", "IEEE754"),
+        _ => return None,
+    };
+    (graph.text(base, "CATEGORY") == Some("FIXED_LENGTH")
+        && graph.text(base, "BASE-TYPE-SIZE") == Some(bits)
+        && graph.text(base, "BASE-TYPE-ENCODING") == Some(encoding))
+    .then_some((native, bits, encoding))
+}
+
 /// All accepted RTE-owned input types, including types not used by a port.
 pub(super) fn inspect(
     graph: &super::graph::Graph,
@@ -200,27 +226,7 @@ pub(super) fn inspect(
                 return Err(invalid(datatype));
             };
             let base = graph.index(&graph.elements[*base].text)?;
-            let native = graph.text(base, "NATIVE-DECLARATION").unwrap_or("");
-            let (bits, encoding) = match native {
-                "uint8" => ("8", "NONE"),
-                "uint16" => ("16", "NONE"),
-                "uint32" => ("32", "NONE"),
-                "uint64" => ("64", "NONE"),
-                "sint8" => ("8", "2C"),
-                "sint16" => ("16", "2C"),
-                "sint32" => ("32", "2C"),
-                "sint64" => ("64", "2C"),
-                "boolean" => ("8", "BOOLEAN"),
-                "float32" => ("32", "IEEE754"),
-                "float64" => ("64", "IEEE754"),
-                _ => return Err(invalid(datatype)),
-            };
-            if graph.text(base, "CATEGORY") != Some("FIXED_LENGTH")
-                || graph.text(base, "BASE-TYPE-SIZE") != Some(bits)
-                || graph.text(base, "BASE-TYPE-ENCODING") != Some(encoding)
-            {
-                return Err(invalid(datatype));
-            }
+            let (native, _, _) = scalar_base(graph, base).ok_or_else(|| invalid(datatype))?;
             insert(&mut primitives, datatype, native.to_owned(), None)?;
         } else if graph.text(datatype, "CATEGORY") == Some("ARRAY") {
             let elements = graph.descendants(datatype, "IMPLEMENTATION-DATA-TYPE-ELEMENT");

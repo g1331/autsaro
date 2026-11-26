@@ -167,10 +167,23 @@ static uint8 rte_lifecycle RTE_Rte_VAR_CLEARED_UNSPECIFIED;
                 let definition = c_layout::initializer(
                     &format!("static {} {}", receiver.native_type, receiver.name),
                     &format!("RTE_{scope}_VAR_INIT_UNSPECIFIED"),
-                    &[c_layout::Item::Value(format!(
-                        "{}u",
-                        receiver.initial_value
-                    ))],
+                    &[c_layout::Item::Value({
+                        let native = composition
+                            .types
+                            .iter()
+                            .find(|datatype| datatype.symbol == receiver.native_type)
+                            .ok_or_else(|| PlanDiagnostic::plan_premise(&receiver.native_type))?;
+                        let value = receiver.initial_value;
+                        if native.native_type.starts_with("sint") {
+                            if value == i64::from(i32::MIN) {
+                                "(-2147483647 - 1)".into()
+                            } else {
+                                value.to_string()
+                            }
+                        } else {
+                            format!("{value}u")
+                        }
+                    })],
                 );
                 source.push_str("/* Owner-only receiver value, initialized from its ComSpec. */\n");
                 source.push_str(&definition);
@@ -270,7 +283,7 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
                     let id = signal(description, &network.transport.com_signal)?;
                     source.push_str(&format!(
                         r#"    {{
-        uint32 value = {name};
+        {} value = {name};
         const uint8 status = Com_ReceiveSignal({id}, &value);
         if (status == COM_SERVICE_NOT_AVAILABLE) {{
             *data = {name};
@@ -288,6 +301,7 @@ RTE_Rte_CODE Std_ReturnType Rte_Stop(void)
         return ({name}_expired == TRUE) ? RTE_E_MAX_AGE_EXCEEDED : E_OK;
     }}
 "#,
+                        port.c_type,
                         if port.handle_never_received {
                             "RTE_E_NEVER_RECEIVED"
                         } else {

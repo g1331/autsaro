@@ -88,3 +88,7 @@ fn encode(value: Option<&str>, format: &str) -> Option<u32> {
 pub(super) fn accepts(route: u32, dual: bool, frame: u32) -> bool {
     route == frame || (dual && route == (frame & !FD))
 }
+
+pub(super) fn wire_length(id: u32, length: u8) -> bool {
+    length <= 8 || (id & FD != 0 && matches!(length, 12 | 16 | 20 | 24 | 32 | 48 | 64))
+}

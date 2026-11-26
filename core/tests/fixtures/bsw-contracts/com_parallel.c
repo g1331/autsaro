@@ -84,9 +84,11 @@ static Std_ReturnType transmit(PduIdType id, const PduInfoType *pdu)
     sent_values[sent_count++] = (uint32)pdu->SduDataPtr[0] | ((uint32)pdu->SduDataPtr[1] << 8u);
     return lower_result;
 }
-static const Com_PduConfigType pdus[] = {{0u, 10u, TRUE, 7u, 30u, 17u},
-                                         {1u, 11u, FALSE, 9u, 0u, 0u}};
-static const Com_ConfigType configuration = {pdus, 2u, 0u, receive, timeout, transmit, rejection};
+static const Com_PduConfigType pdus[] = {{0u, TRUE, 4u, 0u, 0u, 1u}, {1u, FALSE, 4u, 0u, 1u, 1u}};
+static const Com_SignalConfigType signals[] = {{10u, COM_UINT32, 0u, 32u, FALSE, 7u, 30u, 17u},
+                                               {11u, COM_UINT32, 0u, 32u, FALSE, 9u, 0u, 0u}};
+static const Com_ConfigType configuration = {
+    pdus, 2u, signals, 2u, 0u, receive, timeout, transmit, rejection};
 
 void __real_SchM_Exit_Com_COM_STATE(void);
 void __wrap_SchM_Exit_Com_COM_STATE(void)
@@ -233,7 +235,7 @@ static void update_and_stop_while_sending(void)
 static void replace_observer_while_sending(void)
 {
     static const Com_ConfigType replacement = {
-        pdus, 2u, 0u, receive, timeout, transmit, replacement_rejection};
+        pdus, 2u, signals, 2u, 0u, receive, timeout, transmit, replacement_rejection};
     Com_Init(&replacement);
     assert(Com_GetStatus() == COM_INIT && sent_count == 0u);
 }

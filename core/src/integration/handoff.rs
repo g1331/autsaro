@@ -56,10 +56,15 @@ pub(super) fn reference_shape(plan: &ValidatedIntegrationPlan) -> Option<Referen
         .data_ports
         .iter()
         .find(|port| !port.read && port.path == tx.port)?;
-    if [rx, tx]
-        .iter()
-        .any(|signal| signal.dlc != 4 || signal.bit_length != 32)
-    {
+    if [rx, tx].iter().any(|signal| {
+        signal.dlc != 4
+            || signal.pdu_length != 4
+            || signal.frame_offset != 0
+            || signal.start_bit != 0
+            || signal.bit_length != 32
+            || signal.big_endian
+            || signal.native_type != "uint32"
+    }) {
         return None;
     }
     Some(ReferenceShape {
@@ -122,18 +127,24 @@ pub(super) fn verification_files(
             .find(|entry| entry.transport.can_if_pdu == signal.can_if_pdu)
             .and_then(|entry| channel_id(&entry.channel))
     };
-    let endpoint = |direction, channel, handle, id, accepts_fd, length| {
+    let endpoint = |direction,
+                    channel,
+                    handle,
+                    id,
+                    accepts_fd,
+                    [logical, wire, offset]: [u8; 3]| {
         json!({
             "module": "CanIf", "direction": direction, "handle": handle, "channel": channel,
             "format": if id & super::can_id::EXTENDED != 0 { "EXTENDED" } else { "STANDARD" },
             "fdPolicy": if id & super::can_id::FD != 0 { "FD" }
                 else if accepts_fd { "CLASSICAL_OR_FD" } else { "CLASSICAL" },
-            "id": id & super::can_id::EXTENDED_MAX, "logicalLength": length, "wireLength": length,
+            "id": id & super::can_id::EXTENDED_MAX, "logicalLength": logical, "wireLength": wire,
+            "frameOffset": offset,
         })
     };
     let missing_binding = || crate::product_message!("backend.integration.composition.contract_invalid", "code" => "CONTROLLER_MAPPING");
     let mut configured = BTreeMap::new();
-    for signal in &description.signals {
+    for signal in super::signals::pdus(&description.signals) {
         let channel = signal_channel(signal).ok_or_else(missing_binding)?;
         configured.insert(
             &signal.can_if_pdu,
@@ -143,7 +154,7 @@ pub(super) fn verification_files(
                 signal.can_if_handle,
                 signal.encoded_id(),
                 signal.accepts_fd,
-                signal.dlc,
+                [signal.pdu_length, signal.dlc, signal.frame_offset],
             ),
         );
     }
@@ -157,7 +168,7 @@ pub(super) fn verification_files(
                 tp.request_can_if_handle,
                 tp.encoded_request_id(),
                 false,
-                8,
+                [8, 8, 0],
             ),
         );
         configured.insert(
@@ -168,7 +179,7 @@ pub(super) fn verification_files(
                 tp.response_can_if_handle,
                 tp.encoded_response_id(),
                 false,
-                8,
+                [8, 8, 0],
             ),
         );
     }

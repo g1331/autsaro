@@ -93,6 +93,21 @@ static CANIF_CODE uint16 CanIf_Controller(const CanIf_ConfigType *config, uint8 
     return result;
 }
 
+static CANIF_CODE boolean CanIf_ValidMapping(uint8 offset,
+                                             uint8 pdu_length,
+                                             uint8 frame_length,
+                                             uint8 maximum)
+{
+    const uint16 end = (uint16)offset + (uint16)pdu_length;
+    boolean valid;
+    if (frame_length == 0u) {
+        valid = (offset == 0u);
+    } else {
+        valid = (pdu_length != 0u) && (end <= frame_length) && (frame_length <= maximum);
+    }
+    return valid;
+}
+
 static CANIF_CODE boolean CanIf_ValidRx(const CanIf_ConfigType *config)
 {
     boolean valid = TRUE;
@@ -103,6 +118,8 @@ static CANIF_CODE boolean CanIf_ValidRx(const CanIf_ConfigType *config)
             (fd_only || route->accepts_fd) ? CAN_FD_MAX_LENGTH : CAN_CLASSICAL_MAX_LENGTH;
         valid = Can_IsValidId(route->can_id) && ((!fd_only) || (!route->accepts_fd)) &&
                 (route->minimum_length <= maximum) &&
+                CanIf_ValidMapping(
+                    route->frame_offset, route->minimum_length, route->frame_length, maximum) &&
                 (CanIf_Controller(config, route->controller) < CANIF_CONTROLLER_CAPACITY);
         for (uint16 j = 0u; (j < i) && valid; ++j) {
             const CanIf_RxPduConfigType *other = &config->receive[j];
@@ -123,6 +140,8 @@ static CANIF_CODE boolean CanIf_ValidTx(const CanIf_ConfigType *config)
             ((route->can_id & CAN_ID_FD_FLAG) != 0u) ? CAN_FD_MAX_LENGTH : CAN_CLASSICAL_MAX_LENGTH;
         valid = Can_IsValidId(route->can_id) && (route->maximum_length != 0u) &&
                 (route->maximum_length <= maximum) &&
+                CanIf_ValidMapping(
+                    route->frame_offset, route->maximum_length, route->frame_length, maximum) &&
                 (CanIf_Controller(config, route->controller) < CANIF_CONTROLLER_CAPACITY);
         for (uint16 j = 0u; (j < i) && valid; ++j) {
             valid = route->pdu != config->transmit[j].pdu;
@@ -396,6 +415,8 @@ typedef struct {
     uint16 slot;          /**< Owner's controller state index. */
     uint32 lifetime;      /**< Configuration lifetime at admission. */
     uint32 stops;         /**< Owner's stop revision at admission. */
+    uint8 frame_offset;   /**< Mapped byte offset captured at admission. */
+    uint8 frame_length;   /**< Mapped frame length captured at admission. */
     uint8 errors[2];      /**< Runtime errors delivered outside CANIF_STATE. */
 } CanIf_TxAdmissionType;
 
@@ -428,6 +449,8 @@ static CANIF_CODE void CanIf_ReserveTx(CanIf_TxAdmissionType *request,
             request->pdu.length = (uint8)info->SduLength;
             request->pdu.id = route->can_id;
             request->pdu.sdu = info->SduDataPtr;
+            request->frame_offset = route->frame_offset;
+            request->frame_length = route->frame_length;
             request->lifetime = canif_generation;
             request->stops = state->stops;
         } else {
@@ -467,6 +490,8 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
                                      CANIF_CONTROLLER_CAPACITY,
                                      0u,
                                      0u,
+                                     0u,
+                                     0u,
                                      {0u, 0u}};
     uint8 controller = 0u;
     SchM_Enter_CanIf_CANIF_STATE();
@@ -490,6 +515,17 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
         }
     }
     if (request.route < CANIF_TX_CAPACITY) {
+        uint8 frame[CAN_FD_MAX_LENGTH];
+        if (request.frame_length != 0u) {
+            for (uint8 byte = 0u; byte < request.frame_length; ++byte) {
+                frame[byte] = 0u;
+            }
+            for (uint8 byte = 0u; byte < request.pdu.length; ++byte) {
+                frame[request.frame_offset + byte] = request.pdu.sdu[byte];
+            }
+            request.pdu.sdu = frame;
+            request.pdu.length = request.frame_length;
+        }
         const Std_ReturnType written = Can_Write(request.hoh, &request.pdu);
         CanIf_SettleTx(&request, written);
         result = (written == E_OK) ? E_OK : E_NOT_OK; /* CAN_BUSY is not a CanIf result. */
@@ -603,6 +639,7 @@ CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType 
     uint8 deliver = 0u;
     uint8 invalid_length = 0u;
     PduIdType id = 0u;
+    PduInfoType logical = {NULL_PTR, NULL_PTR, 0u};
     SchM_Enter_CanIf_CANIF_STATE();
     const uint16 slot = (Mailbox == NULL_PTR)
                             ? CANIF_CONTROLLER_CAPACITY
@@ -616,11 +653,18 @@ CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType 
             const CanIf_RxPduConfigType *route = &canif_configuration->receive[i];
             if ((route->controller == Mailbox->ControllerId) && (route->hoh == Mailbox->Hoh) &&
                 CanIf_Matches(route, Mailbox->CanId)) {
-                if ((PduInfoPtr->SduLength < route->minimum_length) ||
+                const uint8 minimum =
+                    (route->frame_length == 0u) ? route->minimum_length : route->frame_length;
+                if ((PduInfoPtr->SduLength < minimum) ||
                     (!Can_IsWireLength(Mailbox->CanId, PduInfoPtr->SduLength))) {
                     invalid_length = 1u;
                 } else {
                     id = route->pdu;
+                    logical = *PduInfoPtr;
+                    if (route->frame_length != 0u) {
+                        logical.SduDataPtr = &PduInfoPtr->SduDataPtr[route->frame_offset];
+                        logical.SduLength = route->minimum_length;
+                    }
                     deliver = 1u;
                 }
                 break;
@@ -633,7 +677,7 @@ CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType 
             CANIF_MODULE_ID, 0u, CANIF_SID_RX_INDICATION, CANIF_E_INVALID_DATA_LENGTH);
     }
     if (deliver != 0u) {
-        LSduR_CanIfRxIndication(id, PduInfoPtr);
+        LSduR_CanIfRxIndication(id, &logical);
     }
 }
 #define CANIF_STOP_SEC_CODE

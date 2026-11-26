@@ -394,6 +394,8 @@ fn strict_consumer(scratch: &Path, module: &str, fixture: &str, flags: &[&str]) 
         .arg(root.join("runtime/host/src"))
         .arg("-I")
         .arg(root.join("core/tests/fixtures/bsw-contracts"))
+        .arg("-I")
+        .arg(root.join("core/tests/fixtures/bsw-contracts/config"))
         .arg(root.join("runtime/host/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/host/src/Can_HostLock.c"))
         .arg(root.join(format!("{source_directory}/{module}.c")))
@@ -408,6 +410,19 @@ fn strict_consumer(scratch: &Path, module: &str, fixture: &str, flags: &[&str]) 
         String::from_utf8_lossy(&output.stderr)
     );
     executable
+}
+
+#[test]
+fn com_integer_layout_matches_independent_network_vectors() {
+    let scratch = Scratch::new();
+    let executable = strict_consumer(&scratch.0, "Com", "com_layout_contract.c", &[]);
+    let result = tooling::run_public_command(
+        &mut std::process::Command::new(executable),
+        &scratch.0,
+        "com-layout-vectors",
+        std::time::Duration::from_secs(30),
+    );
+    assert!(result.status.success(), "{result:?}");
 }
 
 #[test]
@@ -574,6 +589,14 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     ] {
         std::fs::copy(
             root.join("core/tests/fixtures/bsw-contracts").join(name),
+            include.join(name),
+        )
+        .unwrap();
+    }
+    for name in ["Com_Cfg.h", "CanIf_Cfg.h"] {
+        std::fs::copy(
+            root.join("core/tests/fixtures/bsw-contracts/config")
+                .join(name),
             include.join(name),
         )
         .unwrap();

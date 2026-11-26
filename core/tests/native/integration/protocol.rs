@@ -1821,3 +1821,67 @@ fn normal_verify_consumes_both_native_diagnostic_streams() {
         Duration::from_secs(360),
     ));
 }
+
+#[test]
+fn host_batch_maps_signed_intel_rx_to_motorola_tx_in_independent_frame_positions() {
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+
+    let scratch = Scratch::new();
+    let plan = super::build(&super::integer_signal_sources()).unwrap();
+    let source = scratch.0.join("Ingress.c");
+    fs::write(
+        &source,
+        r#"#include "Rte_Ingress.h"
+#define Ingress_START_SEC_CODE
+#include "Ingress_MemMap.h"
+Ingress_CODE void Ingress_Periodic(void)
+{
+    sint16 value = 0;
+    if (Rte_Read_RxValue_Value(&value) == E_OK) {
+        (void)Rte_Write_TxValue_Value(value);
+    }
+}
+Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueType data)
+{
+    data[0] = 0u;
+    data[1] = 0u;
+    data[2] = 0u;
+    data[3] = 0u;
+    return E_OK;
+}
+#define Ingress_STOP_SEC_CODE
+#include "Ingress_MemMap.h"
+"#,
+    )
+    .unwrap();
+    let project = scratch.0.join("project");
+    prepare_ecu_project_with_applications(
+        &plan,
+        super::tooling::native_target(),
+        &[ApplicationSource {
+            component_instance: "/Application/Pipeline/IngressInstance".into(),
+            path: source,
+        }],
+    )
+    .unwrap()
+    .generate(&project)
+    .unwrap();
+    let binary = super::sealed_builds::host_batch(&project, &scratch.0.join("host-batch-build"));
+    let result = run(
+        &binary,
+        &scratch.0.join("wire"),
+        b"BEGIN 10\nRX 0 STANDARD 0 800 4 55a07fcc\nCOMMIT\n",
+    );
+    let output: Vec<_> = result
+        .lines()
+        .filter(|line| line.starts_with("OUT "))
+        .map(|line| {
+            (
+                field(line, "id="),
+                field(line, "length="),
+                field(line, "data="),
+            )
+        })
+        .collect();
+    assert_eq!(output, [("801", "4", "003fd000")], "{result}");
+}

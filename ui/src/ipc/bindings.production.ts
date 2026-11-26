@@ -1203,6 +1203,15 @@ export type SignalChannel = {
   dlc: number;
   startBit: number;
   bitLength: number;
+  bigEndian: boolean;
+  nativeType: string;
+  initialValue: number;
+  pduLength: number;
+  frameMapping: string;
+  frameStartBit: number;
+  frameBigEndian: boolean;
+  frameOffset: number;
+  unusedByte: number;
   deadlineMs: number | null;
   transmitPeriodMs: number | null;
 };

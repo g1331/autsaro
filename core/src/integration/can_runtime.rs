@@ -644,7 +644,6 @@ pub(super) fn profile_header(
     communication: &CommunicationRuntimeContract,
     comm_channel_count: usize,
     comm_user_count: usize,
-    com_pdu_count: usize,
     can_if_counts: [usize; 3],
 ) -> (String, Vec<u8>) {
     let can = &communication.can;
@@ -658,7 +657,6 @@ pub(super) fn profile_header(
                 "CAN_HOH_CAPACITY",
                 format!("{}u", communication.hardware.len()),
             ),
-            ("COM_MAX_PDUS", format!("{com_pdu_count}u")),
             ("COMM_USER_CAPACITY", format!("{comm_user_count}u")),
             ("COMM_CHANNEL_CAPACITY", format!("{comm_channel_count}u")),
             (

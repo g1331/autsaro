@@ -709,22 +709,6 @@ pub(super) fn zero_seconds(value: &str) -> bool {
             .all(|byte| byte == b'0')
 }
 
-fn unsigned_encoding(graph: &Graph, implementation: usize) -> Result<(), Vec<PlanDiagnostic>> {
-    if graph
-        .text(implementation, "TYPE-EMITTER")
-        .is_some_and(|emitter| emitter != "RTE")
-    {
-        return Err(fail(graph, implementation, "TYPE_CONFLICT"));
-    }
-    let base = reference_descendant(graph, implementation, "BASE-TYPE-REF")?;
-    if graph.text(base, "BASE-TYPE-ENCODING") != Some("NONE")
-        || graph.text(base, "CATEGORY") != Some("FIXED_LENGTH")
-    {
-        return Err(fail(graph, base, "TYPE_CONFLICT"));
-    }
-    Ok(())
-}
-
 fn native_type(
     graph: &Graph,
     argument: usize,
@@ -1299,7 +1283,7 @@ fn inspect_with_transport(
                     return Err(fail(graph, element, "TYPE_CONFLICT"));
                 }
                 let implementation = implementation(graph, port, behavior, application)?;
-                unsigned_encoding(graph, implementation)?;
+                let integer = super::component::SignalInteger::read(graph, implementation)?;
                 let specification = one(
                     graph,
                     port,
@@ -1319,10 +1303,11 @@ fn inspect_with_transport(
                     graph.descendants(specification, "VALUE"),
                     "INIT_VALUE_REQUIRED",
                 )?;
-                let initial_value = graph.elements[initial]
-                    .text
-                    .parse::<u32>()
-                    .map_err(|_| fail(graph, initial, "INIT_VALUE_REQUIRED"))?;
+                let initial_value =
+                    super::rte_types::integer_constant(&graph.elements[initial].text)
+                        .and_then(|value| i64::try_from(value).ok())
+                        .filter(|value| integer.contains(*value, integer.bits))
+                        .ok_or_else(|| fail(graph, initial, "INIT_VALUE_REQUIRED"))?;
                 if graph.target(specification, "DATA-ELEMENT-REF") != Some(element)
                     || !graph.descendants(interface, "INVALID-VALUE").is_empty()
                     || !graph.descendants(application, "INVALID-VALUE").is_empty()
@@ -2409,6 +2394,7 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
     names.extend("DCM_INITIAL DCM_PENDING DCM_CANCEL DCM_FORCE_RCRRP_OK DCM_RES_POS_OK DCM_RES_POS_NOT_OK DCM_RES_NEG_OK DCM_RES_NEG_NOT_OK DCM_OBD_ON_CAN DCM_OBD_ON_FLEXRAY DCM_OBD_ON_IP DCM_UDS_ON_CAN DCM_UDS_ON_FLEXRAY DCM_UDS_ON_IP DCM_ROE_ON_CAN DCM_ROE_ON_FLEXRAY DCM_ROE_ON_IP DCM_PERIODICTRANS_ON_CAN DCM_PERIODICTRANS_ON_FLEXRAY DCM_PERIODICTRANS_ON_IP DCM_NO_ACTIVE_PROTOCOL DCM_UDS_ON_LIN DCM_SUPPLIER_1 DCM_SUPPLIER_2 DCM_SUPPLIER_3 DCM_SUPPLIER_4 DCM_SUPPLIER_5 DCM_SUPPLIER_6 DCM_SUPPLIER_7 DCM_SUPPLIER_8 DCM_SUPPLIER_9 DCM_SUPPLIER_10 DCM_SUPPLIER_11 DCM_SUPPLIER_12 DCM_SUPPLIER_13 DCM_SUPPLIER_14 DCM_SUPPLIER_15 DCM_POS_RESP DCM_E_GENERALREJECT DCM_E_SERVICENOTSUPPORTED DCM_E_SUBFUNCTIONNOTSUPPORTED DCM_E_INCORRECTMESSAGELENGTHORINVALIDFORMAT DCM_E_RESPONSETOOLONG DCM_E_BUSYREPEATREQUEST DCM_E_CONDITIONSNOTCORRECT DCM_E_REQUESTSEQUENCEERROR DCM_E_NORESPONSEFROMSUBNETCOMPONENT DCM_E_FAILUREPREVENTSEXECUTIONOFREQUESTEDACTION DCM_E_REQUESTOUTOFRANGE DCM_E_SECURITYACCESSDENIED DCM_E_INVALIDKEY DCM_E_EXCEEDNUMBEROFATTEMPTS DCM_E_REQUIREDTIMEDELAYNOTEXPIRED DCM_E_UPLOADDOWNLOADNOTACCEPTED DCM_E_TRANSFERDATASUSPENDED DCM_E_GENERALPROGRAMMINGFAILURE DCM_E_WRONGBLOCKSEQUENCECOUNTER DCM_E_SUBFUNCTIONNOTSUPPORTEDINACTIVESESSION DCM_E_SERVICENOTSUPPORTEDINACTIVESESSION DCM_E_RPMTOOHIGH DCM_E_RPMTOOLOW DCM_E_ENGINEISRUNNING DCM_E_ENGINEISNOTRUNNING DCM_E_ENGINERUNTIMETOOLOW DCM_E_TEMPERATURETOOHIGH DCM_E_TEMPERATURETOOLOW DCM_E_VEHICLESPEEDTOOHIGH DCM_E_VEHICLESPEEDTOOLOW DCM_E_THROTTLE_PEDALTOOHIGH DCM_E_THROTTLE_PEDALTOOLOW DCM_E_TRANSMISSIONRANGENOTINNEUTRAL DCM_E_TRANSMISSIONRANGENOTINGEAR DCM_E_BRAKESWITCH_NOTCLOSED DCM_E_SHIFTERLEVERNOTINPARK DCM_E_TORQUECONVERTERCLUTCHLOCKED DCM_E_VOLTAGETOOHIGH DCM_E_VOLTAGETOOLOW DCM_E_VMSCNC_0 DCM_E_VMSCNC_1 DCM_E_VMSCNC_2 DCM_E_VMSCNC_3 DCM_E_VMSCNC_4 DCM_E_VMSCNC_5 DCM_E_VMSCNC_6 DCM_E_VMSCNC_7 DCM_E_VMSCNC_8 DCM_E_VMSCNC_9 DCM_E_VMSCNC_A DCM_E_VMSCNC_B DCM_E_VMSCNC_C DCM_E_VMSCNC_D DCM_E_VMSCNC_E DCM_SEC_LEV_LOCKED DCM_DEFAULT_SESSION DCM_PROGRAMMING_SESSION DCM_EXTENDED_DIAGNOSTIC_SESSION DCM_SAFETY_SYSTEM_DIAGNOSTIC_SESSION".split_whitespace().map(str::to_owned));
     names.extend("Dcm_OpStatusType Dcm_ConfirmationStatusType Dcm_ProtocolType Dcm_NegativeResponseCodeType Dcm_ConfigType Dcm_MsgItemType Dcm_MsgType Dcm_MsgLenType Dcm_MsgAddInfoType Dcm_IdContextType Dcm_MsgContextType Dcm_ReadDidType Ecu_DcmAuthenticationModeType".split_whitespace().map(str::to_owned));
     names.extend("RTE_CORE RTE_MAIN_H RTE_CFG_H RTE_E_OK RTE_E_LIMIT Rte_Start Rte_Stop SchM_ConfigType SchM_Init SchM_Start SchM_StartTiming SchM_Deinit RTE_CODE SCHM_LIFECYCLE_UNALLOCATED SCHM_LIFECYCLE_INITIALIZED SCHM_LIFECYCLE_STARTED SCHM_LIFECYCLE_TIMING SCHM_LIFECYCLE_RETIRED schm_lifecycle RTE_E_UNCONNECTED rte_lifecycle RTE_LIFECYCLE_UNALLOCATED RTE_LIFECYCLE_STARTED RTE_LIFECYCLE_STOPPED SchM_Switch_Dcm_DcmDiagnosticSessionControl SchM_Mode_Dcm_DcmDiagnosticSessionControl Dcm_SecLevelType Dcm_SesCtrlType Rte_ModeType_DcmDiagnosticSessionControl Dcm_GetSecurityLevel Dcm_GetSesCtrlType Dcm_ResetToDefaultSession Can_HostTransmitToken Can_HostCompleteTransmit CanIf_GetControllerRxErrorCounter CanIf_GetControllerTxErrorCounter CanTp_CancelReceive CanTp_CancelTransmit Com_TriggerIPDUSend ComM_GetInhibitionStatus ComM_SetECUGroupClassification ComM_GetCurrentPNCComMode ComM_EcuM_WakeUpIndication".split_whitespace().map(str::to_owned));
+    names.extend("COM_UINT8 COM_UINT16 COM_UINT32 COM_SINT8 COM_SINT16 COM_SINT32 Com_IntegerType Com_SignalConfigType COM_SIGNAL_CAPACITY COM_PDU_CAPACITY COM_PAYLOAD_CAPACITY CANIF_TX_CAPACITY".split_whitespace().map(str::to_owned));
     names.extend("ECU_COM_REJECTION_H ECU_COM_REJECTION_CAPACITY Ecu_ComRecordRejection Ecu_ComDrainRejections Com_TxRejectionType COM_H COMSTACK_TYPES_H COMSTACK_CFG_H ECU_TARGET_H ECU_HOST_BATCH_H ECU_STATUS_H AUTOSAR_OS_TARGET_H AUTOSAR_OS_H AUTOSAR_OS_TIME_H STD_HIGH STD_LOW STD_ACTIVE STD_IDLE STD_ON STD_OFF COM_SERVICE_NOT_AVAILABLE COM_BUSY COM_UNINIT COM_INIT ECU_TARGET_UNPREPARED ECU_TARGET_INITIALIZING ECU_TARGET_READY ECU_TARGET_FAILED ECU_TARGET_CLOSED ECU_TARGET_OUTPUT_CAPACITY ECU_BATCH_CAPACITY ECU_BATCH_MAX_SPAN ECU_BATCH_LINE_CAPACITY ECU_BATCH_WATCHDOG_MS ECU_BATCH_BEGIN ECU_BATCH_RX ECU_BATCH_COMMIT RTE_MEMMAP_ACTIVE Ecu_TargetIsOwner Ecu_TargetCheckLifecycleContext Com_SendSignal Com_ReceiveSignal PduIdType PduLengthType PduInfoType BufReq_ReturnType TpDataStateType RetryInfoType NetworkHandleType Com_StatusType Com_SignalIdType Com_IpduGroupIdType Com_PduConfigType Com_NotificationType Com_TransmitType Com_ConfigType OS_MAX_TASKS OS_MAX_PRIORITY OS_MAX_ACTIVATIONS OS_BASIC_TASK OS_EXTENDED_TASK OS_MAX_RESOURCES OS_MAX_INTERNAL_RESOURCES OS_MAX_INTERRUPTS OS_MAX_ISR_PRIORITY OS_SCHEDULE_FULL OS_SCHEDULE_NON".split_whitespace().map(str::to_owned));
     for index in 0..plan
         .components

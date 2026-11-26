@@ -454,6 +454,51 @@ fn direct_external_headers_refuse_only_missing_or_wrong_major_minor() {
     });
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_delivery_arti_and_os_headers_compile_as_cpp17() {
+    let plan = build(&inputs()).unwrap();
+    let files = prepared_pipeline_files_for_target(&plan, native_delivery_target());
+    let scratch = Scratch::new();
+    let root = &scratch.0;
+    install(&files, root);
+    let target: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root.join("target.json")).unwrap()).unwrap();
+    let flags = target["compilerFlags"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|flag| flag.as_str().unwrap())
+        .filter(|flag| !flag.starts_with("-std="));
+
+    for header in ["Arti.h", "Os.h", "Os_Arti.h", "Os_Host.h", "Os_Types.h"] {
+        let include = format!("#include \"{header}\"\n");
+        for count in [1, 2] {
+            let label = format!("cpp17-{header}-{count}");
+            let source = root.join(format!("{label}.cpp"));
+            std::fs::write(&source, include.repeat(count)).unwrap();
+            let mut command = tooling::c_compiler();
+            command
+                .current_dir(root)
+                .args(["-std=c++17", "-fsyntax-only"])
+                .args(flags.clone());
+            tooling::project_includes(&mut command, root);
+            command.arg(&source);
+            let result = tooling::run_public_command(
+                &mut command,
+                root,
+                &label,
+                std::time::Duration::from_secs(30),
+            );
+            assert!(
+                result.status.success(),
+                "{label}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+        }
+    }
+}
+
 #[test]
 fn public_headers_publish_their_owner_release_in_ecu_and_contract_deliveries() {
     let plan = build(&inputs()).unwrap();

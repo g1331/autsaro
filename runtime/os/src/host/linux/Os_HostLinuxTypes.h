@@ -18,7 +18,7 @@ typedef const char *LPCSTR;
 typedef void *LPSECURITY_ATTRIBUTES;
 typedef DWORD *LPDWORD;
 typedef DWORD (*LPTHREAD_START_ROUTINE)(void *argument);
-typedef struct Os_HostHandleType *HANDLE;
+typedef struct Os_HostHandle *HANDLE;
 typedef struct {
     ucontext_t native;
     uintptr_t Rsp;

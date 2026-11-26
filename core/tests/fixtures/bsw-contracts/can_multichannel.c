@@ -33,7 +33,11 @@ EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink,
     assert(sink == NULL_PTR && controller < CHANNELS);
     const uint8 abstract = abstract_for(controller);
     assert((handle % CHANNELS) == abstract);
-    assert(dlc == 1u && data[0] == handle);
+    if (handle == 0u) {
+        assert(dlc == 3u && data[0] == 0u && data[1] == handle && data[2] == 0u);
+    } else {
+        assert(dlc == 1u && data[0] == handle);
+    }
     if (handle < CHANNELS) {
         assert(id == ID && brs == FALSE && data_phase_bitrate == 0u);
     } else {
@@ -93,7 +97,12 @@ static void input(uint8 channel, boolean fd, EcuStatus expected)
 {
     const uint8 data = abstract_for(channel) + (fd ? CHANNELS : 0u);
     const uint32 id = fd ? (ID | CAN_ID_EXTENDED_FLAG | CAN_ID_FD_FLAG) : ID;
-    assert(Can_HostInjectChannel(channel, id, 1u, &data) == expected);
+    if (data == 0u) {
+        const uint8 frame[] = {0xa5u, data, 0x5au};
+        assert(Can_HostInjectChannel(channel, id, sizeof(frame), frame) == expected);
+    } else {
+        assert(Can_HostInjectChannel(channel, id, 1u, &data) == expected);
+    }
     Can_MainFunction_Read();
 }
 static void configure(void)
@@ -123,8 +132,14 @@ static void configure(void)
         for (uint8 fd = 0u; fd < 2u; ++fd) {
             const PduIdType handle = abstract + (fd * CHANNELS);
             const uint32 id = (fd != 0u) ? (ID | CAN_ID_EXTENDED_FLAG | CAN_ID_FD_FLAG) : ID;
-            rx[handle] = (CanIf_RxPduConfigType){id, handle, 1u, FALSE, abstract, hrh};
-            tx[handle] = (CanIf_TxPduConfigType){id, handle, 1u, abstract, hth};
+            rx[handle] = (CanIf_RxPduConfigType){id, handle, 1u, FALSE, abstract, hrh, 0u, 0u};
+            tx[handle] = (CanIf_TxPduConfigType){id, handle, 1u, abstract, hth, 0u, 0u};
+            if (handle == 0u) {
+                rx[handle].frame_offset = 1u;
+                rx[handle].frame_length = 3u;
+                tx[handle].frame_offset = 1u;
+                tx[handle].frame_length = 3u;
+            }
         }
     }
     Can_Init(&can);

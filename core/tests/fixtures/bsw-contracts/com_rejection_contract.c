@@ -21,10 +21,12 @@ static void rejection(PduIdType id, Std_ReturnType result)
     ++rejections;
     returned = 0u;
 }
-static const Com_PduConfigType pdus[] = {{5u, 0u, FALSE, 0u, 0u, 0u}, {9u, 1u, FALSE, 0u, 0u, 0u}};
+static const Com_PduConfigType pdus[] = {{5u, FALSE, 4u, 0u, 0u, 1u}, {9u, FALSE, 4u, 0u, 1u, 1u}};
+static const Com_SignalConfigType signals[] = {{0u, COM_UINT32, 0u, 32u, FALSE, 0u, 0u, 0u},
+                                               {1u, COM_UINT32, 0u, 32u, FALSE, 0u, 0u, 0u}};
 int main(void)
 {
-    Com_ConfigType config = {pdus, 2u, 0u, NULL_PTR, NULL_PTR, transmit, NULL_PTR};
+    Com_ConfigType config = {pdus, 2u, signals, 2u, 0u, NULL_PTR, NULL_PTR, transmit, NULL_PTR};
     Com_Init(&config);
     assert(Com_GetStatus() == COM_UNINIT);
     assert(Com_TriggerIPDUSend(5u) == E_NOT_OK && calls[0] == 0u);

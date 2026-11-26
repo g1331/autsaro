@@ -60,8 +60,7 @@ fn inspect_endpoints(
     signals: &[SignalChannel],
     diagnostic: Option<(&str, &str)>,
 ) -> Result<Vec<PduRoute>, Vec<PlanDiagnostic>> {
-    let mut selected: Vec<_> = signals
-        .iter()
+    let mut selected: Vec<_> = super::signals::pdus(signals)
         .map(|signal| (signal.global_pdu.as_str(), signal.receive, false))
         .collect();
     if let Some((receive, transmit)) = diagnostic {
