@@ -242,7 +242,6 @@ int main(void)
                 if row["fingerprint"] and previous["diagnostics"][row["diagnostic"]]["id"] == "misra-c2012-10.4"
             }
             self.assertTrue(registered)
-            load_dispositions = c_disposition.load
             with (patch.object(c_gate, "ROOT", root), patch.object(c_gate, "git", c_baseline.git),
                   patch.object(c_disposition, "load", return_value=registered)):
                 current, raw = analyze("current", "shared-header", source, 2)
@@ -264,7 +263,7 @@ int main(void)
 
             with (patch.object(c_gate, "ROOT", root), patch.object(c_gate, "git", c_baseline.git),
                   patch.object(c_disposition, "DIRECTORY", root.name + "-missing-dispositions"),
-                  patch.object(c_disposition, "load", wraps=load_dispositions)):
+                  patch.object(c_disposition, "WINDOWS_DISPOSITION_BINARIES", (raw["tool"]["binarySha256"],))):
                 summary_path.write_bytes(raw_bytes)
                 c_gate.scan(target, sample, scopes, mode="pr")
                 gate = c_gate.read(current / "gate.json")

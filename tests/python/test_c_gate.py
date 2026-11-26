@@ -470,6 +470,10 @@ class SourceGateTests(unittest.TestCase):
             self.assertNotIn("Generate complete analysis samples",
                              [step.get("name") for step in jobs[prepare]["steps"]])
             self.assertEqual(current["steps"], baseline["steps"])
+            step_ids = [step.get("id") for step in current["steps"]]
+            headers = step_ids.index("linux-uapi-headers")
+            self.assertEqual(current["steps"][headers]["if"], "runner.os == 'Linux'")
+            self.assertLess(headers, step_ids.index("analyze"))
             for job in (current, baseline):
                 groups = job["strategy"]["matrix"]["include"]
                 self.assertCountEqual([row[key] for row in groups for key in ("first", "second")],
