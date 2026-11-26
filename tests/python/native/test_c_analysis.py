@@ -327,6 +327,7 @@ DWORD FixtureWait(HANDLE object)
         seam = "integration/include/Det_Host.h"
         platform_header = "os/src/host/platform.h"
         entry = "integration/src/ecu_host_batch.c"
+        host_batch = "integration/src/Ecu_HostBatch.c"
         host = "integration/src/Det_Host.c"
         platform_source = "os/src/host/provider.c"
         port = "kernel/portable/fixture/port.c"
@@ -337,7 +338,8 @@ DWORD FixtureWait(HANDLE object)
         }
         shared = c_baseline.ROOT / "core/tests/fixtures/c-analysis-gate/shared.h"
         source = f'#include <stdint.h>\n#include "{shared.name}"\n#include "{seam}"\n#include "{platform_header}"\n'
-        source += "int main(void) { return Seam() + Platform() + (int)SEED; }\n"
+        source += "int TargetApi(void) { return 0; }\n"
+        source += "int main(void) { return Seam() + Platform() + TargetApi() + (int)SEED; }\n"
         jump = "goto done; done: return 0;"
         clean = "return 0;"
 
@@ -357,9 +359,10 @@ DWORD FixtureWait(HANDLE object)
                     shared.name: shared.read_text(encoding="utf-8"),
                     entry: f"int main(void) {{ {host_body} }}\n",
                     "integration/src/ecu_probe.c": "int main(void) { return 0; }\n",
+                    host_batch: f"int HostBatch(void) {{ {host_body} }}\n",
                     host: f"int Host(void) {{ {host_body} }}\n",
                     platform_source: f"int Provider(void) {{ {host_body} }}\n",
-                    port: f"int Port(void) {{ {clean} }}\n",
+                    port: f"int Port(void) {{ {host_body} }}\n",
                     seam: f"static inline int Seam(void) {{ {target_body} }}\n",
                     platform_header: f"static inline int Platform(void) {{ {jump} }}\n",
                     **{path: f"int {symbol}(void) {{ {target_body} }}\n"
@@ -385,8 +388,10 @@ DWORD FixtureWait(HANDLE object)
             self.assertIn(seam, raw["scope"]["cppcheckInputs"]["bsw/src/main.c"]["project"])
             findings = {location["file"] for row in raw["diagnostics"] for location in row["locations"]}
             self.assertIn(platform_header, findings)
-            self.assertTrue(findings.isdisjoint({entry, host, platform_source, port}))
-            self.assertTrue(json.loads((current / "misra.json").read_text())["ctu"])
+            self.assertTrue(findings.isdisjoint({entry, host_batch, host, platform_source, port}))
+            self.assertTrue(any(row["id"] == "misra-c2012-8.7" and
+                                row["locations"][0]["file"] == "bsw/src/main.c"
+                                for row in raw["diagnostics"]))
 
             with (patch.object(c_gate, "ROOT", root), patch.object(c_gate, "git", c_baseline.git),
                   patch.object(c_disposition, "load", return_value={})):
