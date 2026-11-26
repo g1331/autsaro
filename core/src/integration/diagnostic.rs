@@ -49,6 +49,20 @@ pub struct DiagnosticTransportContract {
     pub(super) can_if_rx_pdu: String,
     #[serde(skip)]
     pub(super) can_if_tx_pdu: String,
+    #[serde(skip)]
+    pub(super) dcm_connection: String,
+    #[serde(skip)]
+    pub(super) rx_transport: String,
+    #[serde(skip)]
+    pub(super) tx_transport: String,
+    #[serde(skip)]
+    pub(super) rx_npdu_container: String,
+    #[serde(skip)]
+    pub(super) dcm_rx: String,
+    #[serde(skip)]
+    pub(super) dcm_tx: String,
+    #[serde(skip)]
+    pub(super) additional_connections: Vec<DiagnosticTransportContract>,
     pub rx_sdu: String,
     pub tx_sdu: String,
     pub rx_npdu: String,
@@ -58,6 +72,18 @@ pub struct DiagnosticTransportContract {
     pub request_accepts_fd: bool,
     pub response_can_id: u32,
     pub response_extended: bool,
+    #[serde(skip)]
+    pub(super) request_fd: bool,
+    #[serde(skip)]
+    pub(super) response_fd: bool,
+    #[serde(skip)]
+    pub(super) rx_max_dl: u8,
+    #[serde(skip)]
+    pub(super) rx_min_dl: u8,
+    #[serde(skip)]
+    pub(super) tx_dl: u8,
+    #[serde(skip)]
+    pub(super) padding: u8,
     pub request_can_if_handle: u16,
     pub response_can_if_handle: u16,
     pub p2_ms: u32,
@@ -81,12 +107,26 @@ pub struct DiagnosticTransportContract {
 }
 
 impl DiagnosticTransportContract {
+    pub(super) fn connections(&self) -> impl Iterator<Item = &Self> {
+        std::iter::once(self).chain(&self.additional_connections)
+    }
+
     pub(super) fn encoded_request_id(&self) -> u32 {
         super::can_id::encoded(self.request_can_id, self.request_extended)
+            | if self.request_fd {
+                super::can_id::FD
+            } else {
+                0
+            }
     }
 
     pub(super) fn encoded_response_id(&self) -> u32 {
         super::can_id::encoded(self.response_can_id, self.response_extended)
+            | if self.response_fd {
+                super::can_id::FD
+            } else {
+                0
+            }
     }
 }
 
@@ -114,10 +154,13 @@ fn one(graph: &Graph, context: usize, kind: &str) -> Result<usize, Vec<PlanDiagn
         .filter(|index| definition_is(graph, *index, kind))
         .collect();
     found.sort_unstable();
-    if found.len() == 1 {
-        Ok(found[0])
+    unique(graph, context, &found)
+}
+
+fn unique(graph: &Graph, context: usize, found: &[usize]) -> Result<usize, Vec<PlanDiagnostic>> {
+    if let [entry] = found {
+        Ok(*entry)
     } else {
-        // A duplicate is reported where it is declared; a missing object at its user.
         Err(reject(
             graph,
             found.get(1).copied().unwrap_or(context),
@@ -127,6 +170,29 @@ fn one(graph: &Graph, context: usize, kind: &str) -> Result<usize, Vec<PlanDiagn
             ),
         ))
     }
+}
+
+fn nsdu_for(graph: &Graph, sdu: usize, direction: &str) -> Result<usize, Vec<PlanDiagnostic>> {
+    let kind = format!("CanTp{direction}NSdu");
+    let found: Vec<_> = graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| {
+            definition_is(graph, *index, &kind)
+                && value(graph, *index, &format!("{kind}Ref"), true)
+                    == Some(graph.elements[sdu].object.as_str())
+        })
+        .collect();
+    unique(graph, sdu, &found)
+}
+
+fn child(graph: &Graph, owner: usize, kind: &str) -> Result<usize, Vec<PlanDiagnostic>> {
+    let found: Vec<_> = graph
+        .descendants(owner, "ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, kind))
+        .collect();
+    unique(graph, owner, &found)
 }
 
 fn reference(graph: &Graph, context: usize, parameter: &str) -> Result<usize, Vec<PlanDiagnostic>> {
@@ -182,6 +248,8 @@ struct DiagnosticCanLink {
     id: u32,
     handle: u16,
     accepts_fd: bool,
+    length: u8,
+    minimum: u8,
     physical_channel: usize,
     can_if_pdu: usize,
 }
@@ -213,18 +281,16 @@ fn can_link(
         ));
     }
     let can_if = found[0];
-    let (id, accepts_fd) = super::can_id::pdu_id(graph, can_if, receive)
-        .filter(|(id, _)| id & super::can_id::FD == 0)
-        .ok_or_else(|| {
-            reject(
-                graph,
-                can_if,
-                "CAN_ID_CONFLICT",
-                crate::product_message!(
-                    "backend.integration.diagnostic.diagnostic_can_identifier_out_of_range"
-                ),
-            )
-        })?;
+    let (id, accepts_fd) = super::can_id::pdu_id(graph, can_if, receive).ok_or_else(|| {
+        reject(
+            graph,
+            can_if,
+            "CAN_ID_CONFLICT",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_can_identifier_out_of_range"
+            ),
+        )
+    })?;
     let handle = value(graph, can_if, &format!("{prefix}Id"), false)
         .and_then(|value| value.parse::<u16>().ok())
         .ok_or_else(|| {
@@ -237,16 +303,19 @@ fn can_link(
                 ),
             )
         })?;
-    if value(graph, pdu, "PduLength", false) != Some("8") {
-        return Err(reject(
-            graph,
-            pdu,
-            "LENGTH_CONFLICT",
-            crate::product_message!(
-                "backend.integration.diagnostic.diagnostic_classical_can_npdu_required"
-            ),
-        ));
-    }
+    let length = value(graph, pdu, "PduLength", false)
+        .and_then(|length| length.parse::<u8>().ok())
+        .filter(|length| *length >= 8 && super::can_id::wire_length(id, *length))
+        .ok_or_else(|| {
+            reject(
+                graph,
+                pdu,
+                "LENGTH_CONFLICT",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_npdu_kind_or_length_mismatch"
+                ),
+            )
+        })?;
     let target = super::can_id::pdu_trigger_reference(graph, pdu)?;
     let mut triggers: Vec<_> = graph
         .of_kind("CAN-FRAME-TRIGGERING")
@@ -321,7 +390,12 @@ fn can_link(
             ),
         )
     })?;
-    if graph.elements[system_pdu].tag != "N-PDU" || graph.text(system_pdu, "LENGTH") != Some("8") {
+    if graph.elements[system_pdu].tag != "N-PDU"
+        || graph
+            .text(system_pdu, "LENGTH")
+            .and_then(|value| value.parse().ok())
+            != Some(length)
+    {
         return Err(reject(
             graph,
             system_pdu,
@@ -333,7 +407,12 @@ fn can_link(
     }
     let physical_channel = check_trigger(graph, trigger, system_pdu, None, receive)?;
     let ports = graph.descendants(trigger, "FRAME-PORT-REF");
-    if ports.len() != 1 || graph.text(frame, "FRAME-LENGTH") != Some("8") {
+    if ports.len() != 1
+        || graph
+            .text(frame, "FRAME-LENGTH")
+            .and_then(|value| value.parse().ok())
+            != Some(length)
+    {
         return Err(reject(
             graph,
             trigger,
@@ -354,24 +433,33 @@ fn can_link(
             ),
         ));
     }
-    if receive
-        && (value(graph, can_if, "CanIfRxPduDataLength", false) != Some("8")
-            || !matches!(
-                value(graph, can_if, "CanIfRxPduDataLengthCheck", false),
-                Some("true" | "1")
-            ))
-    {
-        return Err(reject(
-            graph,
-            can_if,
-            "LENGTH_CONFLICT",
-            crate::product_message!("backend.integration.diagnostic.diagnostic_rx_dlc_required"),
-        ));
-    }
+    let minimum = if receive {
+        let check = value(graph, can_if, "CanIfRxPduDataLengthCheck", false);
+        let configured = value(graph, can_if, "CanIfRxPduDataLength", false)
+            .and_then(|value| value.parse::<u8>().ok());
+        match (check, configured, id & super::can_id::FD != 0) {
+            (Some("false" | "0"), _, true) => 0,
+            (Some("true" | "1"), Some(8), _) => 8,
+            _ => {
+                return Err(reject(
+                    graph,
+                    can_if,
+                    "LENGTH_CONFLICT",
+                    crate::product_message!(
+                        "backend.integration.diagnostic.diagnostic_rx_dlc_required"
+                    ),
+                ));
+            }
+        }
+    } else {
+        0
+    };
     Ok(DiagnosticCanLink {
         id,
         handle,
         accepts_fd,
+        length,
+        minimum,
         physical_channel,
         can_if_pdu: can_if,
     })
@@ -745,18 +833,130 @@ pub(super) fn inspect_transport(
             ),
         ));
     }
-    let rx = one(graph, protocol, "DcmDslProtocolRx")?;
-    let tx = one(graph, protocol, "DcmDslProtocolTx")?;
     if value(graph, protocol, "DcmDslProtocolType", false) != Some("DCM_UDS_ON_CAN")
         || !matches!(
             value(graph, protocol, "DcmDslProtocolRowUsed", false),
             Some("true" | "1")
         )
-        || value(graph, rx, "DcmDslProtocolRxAddrType", false) != Some("DCM_PHYSICAL_TYPE")
     {
         return Err(reject(
             graph,
             protocol,
+            "SERVICE_UNSUPPORTED",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_physical_connection_required"
+            ),
+        ));
+    }
+    let general = one(graph, context, "CanTpGeneral")?;
+    let padding = value(graph, general, "CanTpPaddingByte", false)
+        .and_then(crate::definitions::unsigned_integer)
+        .and_then(|byte| u8::try_from(byte).ok())
+        .ok_or_else(|| {
+            reject(
+                graph,
+                general,
+                "SERVICE_UNSUPPORTED",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_transport_behavior_unsupported"
+                ),
+            )
+        })?;
+    let mut connections = graph
+        .descendants(protocol, "ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, "DcmDslMainConnection"))
+        .map(|connection| {
+            inspect_connection(graph, protocol, connection, padding, (p2_ms, p2_star_ms))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    for (direction, receive) in [("CanTpRxNSdu", true), ("CanTpTxNSdu", false)] {
+        let used: BTreeSet<_> = connections
+            .iter()
+            .map(|tp| {
+                if receive {
+                    tp.rx_transport.as_str()
+                } else {
+                    tp.tx_transport.as_str()
+                }
+            })
+            .collect();
+        if let Some(unbound) = graph
+            .of_kind("ECUC-CONTAINER-VALUE")
+            .into_iter()
+            .find(|index| {
+                definition_is(graph, *index, direction)
+                    && !used.contains(graph.elements[*index].object.as_str())
+            })
+        {
+            return Err(reject(
+                graph,
+                unbound,
+                "DIAGNOSTIC_REFERENCE",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_flow_control_routes_mismatch"
+                ),
+            ));
+        }
+    }
+    let mut rx_sdu_ids = BTreeSet::new();
+    let mut tx_sdu_ids = BTreeSet::new();
+    let mut rx_pdu_ids = BTreeSet::new();
+    let mut dcm_rx_ids = BTreeSet::new();
+    let mut dcm_tx_ids = BTreeSet::new();
+    let mut tx_pdu_ids = std::collections::BTreeMap::new();
+    let mut tx_routes = std::collections::BTreeMap::new();
+    for tp in &connections {
+        if !rx_sdu_ids.insert(tp.receive_nsdu)
+            || !tx_sdu_ids.insert(tp.transmit_nsdu)
+            || !rx_pdu_ids.insert(tp.receive_npdu)
+            || !dcm_rx_ids.insert(tp.dcm_receive)
+            || !dcm_tx_ids.insert(tp.dcm_transmit)
+            || tx_pdu_ids
+                .insert(tp.transmit_npdu, &tp.tx_npdu)
+                .is_some_and(|prior| prior != &tp.tx_npdu)
+            || tx_routes
+                .insert(&tp.tx_npdu, tp.transmit_npdu)
+                .is_some_and(|prior| prior != tp.transmit_npdu)
+        {
+            return Err(reject(
+                graph,
+                graph.index(&tp.dcm_connection)?,
+                "DIAGNOSTIC_IDENTIFIER",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_flow_control_routes_mismatch"
+                ),
+            ));
+        }
+    }
+    if connections.is_empty() {
+        return Err(reject(
+            graph,
+            protocol,
+            "DIAGNOSTIC_NOT_UNIQUE",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_transport_object_missing_or_duplicate"
+            ),
+        ));
+    }
+    let mut primary = connections.remove(0);
+    primary.additional_connections = connections;
+    Ok(primary)
+}
+
+fn inspect_connection(
+    graph: &Graph,
+    protocol: usize,
+    context: usize,
+    padding: u8,
+    (p2_ms, p2_star_ms): (u32, u32),
+) -> Result<DiagnosticTransportContract, Vec<PlanDiagnostic>> {
+    let rx = child(graph, context, "DcmDslProtocolRx")?;
+    let tx = child(graph, context, "DcmDslProtocolTx")?;
+    if value(graph, rx, "DcmDslProtocolRxAddrType", false) != Some("DCM_PHYSICAL_TYPE") {
+        return Err(reject(
+            graph,
+            rx,
             "SERVICE_UNSUPPORTED",
             crate::product_message!(
                 "backend.integration.diagnostic.diagnostic_physical_connection_required"
@@ -791,20 +991,8 @@ pub(super) fn inspect_transport(
             ));
         }
     }
-    let rx_transport = one(graph, context, "CanTpRxNSdu")?;
-    let tx_transport = one(graph, context, "CanTpTxNSdu")?;
-    let general = one(graph, context, "CanTpGeneral")?;
-    // Each selection is refused at the container that holds it.
-    if value(graph, general, "CanTpPaddingByte", false) != Some("0") {
-        return Err(reject(
-            graph,
-            general,
-            "SERVICE_UNSUPPORTED",
-            crate::product_message!(
-                "backend.integration.diagnostic.diagnostic_transport_behavior_unsupported"
-            ),
-        ));
-    }
+    let rx_transport = nsdu_for(graph, rx_sdu, "Rx")?;
+    let tx_transport = nsdu_for(graph, tx_sdu, "Tx")?;
     if !matches!(
         value(graph, protocol, "DcmSendRespPendOnRestart", false),
         Some("false" | "0")
@@ -820,15 +1008,13 @@ pub(super) fn inspect_transport(
             ),
         ));
     }
-    for (transport, sdu, direction) in [(rx_transport, rx_sdu, "Rx"), (tx_transport, tx_sdu, "Tx")]
-    {
-        if reference(graph, transport, &format!("CanTp{direction}NSduRef"))? != sdu
-            || value(
-                graph,
-                transport,
-                &format!("CanTp{direction}AddressingFormat"),
-                false,
-            ) != Some("CANTP_STANDARD")
+    for (transport, direction) in [(rx_transport, "Rx"), (tx_transport, "Tx")] {
+        if value(
+            graph,
+            transport,
+            &format!("CanTp{direction}AddressingFormat"),
+            false,
+        ) != Some("CANTP_STANDARD")
             || value(graph, transport, &format!("CanTp{direction}TaType"), false)
                 != Some("CANTP_PHYSICAL")
             || value(
@@ -857,12 +1043,12 @@ pub(super) fn inspect_transport(
             ));
         }
     }
-    let rx_npdu_cfg = one(graph, rx_transport, "CanTpRxNPdu")?;
-    let tx_npdu_cfg = one(graph, tx_transport, "CanTpTxNPdu")?;
+    let rx_npdu_cfg = child(graph, rx_transport, "CanTpRxNPdu")?;
+    let tx_npdu_cfg = child(graph, tx_transport, "CanTpTxNPdu")?;
     let rx_npdu = reference(graph, rx_npdu_cfg, "CanTpRxNPduRef")?;
     let tx_npdu = reference(graph, tx_npdu_cfg, "CanTpTxNPduRef")?;
-    let tx_flow = one(graph, rx_transport, "CanTpTxFcNPdu")?;
-    let rx_flow = one(graph, tx_transport, "CanTpRxFcNPdu")?;
+    let tx_flow = child(graph, rx_transport, "CanTpTxFcNPdu")?;
+    let rx_flow = child(graph, tx_transport, "CanTpRxFcNPdu")?;
     if reference(graph, tx_flow, "CanTpTxFcNPduRef")? != tx_npdu
         || reference(graph, rx_flow, "CanTpRxFcNPduRef")? != rx_npdu
     {
@@ -918,6 +1104,13 @@ pub(super) fn inspect_transport(
         ));
     }
     Ok(DiagnosticTransportContract {
+        dcm_connection: graph.elements[context].object.clone(),
+        rx_transport: graph.elements[rx_transport].object.clone(),
+        tx_transport: graph.elements[tx_transport].object.clone(),
+        rx_npdu_container: graph.elements[rx_npdu_cfg].object.clone(),
+        dcm_rx: graph.elements[rx].object.clone(),
+        dcm_tx: graph.elements[tx].object.clone(),
+        additional_connections: Vec::new(),
         physical_channel: graph.elements[request.physical_channel].object.clone(),
         can_if_rx_pdu: graph.elements[request.can_if_pdu].object.clone(),
         can_if_tx_pdu: graph.elements[response.can_if_pdu].object.clone(),
@@ -930,6 +1123,12 @@ pub(super) fn inspect_transport(
         request_accepts_fd: request.accepts_fd,
         response_can_id: response.id & super::can_id::EXTENDED_MAX,
         response_extended: response.id & super::can_id::EXTENDED != 0,
+        request_fd: request.id & super::can_id::FD != 0,
+        response_fd: response.id & super::can_id::FD != 0,
+        rx_max_dl: request.length,
+        rx_min_dl: request.minimum,
+        tx_dl: response.length,
+        padding,
         request_can_if_handle: request.handle,
         response_can_if_handle: response.handle,
         p2_ms,

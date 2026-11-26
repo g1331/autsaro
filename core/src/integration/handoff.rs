@@ -178,7 +178,7 @@ pub(super) fn verification_files(
             );
         }
     }
-    if let Some(tp) = transport {
+    for tp in transport.into_iter().flat_map(|tp| tp.connections()) {
         let channel = channel_id(&tp.physical_channel).ok_or_else(missing_binding)?;
         configured.insert(
             &tp.can_if_rx_pdu,
@@ -188,7 +188,7 @@ pub(super) fn verification_files(
                 tp.request_can_if_handle,
                 tp.encoded_request_id(),
                 false,
-                [8, 8, 0],
+                [tp.rx_max_dl, tp.rx_max_dl, 0],
             ),
         );
         configured.insert(
@@ -199,7 +199,7 @@ pub(super) fn verification_files(
                 tp.response_can_if_handle,
                 tp.encoded_response_id(),
                 false,
-                [8, 8, 0],
+                [tp.tx_dl, tp.tx_dl, 0],
             ),
         );
     }
@@ -226,6 +226,7 @@ pub(super) fn verification_files(
         inputs["did"] = json!(shape.diagnostic.did);
         inputs["initialReceiveValue"] = json!(shape.read.initial_value);
         inputs["receiveTimeoutMs"] = json!(shape.diagnostic.n_cr_ms);
+        inputs["diagnosticPaddingByte"] = json!(tp.padding);
     }
     Ok(BTreeMap::from([(
         super::outputs::VERIFICATION_INPUTS_PATH.into(),

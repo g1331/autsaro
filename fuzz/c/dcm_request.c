@@ -25,8 +25,9 @@ enum { MODE_NO, MODE_SILENT, MODE_FULL };
 static Std_ReturnType read_did(uint8 *data);
 static void authentication(uint8 state);
 /* Restored before each input, so that an input runs alone as it does when replayed. */
+static const Dcm_ConnectionConfigType defaults_connection[] = {{RX, TX, CHANNEL, ROUTER}};
 static const Dcm_ConfigType defaults = {
-    RX, TX, CHANNEL, 0x1234u, read_did, 4u, 50u, 5000u, 5u, 64u, ROUTER, authentication, 0u};
+    defaults_connection, 1u, 0x1234u, read_did, 4u, 50u, 5000u, 5u, 64u, authentication, 0u};
 static Dcm_ConfigType config;
 static const uint8 *input;
 static size_t input_size;

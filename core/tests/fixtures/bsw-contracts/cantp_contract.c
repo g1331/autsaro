@@ -28,22 +28,24 @@ enum { PAD = 0xccu, RX_INDICATION = 0x42u, MAIN = 0x06u, CANCEL_TX = 0x4au, CANC
 enum { E_PADDING = 0x70u, E_OPER_NOT_SUPPORTED = 0xa0u, E_COM = 0xb0u, E_RX_COM = 0xc0u };
 enum { E_TX_COM = 0xd0u };
 
-static const CanTp_ConfigType config = {.receive = RX_NSDU,
-                                        .transmit = TX_NSDU,
-                                        .lower_receive = RX_NPDU,
-                                        .lower_transmit = TX_NPDU,
-                                        .maximum_length = 256u,
-                                        .n_as = N_AS,
-                                        .n_ar = N_AR,
-                                        .n_br = N_BR,
-                                        .n_bs = N_BS,
-                                        .n_cr = N_CR,
-                                        .n_cs = N_CS,
-                                        .main_period_ms = 1u,
-                                        .wait_frame_max = WFT_MAX,
-                                        .padding = PAD,
-                                        .upper_receive = UPPER_RX,
-                                        .upper_transmit = UPPER_TX};
+static const CanTp_ConnectionConfigType config = {.receive = RX_NSDU,
+                                                  .transmit = TX_NSDU,
+                                                  .lower_receive = RX_NPDU,
+                                                  .lower_transmit = TX_NPDU,
+                                                  .maximum_length = 256u,
+                                                  .n_as = N_AS,
+                                                  .n_ar = N_AR,
+                                                  .n_br = N_BR,
+                                                  .n_bs = N_BS,
+                                                  .n_cr = N_CR,
+                                                  .n_cs = N_CS,
+                                                  .main_period_ms = 1u,
+                                                  .wait_frame_max = WFT_MAX,
+                                                  .padding = PAD,
+                                                  .upper_receive = UPPER_RX,
+                                                  .upper_transmit = UPPER_TX,
+                                                  .tx_dl = 8u,
+                                                  .rx_max_dl = 8u};
 
 static uint8 sent[32][8];
 static unsigned sent_count;
@@ -171,7 +173,7 @@ Std_ReturnType Det_ReportRuntimeError(uint16_t ModuleId,
 
 static void start(void)
 {
-    CanTp_Init(&config);
+    CanTp_Init(&(const CanTp_ConfigType){&config, 1u});
     sent_count = 0u;
     lower_result = E_OK;
     copy_tx_result = BUFREQ_OK;
@@ -250,25 +252,27 @@ static void expect_det(uint8 api, uint8 error)
 
 static void off_state(void)
 {
-    static const CanTp_ConfigType no_nbr = {.receive = RX_NSDU,
-                                            .transmit = TX_NSDU,
-                                            .lower_receive = RX_NPDU,
-                                            .lower_transmit = TX_NPDU,
-                                            .maximum_length = 256u,
-                                            .n_as = N_AS,
-                                            .n_ar = N_AR,
-                                            .n_br = 0u,
-                                            .n_bs = N_BS,
-                                            .n_cr = N_CR,
-                                            .n_cs = N_CS,
-                                            .main_period_ms = 1u};
+    static const CanTp_ConnectionConfigType no_nbr = {.receive = RX_NSDU,
+                                                      .transmit = TX_NSDU,
+                                                      .lower_receive = RX_NPDU,
+                                                      .lower_transmit = TX_NPDU,
+                                                      .maximum_length = 256u,
+                                                      .n_as = N_AS,
+                                                      .n_ar = N_AR,
+                                                      .n_br = 0u,
+                                                      .n_bs = N_BS,
+                                                      .n_cr = N_CR,
+                                                      .n_cs = N_CS,
+                                                      .main_period_ms = 1u,
+                                                      .tx_dl = 8u,
+                                                      .rx_max_dl = 8u};
     assert(transmit(5u) == E_NOT_OK);
     receive8(0x03u, 1u, 2u, 3u);
     ticks(1u);
     assert(CanTp_CancelReceive(RX_NSDU) == E_NOT_OK);
     assert(CanTp_CancelTransmit(TX_NSDU) == E_NOT_OK);
     CanTp_Init(NULL_PTR);
-    CanTp_Init(&no_nbr);
+    CanTp_Init(&(const CanTp_ConfigType){&no_nbr, 1u});
     assert(transmit(5u) == E_NOT_OK);
     assert(sent_count == 0u && starts == 0u && det_count == 0u);
 }
@@ -605,7 +609,7 @@ static void reception_timer_ordering(void)
     start();
     Ecu_CanTpReceptionBeforeMain(TRUE);
     CanTp_Shutdown();
-    CanTp_Init(&config);
+    CanTp_Init(&(const CanTp_ConfigType){&config, 1u});
     assert(transmit(20u) == E_OK);
     confirm(E_OK);
     ticks(N_BS);
@@ -617,14 +621,14 @@ static void reception_timer_ordering(void)
  * buffer once more before it decides (SWS_CanTp_00341). A one-period timer is refused. */
 static void shortest_timers(void)
 {
-    CanTp_ConfigType quick = config;
+    CanTp_ConnectionConfigType quick = config;
     quick.n_as = 2u;
     quick.n_ar = 2u;
     quick.n_br = 2u;
     quick.n_cs = 2u;
     quick.wait_frame_max = 0u;
     start();
-    CanTp_Init(&quick);
+    CanTp_Init(&(const CanTp_ConfigType){&quick, 1u});
     /* The CF after a confirmation waits for the main function, within N_Cs. */
     assert(transmit(20u) == E_OK);
     confirm(E_OK);
@@ -671,7 +675,7 @@ static void shortest_timers(void)
 
     CanTp_Shutdown();
     quick.n_cs = 1u;
-    CanTp_Init(&quick);
+    CanTp_Init(&(const CanTp_ConfigType){&quick, 1u});
     assert(transmit(5u) == E_NOT_OK && sent_count == 6u);
 }
 static void full_duplex(void)
@@ -731,7 +735,7 @@ static void stop_and_restart(void)
     assert(transmit(20u) == E_OK);
     receive_data(0x10u, 20u, 1u, 8u);
     /* Reinitialization loses both connections without notification. */
-    CanTp_Init(&config);
+    CanTp_Init(&(const CanTp_ConfigType){&config, 1u});
     ticks(N_CR + N_AS);
     assert(tx_done == 0u && rx_done == 0u && det_count == 0u);
     /* The FF still holds the N-PDU until its own confirmation. */

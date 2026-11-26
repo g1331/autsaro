@@ -359,7 +359,7 @@ fn physical_bindings(
             )
         })
         .collect::<Vec<_>>();
-    if let Some(tp) = diagnostic {
+    for tp in diagnostic.into_iter().flat_map(|tp| tp.connections()) {
         endpoints.push((&tp.can_if_rx_pdu, &tp.physical_channel, true));
         endpoints.push((&tp.can_if_tx_pdu, &tp.physical_channel, false));
     }
@@ -661,6 +661,7 @@ pub(super) fn profile_header(
     comm_channel_count: usize,
     comm_user_count: usize,
     can_if_counts: [usize; 3],
+    cantp_count: usize,
 ) -> (String, Vec<u8>) {
     let can = &communication.can;
     let profile = super::c_layout::commented_defines(
@@ -681,6 +682,10 @@ pub(super) fn profile_header(
             ),
             ("CANIF_RX_CAPACITY", format!("{}u", can_if_counts[1])),
             ("CANIF_TX_CAPACITY", format!("{}u", can_if_counts[2].max(1))),
+            (
+                "CANTP_CONNECTION_CAPACITY",
+                format!("{}u", cantp_count.max(1)),
+            ),
             ("CAN_HOST_QUEUED_COMPLETION", "STD_ON".to_owned()),
             ("CAN_RX_POLLING", "STD_ON".to_owned()),
             ("CAN_TX_POLLING", "STD_ON".to_owned()),

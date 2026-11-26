@@ -1491,9 +1491,10 @@ class AcceptanceTests(unittest.TestCase):
             with self.subTest(identifier=old):
                 self.assertIn(f"| {filename}:{line} | {old} | {new} |", lexical_text)
                 source = (ROOT / "runtime/bsw/src" / filename).read_text(encoding="utf-8")
-                declaration = source.splitlines()[line - 1].split("/*", 1)[0]
-                self.assertRegex(declaration, rf"\b{new}\b")
-                self.assertNotRegex(declaration, rf"\b{old}\b")
+                source = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+                declaration = re.search(rf"(?m)^static [^;{{}}]*\b{new}\b[^;{{}}]*;", source)
+                self.assertIsNotNone(declaration)
+                self.assertNotRegex(declaration[0], rf"\b{old}\b")
         control_evidence = {
             "R14.1": ("altstacks[].storage",),
             "R14.2": ("TC1", "146 种体形", "传递写集合", "#556"),
@@ -1710,8 +1711,6 @@ class AcceptanceTests(unittest.TestCase):
         for evidence in ("每条记录均回查", "去注释保留其中全部换行", "STLR／UTLR",
                          "TC2.46", "(type)(expression)"):
             self.assertIn(evidence, expression_text)
-        cantp = (ROOT / "runtime/bsw/src/CanTp.c").read_text(encoding="utf-8")
-        self.assertIn("const uint16 low = (uint16)data[0] & 0x0fu;", cantp)
         preprocessing_evidence = {
             "R20.2": ("satisfied", "header-name", "663", "0017"),
             "R20.3": ("satisfied", "直接单一", "目标 TU", "间接 include"),

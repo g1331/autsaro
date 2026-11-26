@@ -67,7 +67,9 @@ pub(super) fn inspect_optional(
     inspect_endpoints(
         graph,
         signals,
-        diagnostic.map(|diagnostic| (diagnostic.rx_sdu.as_str(), diagnostic.tx_sdu.as_str())),
+        diagnostic
+            .into_iter()
+            .map(|diagnostic| (diagnostic.rx_sdu.as_str(), diagnostic.tx_sdu.as_str())),
     )
 }
 
@@ -76,18 +78,24 @@ pub(super) fn inspect_transport(
     signals: &[SignalChannel],
     transport: &super::diagnostic::DiagnosticTransportContract,
 ) -> Result<Vec<PduRoute>, Vec<PlanDiagnostic>> {
-    inspect_endpoints(graph, signals, Some((&transport.rx_sdu, &transport.tx_sdu)))
+    inspect_endpoints(
+        graph,
+        signals,
+        transport
+            .connections()
+            .map(|tp| (tp.rx_sdu.as_str(), tp.tx_sdu.as_str())),
+    )
 }
 
-fn inspect_endpoints(
+fn inspect_endpoints<'a>(
     graph: &Graph,
     signals: &[SignalChannel],
-    diagnostic: Option<(&str, &str)>,
+    diagnostic: impl Iterator<Item = (&'a str, &'a str)>,
 ) -> Result<Vec<PduRoute>, Vec<PlanDiagnostic>> {
     let mut selected: Vec<_> = super::signals::pdus(signals)
         .map(|signal| (signal.global_pdu.as_str(), signal.receive, false))
         .collect();
-    if let Some((receive, transmit)) = diagnostic {
+    for (receive, transmit) in diagnostic {
         selected.extend([(receive, true, true), (transmit, false, true)]);
     }
     let mut routes = Vec::new();

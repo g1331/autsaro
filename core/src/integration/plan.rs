@@ -317,7 +317,9 @@ pub(super) fn inspect_composition(
             .any(|(kind, reference)| {
                 schedule::definition_is(graph, index, kind)
                     && schedule::value(graph, index, reference, true).is_some_and(|pdu| {
-                        pdu == diagnostic_transport.rx_sdu || pdu == diagnostic_transport.tx_sdu
+                        diagnostic_transport
+                            .connections()
+                            .any(|tp| pdu == tp.rx_sdu || pdu == tp.tx_sdu)
                     })
             })
         });
@@ -334,30 +336,22 @@ pub(super) fn inspect_composition(
         diagnostic_transport.as_ref(),
         &routes,
     )?;
-    if let Some(transport) = diagnostic_transport.as_ref().filter(|tp| {
-        tp.request_accepts_fd
+    for tp in diagnostic_transport.iter().flat_map(|tp| tp.connections()) {
+        if tp.request_accepts_fd
             && communication_runtime.channels.iter().any(|channel| {
                 channel.physical_channel == tp.physical_channel && channel.data_bitrate.is_some()
             })
-    }) {
-        let route = graph
-            .of_kind("ECUC-CONTAINER-VALUE")
-            .into_iter()
-            .find(|index| {
-                schedule::definition_is(graph, *index, "CanIfRxPduCfg")
-                    && schedule::value(graph, *index, "CanIfRxPduRef", true)
-                        == Some(transport.rx_npdu.as_str())
-            })
-            .unwrap_or(graph.index(&transport.rx_npdu)?);
-        return Err(vec![graph.diagnostic(
-            route,
-            DiagnosticCategory::Unsupported,
-            "CAN_FD_CONFIGURATION",
-            crate::product_message!(
-                "backend.integration.diagnostic.diagnostic_classical_can_npdu_required"
-            ),
-            crate::product_message!("backend.integration.composition.repair_contract"),
-        )]);
+        {
+            return Err(vec![graph.diagnostic(
+                graph.index(&tp.can_if_rx_pdu)?,
+                DiagnosticCategory::Unsupported,
+                "CAN_FD_CONFIGURATION",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_npdu_frame_format_required"
+                ),
+                crate::product_message!("backend.integration.composition.repair_contract"),
+            )]);
+        }
     }
     let mode_runtime = super::mode::inspect(
         graph,
@@ -531,28 +525,33 @@ pub(super) fn inspect_composition(
             ))
         })
         .collect::<Result<Vec<_>, Vec<PlanDiagnostic>>>()?;
-    let diagnostic_endpoints = diagnostic_transport.iter().flat_map(|diagnostic| {
-        [
-            (
-                diagnostic.can_if_rx_pdu.as_str(),
-                diagnostic.physical_channel.as_str(),
-                diagnostic.encoded_request_id(),
-                diagnostic.request_can_if_handle,
-                true,
-                diagnostic.request_accepts_fd,
-                false,
-            ),
-            (
-                diagnostic.can_if_tx_pdu.as_str(),
-                diagnostic.physical_channel.as_str(),
-                diagnostic.encoded_response_id(),
-                diagnostic.response_can_if_handle,
-                false,
-                false,
-                false,
-            ),
-        ]
-    });
+    let mut shared_tx = BTreeSet::new();
+    let diagnostic_endpoints = diagnostic_transport
+        .iter()
+        .flat_map(|tp| tp.connections())
+        .flat_map(|diagnostic| {
+            [
+                (
+                    diagnostic.can_if_rx_pdu.as_str(),
+                    diagnostic.physical_channel.as_str(),
+                    diagnostic.encoded_request_id(),
+                    diagnostic.request_can_if_handle,
+                    true,
+                    diagnostic.request_accepts_fd,
+                    false,
+                ),
+                (
+                    diagnostic.can_if_tx_pdu.as_str(),
+                    diagnostic.physical_channel.as_str(),
+                    diagnostic.encoded_response_id(),
+                    diagnostic.response_can_if_handle,
+                    false,
+                    false,
+                    false,
+                ),
+            ]
+        })
+        .filter(|(object, _, _, _, receive, _, _)| *receive || shared_tx.insert(*object));
     let gateway_endpoints = routes
         .iter()
         .filter_map(|route| route.gateway.as_ref())
@@ -635,11 +634,11 @@ fn can_if_handle_sequence(
             .filter(|signal| signal.receive == receive)
             .map(|signal| (signal.can_if_handle, signal.can_if_pdu.as_str()))
             .collect();
-        if let Some(tp) = transport {
+        for tp in transport.into_iter().flat_map(|tp| tp.connections()) {
             handles.push(if receive {
-                (tp.request_can_if_handle, tp.rx_sdu.as_str())
+                (tp.request_can_if_handle, tp.can_if_rx_pdu.as_str())
             } else {
-                (tp.response_can_if_handle, tp.tx_sdu.as_str())
+                (tp.response_can_if_handle, tp.can_if_tx_pdu.as_str())
             });
         }
         handles.extend(
@@ -655,6 +654,8 @@ fn can_if_handle_sequence(
                     (endpoint.handle, endpoint.can_if_pdu.as_str())
                 }),
         );
+        handles.sort_unstable();
+        handles.dedup();
         let count = handles.len();
         if count > usize::from(u16::MAX) {
             return Err(PlanDiagnostic::plan_premise(

@@ -316,11 +316,12 @@ static StatusType batch_time(uint64_t at, Os_TickCompletionType *completed)
     return (status == E_OS_ID) ? E_OS_VALUE : ((status == E_OS_NOFUNC) ? E_OS_STATE : status);
 }
 typedef struct {
-    Can_IdType id;   /**< Encoded configured identifier. */
-    uint8 channel;   /**< Driver controller for this endpoint. */
-    uint8 length;    /**< Configured payload length. */
-    boolean receive; /**< TRUE for an admissible Rx endpoint. */
-    boolean dual;    /**< TRUE for Classical and FD with the same format. */
+    Can_IdType id;    /**< Encoded configured identifier. */
+    uint8 channel;    /**< Driver controller for this endpoint. */
+    uint8 length;     /**< Configured payload length. */
+    boolean receive;  /**< TRUE for an admissible Rx endpoint. */
+    boolean dual;     /**< TRUE for Classical and FD with the same format. */
+    boolean variable; /**< TRUE for a variable-length CanTp FD endpoint. */
 } Ecu_HostFramePolicyType;
 #include "Ecu_HostFramePolicy.h"
 
@@ -348,7 +349,9 @@ static int host_frame_shape(uint8 channel, uint32 id, uint8 dlc)
                 ((frame->id == id) || (frame->dual && (frame->id == (id & ~CAN_ID_FD_FLAG))))) {
                 result = 0;
                 if (frame->receive) {
-                    if ((dlc == frame->length) || (fd && (dlc > frame->length))) {
+                    if (frame->variable
+                            ? ((dlc > 0u) && (dlc <= frame->length))
+                            : ((dlc == frame->length) || (fd && (dlc > frame->length)))) {
                         result = 1;
                     }
                     break;
