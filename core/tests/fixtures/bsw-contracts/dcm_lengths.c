@@ -32,8 +32,9 @@ Std_ReturnType PduR_DcmTransmit(PduIdType id, const PduInfoType *info)
 }
 static void receive_and_respond(uint16 capacity)
 {
+    const Dcm_ConnectionConfigType config_connection[] = {{1u, 2u, 3u, 4u}};
     Dcm_ConfigType config = {
-        1u, 2u, 3u, 0x1234u, NULL_PTR, 4u, 50u, 5000u, 5u, 64u, 4u, authentication, 0u};
+        config_connection, 1u, 0x1234u, NULL_PTR, 4u, 50u, 5000u, 5u, 64u, authentication, 0u};
     uint8 bytes[256];
     uint8 response[4] = {0u};
     PduLengthType available = 123u;

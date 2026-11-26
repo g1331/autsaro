@@ -1,4 +1,5 @@
-/** @file One physical UDS connection; state in DCM_STATE, calls and publication outside it. */
+/** @file One UDS protocol with configured physical connections; state in DCM_STATE, calls and
+ * publication outside it. */
 #include "Dcm.h"
 #include "Dcm_ComM.h"
 #include "PduR_Dcm.h"
@@ -42,6 +43,7 @@
 #define DCM_SILENT_COM      1u
 #define DCM_FULL_COM        2u
 
+#include "Ecu_ProfileConfig.h"
 #define DCM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Dcm_MemMap.h"
 
@@ -94,10 +96,11 @@ static PduLengthType dcm_received DCM_VAR_CLEARED;     /**< Copied Rx bytes; Ini
 static PduLengthType response_length DCM_VAR_CLEARED;  /**< Completed Tx size; Init resets. */
 static PduLengthType dcm_copied DCM_VAR_CLEARED;       /**< Tx copy cursor; Init resets. */
 static PduLengthType confirmed DCM_VAR_CLEARED;        /**< Tx retry boundary; Init resets. */
-static boolean active_enabled DCM_VAR_CLEARED;  /**< ActiveDiagnostic switch; Init enables. */
-static boolean dcm_diagnostic DCM_VAR_CLEARED;  /**< Diagnostic demand; Init clears. */
-static uint8 communication DCM_VAR_CLEARED;     /**< Channel gate; Init selects NoCom. */
-static Dcm_SesCtrlType dcm_ses DCM_VAR_CLEARED; /**< Active session; Init selects default. */
+static boolean active_enabled DCM_VAR_CLEARED; /**< ActiveDiagnostic switch; Init enables. */
+static boolean dcm_diagnostic DCM_VAR_CLEARED; /**< Diagnostic demand; Init clears. */
+static uint8 communication[CANTP_CONNECTION_CAPACITY] DCM_VAR_CLEARED; /**< Connection mode. */
+static uint32 active_connection DCM_VAR_CLEARED; /**< Admitted request and session owner. */
+static Dcm_SesCtrlType dcm_ses DCM_VAR_CLEARED;  /**< Active session; Init selects default. */
 static Dcm_SesCtrlType dcm_pending_session
     DCM_VAR_CLEARED; /**< Session awaiting successful completion. */
 static boolean session_change_cancelled
@@ -165,6 +168,10 @@ static DCM_CODE void Dcm_Release(void)
         ++diagnostic_revision;
     }
 }
+static DCM_CODE const Dcm_ConnectionConfigType *Dcm_ActiveConnection(void)
+{
+    return &dcm_configuration->connections[active_connection];
+}
 /* Called only while holding DCM_STATE; claims each effect before its external call. */
 static DCM_CODE Dcm_PublicationType Dcm_NextPublication(void)
 {
@@ -172,12 +179,12 @@ static DCM_CODE Dcm_PublicationType Dcm_NextPublication(void)
     if (pending_active > 0u) {
         --pending_active;
         effect.kind = DCM_PUBLISH_ACTIVE;
-        effect.channel = dcm_configuration->channel;
+        effect.channel = Dcm_ActiveConnection()->channel;
         dcm_actors.published_active = TRUE;
         dcm_actors.published_channel = effect.channel;
     } else if ((dcm_actors.published_active == TRUE) &&
                ((dcm_diagnostic == FALSE) ||
-                (dcm_actors.published_channel != dcm_configuration->channel))) {
+                (dcm_actors.published_channel != Dcm_ActiveConnection()->channel))) {
         effect.kind = DCM_PUBLISH_INACTIVE;
         effect.channel = dcm_actors.published_channel;
         dcm_actors.published_active = FALSE;
@@ -194,7 +201,7 @@ static DCM_CODE Dcm_PublicationType Dcm_NextPublication(void)
     } else if (dcm_actors.published_diagnostic != diagnostic_revision) {
         dcm_actors.published_diagnostic = diagnostic_revision;
         dcm_actors.published_active = dcm_diagnostic;
-        dcm_actors.published_channel = dcm_configuration->channel;
+        dcm_actors.published_channel = Dcm_ActiveConnection()->channel;
         effect.channel = dcm_actors.published_channel;
         effect.kind = DCM_PUBLISH_SKIP;
     } else {
@@ -252,7 +259,9 @@ DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr)
         (ConfigPtr->buffer_length >= 8u) && (ConfigPtr->buffer_length <= DCM_BUFFER_CAPACITY) &&
         ((PduLengthType)ConfigPtr->buffer_length == ConfigPtr->buffer_length) &&
         (ConfigPtr->did != DCM_SESSION_DID) && (Dcm_IsAvailability(ConfigPtr->did) == FALSE) &&
-        (ConfigPtr->authentication_mode != NULL_PTR)) {
+        (ConfigPtr->authentication_mode != NULL_PTR) && (ConfigPtr->connections != NULL_PTR) &&
+        (ConfigPtr->connection_count > 0u) &&
+        (ConfigPtr->connection_count <= CANTP_CONNECTION_CAPACITY)) {
         dcm_configuration = ConfigPtr;
         ++dcm_generation;
         ++initialization;
@@ -261,7 +270,10 @@ DCM_CODE void Dcm_Init(const Dcm_ConfigType *ConfigPtr)
         active_enabled = TRUE;
         dcm_diagnostic = FALSE;
         pending_active = 0u;
-        communication = DCM_NO_COM;
+        active_connection = 0u;
+        for (uint32 i = 0u; i < CANTP_CONNECTION_CAPACITY; ++i) {
+            communication[i] = DCM_NO_COM;
+        }
         Dcm_SetSession(DCM_DEFAULT_SESSION);
         dcm_pending_session = 0u;
         session_change_cancelled = FALSE;
@@ -330,6 +342,27 @@ DCM_CODE Std_ReturnType Dcm_SetActiveDiagnostic(boolean active)
     SchM_Exit_Dcm_DCM_STATE();
     return E_OK;
 }
+/* Called inside DCM_STATE. A protocol can admit one physical request at a time.
+ * An extended session and its ComM demand stay with the connection that opened it. */
+static DCM_CODE uint32 Dcm_ReceptionConnection(PduIdType id)
+{
+    uint32 selected = CANTP_CONNECTION_CAPACITY;
+    if ((dcm_configuration != NULL_PTR) && (dcm_s == DCM_IDLE)) {
+        for (uint32 i = 0u;
+             (i < CANTP_CONNECTION_CAPACITY) && (i < dcm_configuration->connection_count) &&
+             (selected == CANTP_CONNECTION_CAPACITY);
+             ++i) {
+            if ((dcm_configuration->connections[i].receive == id) &&
+                (communication[i] != DCM_NO_COM) &&
+                ((i == active_connection) ||
+                 ((dcm_ses == DCM_DEFAULT_SESSION) && (!dcm_diagnostic) && (pending_active == 0u) &&
+                  (!dcm_actors.published_active)))) {
+                selected = i;
+            }
+        }
+    }
+    return selected;
+}
 /* MR12 RULE 8.7 VIOLATION: the no-diagnostic package retains this supported library service. */
 DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
                                                 const PduInfoType *info,
@@ -338,26 +371,23 @@ DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
 {
     BufReq_ReturnType result = BUFREQ_E_NOT_OK;
     SchM_Enter_Dcm_DCM_STATE();
-    if ((dcm_configuration != NULL_PTR) && (id == dcm_configuration->receive) &&
-        (communication != DCM_NO_COM) && (bufferSizePtr != NULL_PTR) && (TpSduLength > 0u) &&
+    const uint32 selected = Dcm_ReceptionConnection(id);
+    if ((selected < CANTP_CONNECTION_CAPACITY) && (bufferSizePtr != NULL_PTR) &&
+        (TpSduLength > 0u) &&
         ((info == NULL_PTR) ||
          ((info->MetaDataPtr == NULL_PTR) && (info->SduLength <= TpSduLength) &&
           ((info->SduLength == 0u) || (info->SduDataPtr != NULL_PTR))))) {
-        if (dcm_s == DCM_IDLE) {
-            if (TpSduLength > dcm_configuration->buffer_length) {
-                result = BUFREQ_E_OVFL;
-            } else {
-                ++dcm_generation;
-                request_length = TpSduLength;
-                dcm_received = 0u;
-                dcm_s = DCM_RECEIVING;
-                session_change_cancelled = FALSE;
-                *bufferSizePtr = (PduLengthType)dcm_configuration->buffer_length;
-                result = BUFREQ_OK;
-            }
+        if (TpSduLength > dcm_configuration->buffer_length) {
+            result = BUFREQ_E_OVFL;
         } else {
-            /* SWS_Dcm_00241/01678: a busy physical connection declines further requests;
-             * concurrent TesterPresent is functional-only and that addressing is refused. */
+            active_connection = selected;
+            ++dcm_generation;
+            request_length = TpSduLength;
+            dcm_received = 0u;
+            dcm_s = DCM_RECEIVING;
+            session_change_cancelled = FALSE;
+            *bufferSizePtr = (PduLengthType)dcm_configuration->buffer_length;
+            result = BUFREQ_OK;
         }
     }
     SchM_Exit_Dcm_DCM_STATE();
@@ -370,8 +400,9 @@ DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
 {
     BufReq_ReturnType result = BUFREQ_E_NOT_OK;
     SchM_Enter_Dcm_DCM_STATE();
-    if ((dcm_configuration != NULL_PTR) && (id == dcm_configuration->receive) &&
-        (communication != DCM_NO_COM) && (info != NULL_PTR) && (bufferSizePtr != NULL_PTR) &&
+    if ((dcm_configuration != NULL_PTR) && (id == Dcm_ActiveConnection()->receive) &&
+        (communication[active_connection] != DCM_NO_COM) && (info != NULL_PTR) &&
+        (bufferSizePtr != NULL_PTR) &&
         ((info->SduLength == 0u) || (info->SduDataPtr != NULL_PTR))) {
         if ((dcm_s == DCM_RECEIVING) && (info->SduLength <= (request_length - dcm_received))) {
             PduLengthType i;
@@ -392,10 +423,10 @@ DCM_CODE BufReq_ReturnType Dcm_CopyRxData(PduIdType id,
 DCM_CODE void Dcm_TpRxIndication(PduIdType id, Std_ReturnType result)
 {
     SchM_Enter_Dcm_DCM_STATE();
-    if ((dcm_configuration != NULL_PTR) && (id == dcm_configuration->receive)) {
+    if ((dcm_configuration != NULL_PTR) && (id == Dcm_ActiveConnection()->receive)) {
         if (dcm_s == DCM_RECEIVING) {
             if ((result == E_OK) && (dcm_received == request_length) &&
-                (communication != DCM_NO_COM)) {
+                (communication[active_connection] != DCM_NO_COM)) {
                 dcm_s = DCM_REQUEST;
                 dcm_diagnostic = TRUE;
                 if (active_enabled == TRUE) {
@@ -584,7 +615,7 @@ static DCM_CODE void Dcm_PrepareWork(Dcm_WorkType *work)
     work->message.msgAddInfo.suppressPosResponse = 0u;
     work->message.resMaxDataLen = (Dcm_MsgLenType)dcm_configuration->buffer_length - 1u;
     work->message.idContext = 0u;
-    work->message.dcmRxPduId = dcm_configuration->receive;
+    work->message.dcmRxPduId = Dcm_ActiveConnection()->receive;
     work->response[0] = 0u;
     work->session = dcm_ses;
     work->pending_session = 0u;
@@ -641,12 +672,12 @@ static DCM_CODE void Dcm_TransmitResponse(void)
     PduIdType id = 0u;
     PduInfoType info = {NULL_PTR, NULL_PTR, 0u};
     SchM_Enter_Dcm_DCM_STATE();
-    if ((dcm_s == DCM_RESPONSE) && (communication == DCM_FULL_COM) &&
+    if ((dcm_s == DCM_RESPONSE) && (communication[active_connection] == DCM_FULL_COM) &&
         (dcm_lower == DCM_LOWER_IDLE)) {
         dcm_s = DCM_TRANSMITTING;
         dcm_lower = DCM_LOWER_CALLING;
-        dcm_lower_transmit = dcm_configuration->transmit;
-        id = dcm_configuration->router_transmit;
+        dcm_lower_transmit = Dcm_ActiveConnection()->transmit;
+        id = Dcm_ActiveConnection()->router_transmit;
         info.SduLength = response_length;
         send = TRUE;
     }
@@ -711,7 +742,7 @@ DCM_CODE BufReq_ReturnType Dcm_CopyTxData(PduIdType id,
 {
     BufReq_ReturnType result = BUFREQ_E_NOT_OK;
     SchM_Enter_Dcm_DCM_STATE();
-    if ((dcm_configuration != NULL_PTR) && (id == dcm_configuration->transmit) &&
+    if ((dcm_configuration != NULL_PTR) && (id == Dcm_ActiveConnection()->transmit) &&
         (dcm_s == DCM_TRANSMITTING) && (info != NULL_PTR) && (availableDataPtr != NULL_PTR) &&
         ((info->SduLength == 0u) || (info->SduDataPtr != NULL_PTR))) {
         PduLengthType position = dcm_copied;
@@ -772,8 +803,14 @@ DCM_CODE void Dcm_TpTxConfirmation(PduIdType id, Std_ReturnType result)
 static DCM_CODE void Dcm_Mode(uint8 NetworkId, uint8 mode)
 {
     SchM_Enter_Dcm_DCM_STATE();
-    if ((dcm_configuration != NULL_PTR) && (NetworkId == dcm_configuration->channel)) {
-        communication = mode;
+    if (dcm_configuration != NULL_PTR) {
+        for (uint32 i = 0u;
+             (i < CANTP_CONNECTION_CAPACITY) && (i < dcm_configuration->connection_count);
+             ++i) {
+            if (NetworkId == dcm_configuration->connections[i].channel) {
+                communication[i] = mode;
+            }
+        }
     }
     SchM_Exit_Dcm_DCM_STATE();
 }

@@ -45,7 +45,6 @@ pub(super) fn configured_kind(definition: &str) -> bool {
 
 pub(super) struct Names {
     pub headers: BTreeMap<String, Vec<(String, String)>>,
-    parameters: BTreeMap<String, Vec<String>>,
     references: BTreeMap<(String, String), String>,
 }
 
@@ -53,7 +52,6 @@ impl Names {
     pub fn new(plan: &PlanDescription) -> Result<Self, Vec<PlanDiagnostic>> {
         let mut result = Self {
             headers: BTreeMap::new(),
-            parameters: BTreeMap::new(),
             references: BTreeMap::new(),
         };
         for record in &plan.configuration {
@@ -80,11 +78,6 @@ impl Names {
                         .entry(module.into())
                         .or_default()
                         .push((symbol.clone(), format!("{value}u")));
-                    result
-                        .parameters
-                        .entry(super::short_name(parameter).into())
-                        .or_default()
-                        .push(symbol.clone());
                 }
             }
             for (reference, targets) in &record.references {
@@ -127,6 +120,15 @@ impl Names {
                 let tp = plan
                     .diagnostic_transport
                     .as_ref()
+                    .into_iter()
+                    .flat_map(|tp| tp.connections())
+                    .find(|tp| {
+                        if route.receive {
+                            tp.rx_sdu == route.pdu
+                        } else {
+                            tp.tx_sdu == route.pdu
+                        }
+                    })
                     .ok_or_else(|| PlanDiagnostic::plan_premise(&route.path))?;
                 if route.receive {
                     tp.request_can_if_handle
@@ -164,15 +166,6 @@ impl Names {
                 if container == "ComSignal" { "U" } else { "u" }
             ),
         ));
-    }
-
-    /// Parameters used here have one selected instance, checked by their owner.
-    pub fn parameter(&self, parameter: &str) -> Result<&str, Vec<PlanDiagnostic>> {
-        self.parameters
-            .get(parameter)
-            .and_then(|names| names.first())
-            .map(String::as_str)
-            .ok_or_else(|| PlanDiagnostic::plan_premise(parameter))
     }
 
     pub fn reference(&self, reference: &str, target: &str) -> Result<&str, Vec<PlanDiagnostic>> {

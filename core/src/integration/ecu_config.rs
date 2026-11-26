@@ -492,6 +492,10 @@ pub(super) fn files(
         mode.channels.len(),
         mode.users.len(),
         can_if_counts,
+        description
+            .diagnostic_transport
+            .as_ref()
+            .map_or(0, |tp| tp.connections().count()),
     );
     outputs.emit(ECU, path, bytes)?;
     for (module, definitions) in &symbolic.headers {
@@ -530,16 +534,6 @@ pub(super) fn files(
         )?;
     }
 
-    let diagnostic_channel = if description.diagnostic_transport.is_some() {
-        let mut connections = mode.dcm_connections.values();
-        let channel = connections
-            .next()
-            .filter(|_| connections.len() == 0)
-            .ok_or_else(|| PlanDiagnostic::plan_premise(&mode.bswm_configuration))?;
-        Some(channel.as_str())
-    } else {
-        None
-    };
     for (module, area) in [
         ("CanIf", "CANIF"),
         ("ComM", "COMM"),
@@ -1047,7 +1041,13 @@ pub(super) fn files(
         )),
     );
     let transport = &description.diagnostic_transport;
-    if let Some(tp) = transport {
+    let mut tp_routes = Vec::new();
+    let mut tp_connections = Vec::new();
+    let mut dcm_connections = Vec::new();
+    let mut emitted_tx = std::collections::BTreeSet::new();
+    let period = description.schedule.counter_tick_ms;
+    let ticks = |value| periods(value, period, &description.schedule.counter);
+    for tp in transport.iter().flat_map(|tp| tp.connections()) {
         let rx_route = description
             .routes
             .iter()
@@ -1060,11 +1060,11 @@ pub(super) fn files(
             .ok_or_else(|| PlanDiagnostic::plan_premise(&tp.tx_sdu))?;
         let can_rx = symbolic.reference("CanIfRxPduRef", &tp.rx_npdu)?;
         let can_tx = symbolic.reference("CanIfTxPduRef", &tp.tx_npdu)?;
-        let tp_rx = symbolic.parameter("CanTpRxNPduId")?;
-        let tp_rx_sdu = symbolic.parameter("CanTpRxNSduId")?;
-        let tp_tx_sdu = symbolic.parameter("CanTpTxNSduId")?;
-        let dcm_rx = symbolic.parameter("DcmDslProtocolRxPduId")?;
-        let dcm_tx = symbolic.parameter("DcmDslTxConfirmationPduId")?;
+        let tp_rx = name("CanTp", "CanTpRxNPdu", &tp.rx_npdu_container);
+        let tp_rx_sdu = name("CanTp", "CanTpRxNSdu", &tp.rx_transport);
+        let tp_tx_sdu = name("CanTp", "CanTpTxNSdu", &tp.tx_transport);
+        let dcm_rx = name("Dcm", "DcmDslProtocolRx", &tp.dcm_rx);
+        let dcm_tx = name("Dcm", "DcmDslProtocolTx", &tp.dcm_tx);
         let pd_rx_source = name("PduR", "PduRSrcPdu", &rx_route.source);
         let pd_tx_source = name("PduR", "PduRSrcPdu", &tx_route.source);
         let pd_tx_destination = name("PduR", "PduRDestPdu", &tx_route.destination);
@@ -1073,45 +1073,73 @@ pub(super) fn files(
         let (rx_controller, hrh) = can_if_route(description, &tp.can_if_rx_pdu, true)?;
         let (tx_controller, hth) = can_if_route(description, &tp.can_if_tx_pdu, false)?;
         receive.push(row(&format!(
-            "{}u, {can_rx}, 8u, FALSE, {rx_controller}, {hrh}, 0u, 0u",
+            "{}u, {can_rx}, {}u, {}, {rx_controller}, {hrh}, 0u, 0u",
             tp.encoded_request_id(),
+            tp.rx_min_dl,
+            if tp.request_accepts_fd {
+                "TRUE"
+            } else {
+                "FALSE"
+            },
         )));
-        transmit.push(row(&format!(
-            "{}u, {can_tx}, 8u, {tx_controller}, {hth}, 0u, 0u",
-            tp.encoded_response_id()
-        )));
+        if emitted_tx.insert(&tp.can_if_tx_pdu) {
+            transmit.push(row(&format!(
+                "{}u, {can_tx}, {}u, {tx_controller}, {hth}, 0u, 0u",
+                tp.encoded_response_id(),
+                tp.tx_dl
+            )));
+            ls_tx.push(row(&format!(
+                "LSDUR_UP_CANTP, {ls_tx_source}, {can_tx}, &CanTp_TxConfirmation, NULL_PTR"
+            )));
+        }
         ls_rx.push(row(&format!(
             "{ls_rx_source}, {tp_rx}, &CanTp_RxIndication"
         )));
-        ls_tx.push(row(&format!(
-            "LSDUR_UP_CANTP, {ls_tx_source}, {can_tx}, &CanTp_TxConfirmation, NULL_PTR"
-        )));
         // CanTp confirms through tp_routes, under its own N-SDU namespace.
         pd_tx.push(row(&format!("PDUR_UP_DCM, {pd_tx_source}, PDUR_LO_CANTP, {tp_tx_sdu}, &CanTp_Transmit, NULL_PTR, NULL_PTR")));
-        config_data(
-            &mut pd_configuration,
-            "PduR",
-            "static const PduR_TpRouteType tp_routes[]",
-            &[row(&format!(
-                "{pd_rx_source}, {dcm_rx}, {pd_tx_destination}, {dcm_tx}, &Dcm_StartOfReception, &Dcm_CopyRxData, &Dcm_TpRxIndication, &Dcm_CopyTxData, &Dcm_TpTxConfirmation"
-            ))],
-        );
-        let period = description.schedule.counter_tick_ms;
-        let ticks = |value| periods(value, period, &description.schedule.counter);
-        init_data(
-            &mut config,
-            "CanTp",
-            "static const CanTp_ConfigType tp_config",
-            &values(&format!(
-                "{tp_rx_sdu}, {tp_tx_sdu}, {tp_rx}, {ls_tx_source}, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {period}u, 0u, 0u, {pd_rx_source}, {pd_tx_destination}",
+        tp_routes.push(row(&format!(
+            "{pd_rx_source}, {dcm_rx}, {pd_tx_destination}, {dcm_tx}, &Dcm_StartOfReception, &Dcm_CopyRxData, &Dcm_TpRxIndication, &Dcm_CopyTxData, &Dcm_TpTxConfirmation"
+        )));
+        let diagnostic_channel = mode
+            .dcm_connections
+            .get(&tp.dcm_connection)
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&tp.dcm_connection))?;
+        let channel = name("ComM", "ComMChannel", diagnostic_channel);
+        dcm_connections.push(row(&format!(
+            "{dcm_rx}, {dcm_tx}, {channel}, {pd_tx_source}"
+        )));
+        tp_connections.push(row(&format!(
+                "{tp_rx_sdu}, {tp_tx_sdu}, {tp_rx}, {ls_tx_source}, {}u, {}u, {}u, {}u, {}u, {}u, {}u, {period}u, 0u, {}u, {pd_rx_source}, {pd_tx_destination}, {}u, {}u",
                 tp.buffer_bytes,
                 ticks(tp.n_as_ms)?,
                 ticks(tp.n_ar_ms)?,
                 ticks(tp.n_br_ms)?,
                 ticks(tp.n_bs_ms)?,
                 ticks(tp.n_cr_ms)?,
-                ticks(tp.n_cs_ms)?
-            )),
+                ticks(tp.n_cs_ms)?,
+                tp.padding,
+                tp.tx_dl,
+                tp.rx_max_dl
+        )));
+    }
+    if let Some(tp) = transport {
+        config_data(
+            &mut pd_configuration,
+            "PduR",
+            "static const PduR_TpRouteType tp_routes[]",
+            &tp_routes,
+        );
+        config_data(
+            &mut config,
+            "CanTp",
+            "static const CanTp_ConnectionConfigType tp_connections[]",
+            &tp_connections,
+        );
+        init_data(
+            &mut config,
+            "CanTp",
+            "static const CanTp_ConfigType tp_config",
+            &values(&format!("tp_connections, {}u", tp_connections.len())),
         );
         let (did, read) = match &description.diagnostic {
             Some(did) => {
@@ -1137,18 +1165,19 @@ pub(super) fn files(
             ),
             c_layout::section("RTE_Dcm", "Rte", "CODE", false)
         ));
+        config_data(
+            &mut config,
+            "Dcm",
+            "static const Dcm_ConnectionConfigType dcm_connections[]",
+            &dcm_connections,
+        );
         init_data(
             &mut config,
             "Dcm",
             "static const Dcm_ConfigType dcm_config",
             &values(&format!(
-                "{dcm_rx}, {dcm_tx}, {}, {did}u, {read}, {}u, {}u, {}u, {}u, {}u, {pd_tx_source}, &Ecu_DcmAuthenticationMode, {}u",
-                name(
-                    "ComM",
-                    "ComMChannel",
-                    diagnostic_channel
-                        .ok_or_else(|| PlanDiagnostic::plan_premise(&mode.bswm_configuration))?
-                ),
+                "dcm_connections, {}u, {did}u, {read}, {}u, {}u, {}u, {}u, {}u, &Ecu_DcmAuthenticationMode, {}u",
+                dcm_connections.len(),
                 ticks(tp.p2_ms)?,
                 tp.p2_ms,
                 tp.p2_star_ms,
@@ -1178,14 +1207,8 @@ pub(super) fn files(
             entries,
         );
     }
-    let rx_signals = super::signals::pdus(&description.signals)
-        .filter(|signal| signal.receive)
-        .count();
-    let rx_count = rx_signals + usize::from(transport.is_some());
-    let tx_count = super::signals::pdus(&description.signals)
-        .filter(|signal| !signal.receive)
-        .count()
-        + usize::from(transport.is_some());
+    let rx_count = receive.len();
+    let tx_count = transmit.len();
     let controllers = description
         .configuration
         .iter()
@@ -1233,13 +1256,13 @@ pub(super) fn files(
         "const PduR_PBConfigType PduR_Config",
         &values(&format!(
             "{configuration_id}u, pd_rx, {}u, pd_tx, {tx_count}u, {}, {}u",
-            rx_signals,
+            pd_rx.len(),
             if transport.is_some() {
                 "tp_routes"
             } else {
                 "NULL_PTR"
             },
-            usize::from(transport.is_some())
+            tp_routes.len()
         )),
     );
     // Post-build sets live in <Mip>_PBcfg.c (SWS_BSW_00015).
@@ -1377,7 +1400,7 @@ pub(super) fn files(
             "{}, {}u, {}",
             name("ComM", "ComMChannel", &channel.channel),
             periods(mode.minimum_full_ms, channel.period_ms, &channel.main_symbol)?,
-            if diagnostic_channel == Some(channel.channel.as_str()) {
+            if transport.is_some() && mode.dcm_connections.values().any(|configured| configured == &channel.channel) {
                 "&Dcm_ComM_NoComModeEntered, &Dcm_ComM_SilentComModeEntered, &Dcm_ComM_FullComModeEntered"
             } else {
                 "NULL_PTR, NULL_PTR, NULL_PTR"
@@ -1767,23 +1790,38 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
             .ok_or_else(|| PlanDiagnostic::plan_premise(&signal.can_if_pdu))?;
         let channel = channel_name(&endpoint.channel)?;
         frame_policies.push(row(&format!(
-            "{}u, {channel}, {}u, {}, {}",
+            "{}u, {channel}, {}u, {}, {}, FALSE",
             signal.encoded_id(),
             signal.dlc,
             if signal.receive { "TRUE" } else { "FALSE" },
             if signal.accepts_fd { "TRUE" } else { "FALSE" },
         )));
     }
-    if let Some(tp) = transport {
+    let mut frame_tx = std::collections::BTreeSet::new();
+    for tp in transport.iter().flat_map(|tp| tp.connections()) {
         let channel = channel_name(&tp.physical_channel)?;
         frame_policies.push(row(&format!(
-            "{}u, {channel}, 8u, TRUE, FALSE",
-            tp.encoded_request_id()
+            "{}u, {channel}, {}u, TRUE, {}, {}",
+            tp.encoded_request_id(),
+            if tp.request_fd {
+                tp.rx_max_dl
+            } else {
+                tp.rx_min_dl
+            },
+            if tp.request_accepts_fd {
+                "TRUE"
+            } else {
+                "FALSE"
+            },
+            if tp.request_fd { "TRUE" } else { "FALSE" },
         )));
-        frame_policies.push(row(&format!(
-            "{}u, {channel}, 8u, FALSE, FALSE",
-            tp.encoded_response_id()
-        )));
+        if frame_tx.insert(&tp.can_if_tx_pdu) {
+            frame_policies.push(row(&format!(
+                "{}u, {channel}, {}u, FALSE, FALSE, FALSE",
+                tp.encoded_response_id(),
+                tp.tx_dl
+            )));
+        }
     }
     let host_policy = format!(
         r#"/** @file Generated route policy private to the host batch target. */

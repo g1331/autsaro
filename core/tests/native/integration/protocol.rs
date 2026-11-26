@@ -89,7 +89,11 @@ fn generated_host_batch_keeps_configured_channels_isolated() {
     // The 17-channel case also exercises the PduR and LSduR tables above 32 Rx routes.
     for count in [2, 3, 4, 6, 17] {
         let scratch = super::Scratch::new();
-        let sources = crate::support::multichannel::multichannel_sources(count);
+        let sources = if count == 2 {
+            crate::support::multichannel::multichannel_diagnostic_sources()
+        } else {
+            crate::support::multichannel::multichannel_sources(count)
+        };
         let plan = super::mainline::build(&sources)
             .unwrap_or_else(|issues| panic!("{count} channels: {issues:#?}"));
         let fixture = fs::read_to_string(
@@ -132,7 +136,7 @@ fn generated_host_batch_keeps_configured_channels_isolated() {
         )
         .unwrap();
         let endpoints = metadata["configuredEndpoints"].as_object().unwrap();
-        assert_eq!(endpoints.len(), 3 * count + 2);
+        assert_eq!(endpoints.len(), 3 * count + if count == 2 { 4 } else { 2 });
         for channel in 0..count {
             assert!(metadata["channels"][channel.to_string()].as_str().is_some());
             let matching = endpoints
@@ -148,6 +152,10 @@ fn generated_host_batch_keeps_configured_channels_isolated() {
         }
         let binary =
             super::sealed_builds::host_batch(&project, &scratch.0.join("host-batch-build"));
+        if count == 2 {
+            fd_diagnostic_isolation(&binary, &scratch.0);
+        }
+        let fd = u8::from(count == 2);
         let diagnostic = count - 1;
         let mut script = String::new();
         let mut expected = Vec::new();
@@ -184,7 +192,9 @@ fn generated_host_batch_keeps_configured_channels_isolated() {
                 expected.push((epoch, channel, "STANDARD".to_owned(), TRANSMIT, data));
             }
             if step % 2 != 0 {
-                script.push_str(&format!("RX {diagnostic} STANDARD 0 {REQUEST} 8 {READ}\n"));
+                script.push_str(&format!(
+                    "RX {diagnostic} STANDARD {fd} {REQUEST} 8 {READ}\n"
+                ));
                 let primary = (step * 16) + diagnostic + 1;
                 let companion = diagnostic + 16;
                 expected.push((
@@ -198,7 +208,7 @@ fn generated_host_batch_keeps_configured_channels_isolated() {
             script.push_str("COMMIT\n");
         }
         script.push_str(&format!(
-            "BEGIN 71\nRX {diagnostic} STANDARD 0 {REQUEST} 8 {READ}\nCOMMIT\n",
+            "BEGIN 71\nRX {diagnostic} STANDARD {fd} {REQUEST} 8 {READ}\nCOMMIT\n",
         ));
         let did_data = format!("076212340000{:02x}{:02x}", 16 + diagnostic, 97 + diagnostic);
         expected.push((71, diagnostic, "STANDARD".into(), RESPONSE, did_data));
@@ -232,6 +242,51 @@ fn generated_host_batch_keeps_configured_channels_isolated() {
 
 /// Verifies: SWS_CANIF_00281
 /// Verifies: SWS_Can_00423
+// R24-11 FD wire vectors through the generated Can → CanIf → LSduR → CanTp → Dcm
+// path. The two controllers expose the same numeric CAN IDs, with distinct handles.
+fn fd_diagnostic_isolation(binary: &Path, scratch: &Path) {
+    let script = format!(
+        concat!(
+            "BEGIN 1\nRX 0 STANDARD 1 {request} 8 1009221234123412\nCOMMIT\n",
+            "BEGIN 2\nRX 1 STANDARD 1 {request} 8 21341234cccccccc\nCOMMIT\n",
+            "BEGIN 3\nRX 0 STANDARD 1 {request} 8 21341234cccccccc\nCOMMIT\n",
+            "BEGIN 4\nRX 0 STANDARD 1 {request} 8 052212341234cccc\nCOMMIT\n",
+            "BEGIN 5\nRX 1 STANDARD 1 {request} 8 300000cccccccccc\nCOMMIT\n",
+            "BEGIN 6\nRX 0 STANDARD 1 {request} 8 300000cccccccccc\nCOMMIT\n",
+            "BEGIN 7\nRX 1 STANDARD 1 {request} 8 052212341234cccc\nCOMMIT\n",
+            "BEGIN 8\nRX 1 STANDARD 1 {request} 12 0009221234123412341234cc\nCOMMIT\n"
+        ),
+        request = REQUEST
+    );
+    let observed = run(binary, &scratch.join("fd-diagnostic"), script.as_bytes());
+    let frames = observed
+        .lines()
+        .filter(|line| line.starts_with("OUT ") && field(line, "id=") == RESPONSE.to_string())
+        .map(|line| {
+            (
+                field(line, "epoch="),
+                field(line, "channel="),
+                field(line, "fd="),
+                field(line, "length="),
+                field(line, "data="),
+            )
+        })
+        .collect::<Vec<_>>();
+    // B0 in HostBatch is driver 0 (the second physical channel), with TX_DL 12.
+    assert_eq!(
+        frames,
+        [
+            ("1", "0", "1", "8", "300000cccccccccc"),
+            ("3", "0", "1", "8", "037f2213cccccccc"),
+            ("4", "0", "1", "12", "100d62123400000000123400"),
+            ("6", "0", "1", "8", "21000000cccccccc"),
+            ("7", "1", "1", "16", "000d62123400000000123400000000cc"),
+            ("8", "1", "1", "8", "037f2213cccccccc"),
+        ],
+        "{observed}"
+    );
+}
+
 #[test]
 fn host_batch_mixed_can_preserves_width_and_exact_id_on_one_channel() {
     let scratch = super::Scratch::new();

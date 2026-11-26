@@ -11,8 +11,8 @@
 #include <string.h>
 #include <stdio.h>
 
-static CanTp_ConfigType config = {
-    1u, 2u, 3u, 4u, 64u, 5u, 5u, 10u, 10u, 10u, 10u, 1u, 2u, 0xccu, 5u, 6u};
+static CanTp_ConnectionConfigType config = {
+    1u, 2u, 3u, 4u, 64u, 5u, 5u, 10u, 10u, 10u, 10u, 1u, 2u, 0xccu, 5u, 6u, 8u, 8u};
 static uint16 capacity;
 static uint16 received;
 static uint16 transmitted;
@@ -139,20 +139,21 @@ static void transfer(uint16 length)
     const PduInfoType tx = {NULL_PTR, NULL_PTR, (PduLengthType)length};
     config.maximum_length = length;
     capacity = length;
-    CanTp_Init(&config);
+    CanTp_Init(&(const CanTp_ConfigType){&config, 1u});
     before = rx_done;
     first(length);
     assert(started == length && received == 6u && last_frame[0] == 0x30u);
     /* Rejected Init must not reset an admitted receive. */
     {
-        CanTp_ConfigType invalid = config;
-        invalid.maximum_length = 257u;
-        CanTp_Init(&invalid);
+        CanTp_ConnectionConfigType invalid = config;
+        invalid.tx_dl = 65u;
+        CanTp_Init(&(const CanTp_ConfigType){&invalid, 1u});
+        invalid.tx_dl = 8u;
         invalid.maximum_length = 7u;
-        CanTp_Init(&invalid);
+        CanTp_Init(&(const CanTp_ConfigType){&invalid, 1u});
         if (sizeof(PduLengthType) == 1u) {
             invalid.maximum_length = 256u;
-            CanTp_Init(&invalid);
+            CanTp_Init(&(const CanTp_ConfigType){&invalid, 1u});
         }
     }
     CanTp_TxConfirmation(4u, E_OK);
@@ -212,7 +213,7 @@ int main(void)
     }
     capacity = 64u;
     config.maximum_length = 64u;
-    CanTp_Init(&config);
+    CanTp_Init(&(const CanTp_ConfigType){&config, 1u});
     first(65u);
     assert(started == 65u && last_frame[0] == 0x32u);
     CanTp_TxConfirmation(4u, E_OK);
@@ -221,7 +222,7 @@ int main(void)
         unsigned before_errors;
         unsigned before_done;
         unsigned before_frames;
-        CanTp_Init(&config);
+        CanTp_Init(&(const CanTp_ConfigType){&config, 1u});
         first(64u);
         CanTp_TxConfirmation(4u, E_OK);
         before_starts = starts;

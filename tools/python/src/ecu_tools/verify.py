@@ -55,6 +55,10 @@ def verify(project: Path, build_directory: Path) -> None:
                           for name in ("nominalBitrate", "dataBitrate"))
                    for channel, timing in fd_timing.items())):
         raise ValueError("Configured FD controller timing is incomplete")
+    padding = inputs.get("diagnosticPaddingByte", 0)
+    if type(padding) is not int or not 0 <= padding <= 255:
+        raise ValueError("Invalid diagnostic padding byte")
+    fd_lengths = (8, 12, 16, 20, 24, 32, 48, 64)
     for role, (direction, length) in roles.items():
         endpoint = endpoints[role]
         if not isinstance(endpoint, dict) or type(endpoint.get("channel")) is not int:
@@ -63,8 +67,12 @@ def verify(project: Path, build_directory: Path) -> None:
         policies = {"CLASSICAL"}
         if role == "receive":
             policies.add("CLASSICAL_OR_FD")
-        if channel in fd_timing and role in ("receive", "transmit"):
+        if channel in fd_timing:
             policies.add("FD")
+        if role in ("request", "response") and endpoint.get("fdPolicy") == "FD":
+            length = endpoint.get("wireLength")
+            if type(length) is not int or length not in fd_lengths:
+                raise ValueError(f"Invalid configured CanTp FD length: {role}")
         if (endpoint.get("module") != "CanIf"
                 or endpoint.get("direction") != direction or channel not in channels
                 or endpoint.get("fdPolicy") not in policies
@@ -79,17 +87,30 @@ def verify(project: Path, build_directory: Path) -> None:
         ep = endpoints[role]
         if fd is None:
             fd = int(ep["fdPolicy"] == "FD" or (str(ep["channel"]) in fd_timing and ep["fdPolicy"] == "CLASSICAL_OR_FD"))
-        return f"RX {ep['channel']} {ep['format']} {fd} {ep['id']} {ep['wireLength']} {data}"
+        return f"RX {ep['channel']} {ep['format']} {fd} {ep['id']} {len(data) // 2} {data}"
 
     def expected_frame(at: int, role: str, data: str) -> tuple[int, int, int, str, int, int, int, str]:
         ep = endpoints[role]
-        return at, ep["handle"], ep["channel"], ep["format"], int(ep["fdPolicy"] == "FD"), ep["id"], ep["wireLength"], data
+        return at, ep["handle"], ep["channel"], ep["format"], int(ep["fdPolicy"] == "FD"), ep["id"], len(data) // 2, data
 
     binary = build(project, build_directory, "host-batch")
     logs = binary.parent / "logs"
     did = f"{inputs['did']:04x}"
-    request = f"0322{did}00000000"
+    def pad(raw: str) -> str:
+        length = len(raw) // 2
+        wire = next(size for size in fd_lengths if size >= length)
+        return raw + f"{padding:02x}" * (wire - length)
+
+    request = pad(f"0322{did}")
     response = f"0762{did}12345678"
+    did_pair = f"62{did}12345678f18601"
+    if endpoints["response"]["wireLength"] > 8:
+        pair_start, pair_end = [pad(f"000a{did_pair}")], []
+    else:
+        pair_start = [f"100a{did_pair[:12]}"]
+        pair_end = [pad(f"21{did_pair[12:]}")]
+    pair_request = pad(f"0522{did}f186")
+    cts = pad("300000")
     initial = inputs["initialReceiveValue"].to_bytes(4, "little").hex()
 
     def actor(label: str, batches: list[tuple[int, list[str], str, list[str], bool]], *, malformed: bool = False) -> None:
@@ -199,24 +220,24 @@ def verify(project: Path, build_directory: Path) -> None:
     actor("echo", [
         (period, [rx], "78563412", [], False),
         (period + 1, [rx, diagnostic(request)], "78563412", [response], False),
-        (period + 2, [rx, diagnostic(f"0522{did}f1860000")], "78563412", [f"100a62{did}123456"], False),
-        (period + 3, [rx, diagnostic("3000000000000000")], "78563412", ["2178f18601000000"], False),
-        (period + 4, [rx, diagnostic(f"0722{did}f186{did}")], "78563412", ["037f221300000000"], False),
+        (period + 2, [rx, diagnostic(pair_request)], "78563412", pair_start, False),
+        (period + 3, [rx, diagnostic(cts)], "78563412", pair_end, False),
+        (period + 4, [rx, diagnostic(f"0722{did}f186{did}")], "78563412", [pad("037f2213")], False),
     ])
     actor("arbitration", [
         (period, [rx], "78563412", [], False),
         # Keep FF-to-CTS at one tick even when the application period exceeds N_Bs.
-        (3 * period - 1, [rx, diagnostic(f"0522{did}f1860000")], "78563412", [f"100a62{did}123456"], False),
-        (3 * period, [rx, diagnostic("3000000000000000")], "78563412", ["2178f18601000000"], False),
-        (4 * period, [rx, diagnostic(f"0522{did}f1860000")], "78563412", [f"100a62{did}123456"], False),
+        (3 * period - 1, [rx, diagnostic(pair_request)], "78563412", pair_start, False),
+        (3 * period, [rx, diagnostic(cts)], "78563412", pair_end, False),
+        (4 * period, [rx, diagnostic(pair_request)], "78563412", pair_start, False),
         # An already-ticked epoch admits the CF without repeating periodic work.
-        (4 * period, [diagnostic("3000000000000000")], "78563412", ["2178f18601000000"], False),
+        (4 * period, [diagnostic(cts)], "78563412", pair_end, False),
         (5 * period, [rx, diagnostic(request)], "78563412", [response], False),
     ])
     deadline = 1 + inputs["receiveTimeoutMs"]
     recovery = (deadline // period + 1) * period
     actor("ncr-recovery", [
-        (1, [diagnostic(f"100922{did}{did}12")], initial, ["3000000000000000"], False),
+        (1, [diagnostic(f"100922{did}{did}12")], initial, [cts], False),
         (deadline, [], initial, [], True),
         (recovery, [rx], "78563412", [], False),
         (recovery + 1, [rx, diagnostic(request)], "78563412", [response], False),

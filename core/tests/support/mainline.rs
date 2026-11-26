@@ -781,8 +781,7 @@ pub(crate) fn mixed_can_sources() -> Vec<InputSource> {
 
 /// A single FD controller with a standard FD receive route and an extended FD
 /// transmit route. The diagnostic transport still uses Classical CAN.
-pub(crate) fn fd_can_sources() -> Vec<InputSource> {
-    let mut sources = single_component_sources();
+pub(crate) fn enable_can_fd(sources: &mut [InputSource], suffix: &str) {
     let definition = "/AUTOSAR/EcucDefs/Can/CanConfigSet/CanController/CanControllerBaudrateConfig/CanControllerFdBaudrateConfig";
     let parameters = [
         ("FLOAT", "CanControllerFdBaudRate", "2000.5"),
@@ -795,9 +794,18 @@ pub(crate) fn fd_can_sources() -> Vec<InputSource> {
         r#"<ECUC-NUMERICAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-{kind}-PARAM-DEF">{definition}/{name}</DEFINITION-REF><VALUE>{value}</VALUE></ECUC-NUMERICAL-PARAM-VALUE>"#
     )).join("");
     xml_edit(
-        &mut sources,
+        sources,
         "ecuc.arxml",
-        |node| named(node, "ECUC-CONTAINER-VALUE", "Baudrate"),
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "Baudrate")
+                && node.ancestors().any(|parent| {
+                    named(
+                        parent,
+                        "ECUC-CONTAINER-VALUE",
+                        &format!("Controller{suffix}"),
+                    )
+                })
+        },
         |xml| {
             xml.replace("</PARAMETER-VALUES>", &format!(
             r#"</PARAMETER-VALUES><SUB-CONTAINERS><ECUC-CONTAINER-VALUE><SHORT-NAME>Fd</SHORT-NAME><DEFINITION-REF DEST="ECUC-PARAM-CONF-CONTAINER-DEF">{definition}</DEFINITION-REF><PARAMETER-VALUES>{parameters}</PARAMETER-VALUES></ECUC-CONTAINER-VALUE></SUB-CONTAINERS>"#
@@ -805,10 +813,10 @@ pub(crate) fn fd_can_sources() -> Vec<InputSource> {
         },
     );
     xml_edit(
-        &mut sources,
+        sources,
         "ecuc.arxml",
         |node| {
-            named(node, "ECUC-CONTAINER-VALUE", "Transmit")
+            named(node, "ECUC-CONTAINER-VALUE", &format!("Transmit{suffix}"))
                 && node.children().any(|child| {
                     child.text() == Some("/AUTOSAR/EcucDefs/Can/CanConfigSet/CanHardwareObject")
                 })
@@ -817,6 +825,11 @@ pub(crate) fn fd_can_sources() -> Vec<InputSource> {
             xml.replace("<PARAMETER-VALUES>", r#"<PARAMETER-VALUES><ECUC-NUMERICAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-INTEGER-PARAM-DEF">/AUTOSAR/EcucDefs/Can/CanConfigSet/CanHardwareObject/CanFdPaddingValue</DEFINITION-REF><VALUE>165</VALUE></ECUC-NUMERICAL-PARAM-VALUE>"#)
         },
     );
+}
+
+pub(crate) fn fd_can_sources() -> Vec<InputSource> {
+    let mut sources = single_component_sources();
+    enable_can_fd(&mut sources, "");
     parameter(&mut sources, "Transmit", "CanIdType", "MIXED");
     parameter(
         &mut sources,

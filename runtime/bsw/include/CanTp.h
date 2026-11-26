@@ -28,21 +28,18 @@
 #define CANTP_SID_CANCEL_RECEIVE  0x4cu /**< SWS_CanTp_00257: service ID. */
 #define CANTP_START_SEC_CODE
 #include "CanTp_MemMap.h"
-/** Implementation-defined configuration of the one channel (SWS_CanTp_00340), generated
- * as the read-only tp_config; each member names its ECUC parameter. N-SDU IDs are those
- * CanTp's own API accepts, N-PDU IDs those exchanged with LSduR, and the upper IDs those
- * passed to PduR callbacks, a separate namespace. The n_* timers count CanTp_MainFunction
- * calls, not milliseconds; each must be at least 2, since a timer may expire at the call
- * right after it starts, or CanTp_Init ignores the configuration. maximum_length (8 to 256
- * bytes) bounds CanTp_Transmit; main_period_ms (nonzero) converts a received STmin;
- * with wait_frame_max 0 a reception is aborted at the first N_Br expiry.
+/** One physical, padded, standard-addressed connection. N-SDU IDs belong to CanTp,
+ * N-PDU IDs to the CanTp/LSduR interface, and upper IDs to PduR. The N-PDU IDs
+ * identify routes including their physical channel. Each row maps Rx data and Rx FC
+ * to one lower receive ID and Tx data and Tx FC to one lower transmit ID.
+ * The n_* timers count calls of CanTp_MainFunction.
  */
 typedef struct {
     PduIdType receive;        /**< Rx N-SDU (CanTpRxNSduId, ECUC_CanTp_00301). */
     PduIdType transmit;       /**< Tx N-SDU (CanTpTxNSduId, ECUC_CanTp_00268). */
     PduIdType lower_receive;  /**< Rx N-PDU (CanTpRxNPduId, ECUC_CanTp_00258). */
     PduIdType lower_transmit; /**< Tx N-PDU (CanTpTxNPduConfirmationPduId, ECUC_CanTp_00286). */
-    uint16 maximum_length;    /**< Largest Tx N-SDU in bytes (DcmDslBufferSize). */
+    uint32 maximum_length;    /**< Largest Tx N-SDU in bytes (DcmDslBufferSize). */
     uint32 n_as;              /**< N_As in periods (CanTpNas, ECUC_CanTp_00263). */
     uint32 n_ar;              /**< N_Ar in periods (CanTpNar, ECUC_CanTp_00277). */
     uint32 n_br;              /**< N_Br in periods (CanTpNbr, ECUC_CanTp_00245). */
@@ -54,19 +51,26 @@ typedef struct {
     uint8 padding;            /**< Fill byte (CanTpPaddingByte, ECUC_CanTp_00298). */
     PduIdType upper_receive;  /**< PduR ID of the Rx N-SDU, from its Pdu reference. */
     PduIdType upper_transmit; /**< PduR ID of the Tx N-SDU, from its Pdu reference. */
+    uint8 tx_dl;              /**< TX_DL from the EcuC Tx data N-PDU PduLength. */
+    uint8 rx_max_dl;          /**< Largest CAN_DL of the configured Rx N-PDU. */
+} CanTp_ConnectionConfigType;
+
+/** Generated CanTp configuration (SWS_CanTp_00340). */
+typedef struct {
+    const CanTp_ConnectionConfigType *connections; /**< Connection table retained by CanTp. */
+    uint32 connection_count;                       /**< Number of entries in connections. */
 } CanTp_ConfigType;
 /** Start the module with a generated configuration and drop all connections without
  * notification (SWS_CanTp_00208, 00273).
- * @param[in] CfgPtr Generated configuration with 8 to 256 bytes per N-SDU, representable by
- * PduLengthType, timers of at
- * least 2 periods and a nonzero period; any other pointer, including NULL, is ignored and
- * the state is unchanged.
+ * @param[in] CfgPtr Generated table with Tx capacity of at least eight bytes representable by
+ * PduLengthType, timers of at least two periods and a nonzero period. Invalid configuration
+ * leaves the state unchanged.
  * @par Return
  * None.
  * Preconditions: None; a repeated call restarts the module.
  * Context: startup task; not inside an exclusive area.
  * Reentrancy: not reentrant.
- * Ownership: the configuration is kept until CanTp_Shutdown or the next CanTp_Init.
+ * Ownership: the connection table is kept until CanTp_Shutdown or the next CanTp_Init.
  */
 CANTP_CODE void CanTp_Init(const CanTp_ConfigType *CfgPtr);
 /** Stop the module and drop all connections without notification (SWS_CanTp_00200).
@@ -115,7 +119,7 @@ CANTP_CODE Std_ReturnType CanTp_CancelTransmit(PduIdType TxPduId);
 CANTP_CODE Std_ReturnType CanTp_CancelReceive(PduIdType RxPduId);
 /** Indicate reception of an N-PDU (SWS_CanTp_00214).
  * @param[in] RxPduId The configured Rx N-PDU; other IDs are ignored.
- * @param[in] PduInfoPtr Lower-layer-owned frame of 1 to 8 bytes without metadata; others
+ * @param[in] PduInfoPtr Lower-layer-owned frame of 1 to 64 bytes without metadata; others
  * are ignored.
  * @par Return
  * None.

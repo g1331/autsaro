@@ -481,3 +481,151 @@ pub(crate) fn multichannel_sources(count: usize) -> Vec<InputSource> {
     );
     inputs
 }
+
+/// Two FD diagnostic links reuse the same CAN IDs on different physical buses.
+pub(crate) fn multichannel_diagnostic_sources() -> Vec<InputSource> {
+    let mut inputs = multichannel_sources(2);
+    for input in &mut inputs {
+        let file = input.logical_path();
+        if !matches!(file, "extract.arxml" | "ecuc.arxml") {
+            continue;
+        }
+        let xml = std::str::from_utf8(input.bytes()).unwrap();
+        let doc = Document::parse(xml).unwrap();
+        let mut edits = Edits::new();
+        for node in doc.descendants().filter(|node| node.is_element()) {
+            let name = text(node, "SHORT-NAME").unwrap_or_default();
+            let tag = node.tag_name().name();
+            let is_diagnostic = name.starts_with("DiagRequest") || name.starts_with("DiagResponse");
+            let original = &xml[node.range()];
+            let mut second = original
+                .replace("DiagRequest", "DiagRequest1")
+                .replace("DiagResponse", "DiagResponse1");
+            if file == "extract.arxml" && is_diagnostic {
+                match tag {
+                    "CAN-FRAME" | "N-PDU" => add(&mut edits, node, second),
+                    "FRAME-PORT" | "I-PDU-PORT" | "CAN-FRAME-TRIGGERING" | "PDU-TRIGGERING" => {
+                        let location = doc
+                            .descendants()
+                            .find(|candidate| {
+                                candidate.has_tag_name(tag)
+                                    && text(*candidate, "SHORT-NAME")
+                                        .is_some_and(|name| name.starts_with("RxValue1"))
+                            })
+                            .unwrap();
+                        second = network(&second, 1);
+                        add(&mut edits, location, second);
+                    }
+                    _ => {}
+                }
+            } else if file == "ecuc.arxml" && tag == "ECUC-CONTAINER-VALUE" {
+                let parameters: &[(&str, usize)] = if definition(node, "CanTpChannel") {
+                    second = second
+                        .replace(
+                            "<SHORT-NAME>PhysicalChannel</",
+                            "<SHORT-NAME>PhysicalChannel1</",
+                        )
+                        .replace("<SHORT-NAME>Frame</", "<SHORT-NAME>Frame1</")
+                        .replace("<SHORT-NAME>FlowControl</", "<SHORT-NAME>FlowControl1</");
+                    &[
+                        ("CanTpRxNSduId", 1),
+                        ("CanTpRxNPduId", 1),
+                        ("CanTpTxFcNPduConfirmationPduId", 1),
+                        ("CanTpTxNSduId", 1),
+                        ("CanTpTxNPduConfirmationPduId", 1),
+                        ("CanTpRxFcNPduId", 1),
+                    ]
+                } else if definition(node, "DcmDslConnection") {
+                    second = second
+                        .replace("<SHORT-NAME>Connection</", "<SHORT-NAME>Connection1</")
+                        .replace("<SHORT-NAME>Physical</", "<SHORT-NAME>Physical1</")
+                        .replace("<SHORT-NAME>Receive</", "<SHORT-NAME>Receive1</")
+                        .replace("<SHORT-NAME>Transmit</", "<SHORT-NAME>Transmit1</")
+                        .replace("/ComM/Config/Host</", "/ComM/Config/Host1</");
+                    &[
+                        ("DcmDslProtocolRxConnectionId", 1),
+                        ("DcmDslProtocolRxPduId", 1),
+                        ("DcmDslTxConfirmationPduId", 1),
+                    ]
+                } else if !is_diagnostic {
+                    continue;
+                } else if definition(node, "CanIfRxPduCfg") {
+                    second = second.replace("/Handles/Receive</", "/Handles/Receive1</");
+                    &[("CanIfRxPduId", 5)]
+                } else if definition(node, "CanIfTxPduCfg") {
+                    second = second.replace("/TransmitBuffer</", "/TransmitBuffer1</");
+                    &[("CanIfTxPduId", 3)]
+                } else if definition(node, "PduRSrcPdu") {
+                    &[("PduRSourcePduHandleId", 20)]
+                } else if definition(node, "PduRDestPdu") {
+                    &[("PduRDestPduHandleId", 20)]
+                } else if definition(node, "Pdu") || definition(node, "PduRRoutingPath") {
+                    &[]
+                } else {
+                    continue;
+                };
+                for (parameter, value) in parameters {
+                    second = set(&second, parameter, *value);
+                }
+                add(&mut edits, node, second);
+            }
+        }
+        *input = InputSource::new(file, apply(xml, edits).into_bytes()).unwrap();
+    }
+    use super::mainline::{enable_can_fd, xml_edit};
+    for channel in 0..2 {
+        let suffix = if channel == 0 { "" } else { "1" };
+        enable_can_fd(&mut inputs, suffix);
+        for (direction, rx) in [("Request", true), ("Response", false)] {
+            let name = format!("Diag{direction}{suffix}");
+            let global_pdu = format!("{name}Pdu");
+            let dl = if !rx && channel == 1 { "12" } else { "64" };
+            parameter(&mut inputs, &global_pdu, "PduLength", dl);
+            parameter(
+                &mut inputs,
+                &name,
+                if rx {
+                    "CanIfRxPduCanIdType"
+                } else {
+                    "CanIfTxPduCanIdType"
+                },
+                "STANDARD_FD_CAN",
+            );
+            if rx {
+                parameter(&mut inputs, &name, "CanIfRxPduDataLengthCheck", "false");
+            }
+            let network = format!("ReferenceCan{suffix}");
+            let trigger = format!("/Extract/{network}/Channel/{name}Trigger");
+            xml_edit(
+                &mut inputs,
+                "ecuc.arxml",
+                |node| named(node, "ECUC-CONTAINER-VALUE", &global_pdu),
+                |xml| {
+                    xml.replace("</PARAMETER-VALUES>", &format!(r#"</PARAMETER-VALUES><REFERENCE-VALUES>
+                    <ECUC-REFERENCE-VALUE>
+                      <DEFINITION-REF DEST="ECUC-FOREIGN-REFERENCE-DEF">/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu/SysTPduToFrameTriggeringRef</DEFINITION-REF>
+                      <VALUE-REF DEST="CAN-FRAME-TRIGGERING">{trigger}</VALUE-REF>
+                    </ECUC-REFERENCE-VALUE></REFERENCE-VALUES>"#))
+                },
+            );
+            for (tag, ending) in [
+                ("CAN-FRAME-TRIGGERING", "Trigger"),
+                ("CAN-FRAME", "Frame"),
+                ("N-PDU", "Pdu"),
+            ] {
+                xml_edit(
+                    &mut inputs,
+                    "extract.arxml",
+                    |node| named(node, tag, &format!("{name}{ending}")),
+                    |xml| {
+                        xml.replace("<CAN-FD-FRAME-SUPPORT>false", "<CAN-FD-FRAME-SUPPORT>true")
+                            .replace("<FRAME-LENGTH>8", &format!("<FRAME-LENGTH>{dl}"))
+                            .replace("<LENGTH>8", &format!("<LENGTH>{dl}"))
+                    },
+                );
+            }
+        }
+    }
+    parameter(&mut inputs, "General", "CanTpPaddingByte", "204");
+    inputs
+}

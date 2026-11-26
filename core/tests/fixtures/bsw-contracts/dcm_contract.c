@@ -74,8 +74,9 @@ static void authentication(uint8 value)
     assert(value == 0u);
     ++authentication_calls;
 }
+static const Dcm_ConnectionConfigType config_connection[] = {{RX, TX, CHANNEL, ROUTER}};
 static const Dcm_ConfigType config = {
-    RX, TX, CHANNEL, APP_DID, read_did, 4u, 50u, 5000u, 5u, 64u, ROUTER, authentication, 0u};
+    config_connection, 1u, APP_DID, read_did, 4u, 50u, 5000u, 5u, 64u, authentication, 0u};
 void ComM_DCM_ActiveDiagnostic(NetworkHandleType channel)
 {
     assert(channel == CHANNEL);

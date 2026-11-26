@@ -39,22 +39,24 @@ static int dispatch_thread(void) { return pthread_equal(pthread_self(), dispatch
 enum { RX_NSDU = 4u, TX_NSDU = 6u, RX_NPDU = 2u, TX_NPDU = 3u, UPPER_RX = 21u, UPPER_TX = 23u };
 enum { N_AS = 5u, N_CS = 10u, PAD = 0xccu };
 enum { MAIN, RECEIVE_SF, RECEIVE_CF, TRANSMIT };
-static const CanTp_ConfigType config = {.receive = RX_NSDU,
-                                        .transmit = TX_NSDU,
-                                        .lower_receive = RX_NPDU,
-                                        .lower_transmit = TX_NPDU,
-                                        .maximum_length = 256u,
-                                        .n_as = N_AS,
-                                        .n_ar = 5u,
-                                        .n_br = 5u,
-                                        .n_bs = 10u,
-                                        .n_cr = 10u,
-                                        .n_cs = N_CS,
-                                        .main_period_ms = 1u,
-                                        .wait_frame_max = 0u,
-                                        .padding = PAD,
-                                        .upper_receive = UPPER_RX,
-                                        .upper_transmit = UPPER_TX};
+static const CanTp_ConnectionConfigType config = {.receive = RX_NSDU,
+                                                  .transmit = TX_NSDU,
+                                                  .lower_receive = RX_NPDU,
+                                                  .lower_transmit = TX_NPDU,
+                                                  .maximum_length = 256u,
+                                                  .n_as = N_AS,
+                                                  .n_ar = 5u,
+                                                  .n_br = 5u,
+                                                  .n_bs = 10u,
+                                                  .n_cr = 10u,
+                                                  .n_cs = N_CS,
+                                                  .main_period_ms = 1u,
+                                                  .wait_frame_max = 0u,
+                                                  .padding = PAD,
+                                                  .upper_receive = UPPER_RX,
+                                                  .upper_transmit = UPPER_TX,
+                                                  .tx_dl = 8u,
+                                                  .rx_max_dl = 8u};
 /* Number of the dispatcher's CANTP_STATE exit to stop after; zero when disarmed. */
 static unsigned armed;
 static unsigned paused;
@@ -253,7 +255,7 @@ static void window(unsigned exits, unsigned request, void (*contend)(void))
 
 static void start(void)
 {
-    CanTp_Init(&config);
+    CanTp_Init(&(const CanTp_ConfigType){&config, 1u});
     sent_count = 0u;
     copy_tx_calls = 0u;
     tx_done = 0u;
@@ -270,7 +272,7 @@ static void transmit_while_confirming(void)
 /* The dispatcher took an SF: Init loses it, and a later SF is only queued. */
 static void reinitialize_while_receiving(void)
 {
-    CanTp_Init(&config);
+    CanTp_Init(&(const CanTp_ConfigType){&config, 1u});
     receive(0x02u, 0x43u, 0x44u);
     assert(starts == 0u && rx_done == 0u);
 }

@@ -443,7 +443,11 @@ pub(super) fn inspect(
         let configured = channels
             .get(&channel)
             .ok_or_else(|| fail(graph, connection, "MODE_REFERENCE"))?;
-        if let Some(transport) = transport {
+        if let Some(transport) = transport
+            .into_iter()
+            .flat_map(|tp| tp.connections())
+            .find(|tp| tp.dcm_connection == graph.elements[connection].object)
+        {
             let controller = communication
                 .channels
                 .iter()

@@ -977,6 +977,19 @@ fn cantp_standard_consumer_executes_full_duplex_transport_outside_its_area() {
     );
 }
 
+#[test]
+fn cantp_fd_wire_lengths_and_connection_ownership() {
+    let scratch = Scratch::new();
+    let executable = strict_consumer(
+        &scratch.0,
+        "CanTp",
+        "cantp_fd.c",
+        &["-DCANTP_CONNECTION_CAPACITY=3u"],
+    );
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+}
+
 /// CanTp leaves CANTP_STATE before PduR and LSduR, and discards overtaken results (ADR 0018).
 #[test]
 fn cantp_events_complete_once_while_another_context_waits_outside_the_area() {
