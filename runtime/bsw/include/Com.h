@@ -197,8 +197,8 @@ COM_CODE void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId);
 COM_CODE void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId);
 /** Update reception timing and unpack a complete configured-length signal (SWS_Com_00123).
  * @param[in] RxPduId A configured Rx I-PDU handle.
- * @param[in] PduInfoPtr Borrowed descriptor and bytes; a short PDU resets deadline monitoring but
- * does not overwrite signal data.
+ * @param[in] PduInfoPtr Borrowed descriptor and bytes. A short PDU resets deadline monitoring and
+ * updates only signals whose complete bit sets are present.
  * @par Return
  * None.
  * Preconditions: Initialized and the Rx group started; invalid inputs and unknown PDUs are ignored.

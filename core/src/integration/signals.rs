@@ -318,7 +318,7 @@ pub(super) fn inspect_ports(
                 DiagnosticCategory::Unsupported,
                 "TRANSFORMER_UNSUPPORTED",
                 crate::product_message!("backend.integration.communication.communication_signal_transformer_present"),
-                crate::product_message!("backend.integration.communication.untransformed_uint32_communication_profile_required"),
+                crate::product_message!("backend.integration.communication.untransformed_integer_communication_profile_required"),
             )]);
         }
         let implementation = SignalInteger::read(graph, graph.index(&port.implementation_type)?)?;

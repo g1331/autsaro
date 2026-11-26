@@ -4,7 +4,7 @@
 
 ### Breaking
 
-- COM now packs and unpacks signed and unsigned fixed-width signals in Intel or Motorola order. Regenerate and rebuild COM and CanIf configurations for separate signal and PDU tables and byte-aligned PDU-to-frame mappings. (#488)
+- COM now packs and unpacks signed and unsigned fixed-width signals in Intel or Motorola order. Regenerate and rebuild COM and CanIf configurations for separate signal and PDU tables and byte-aligned PDU-to-frame mappings. (#665)
 
 - Host CAN supports standard and extended FD frames, explicit receive policies and driver padding through 64 wire bytes. Regenerate ECU packages from ARXML for the FD-capable HostBatchV2 tools. Rebuild native consumers and update private `Can_ConfigType` initializers for bitrates, BRS and HTH padding. Rebuild host output consumers for the probe’s FD timing fields. CanTp continues to use Classical CAN (#485)
 
