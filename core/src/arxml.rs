@@ -11,6 +11,9 @@ mod integration_editor;
 mod persistence;
 mod project;
 mod projection;
+mod variants;
+
+pub use variants::*;
 mod xml;
 
 pub use application::{ApplicationInitializationOutcome, ApplicationInitializationPreview};
@@ -331,14 +334,14 @@ impl Workspace {
                     .map_err(|issue| vec![*issue])
             })
             .collect::<Result<_, _>>()?;
-        Ok(sources)
+        self.resolve_project_sources(sources)
     }
 
     pub fn integration_plan(
         &self,
     ) -> Result<crate::integration::ValidatedIntegrationPlan, Vec<crate::integration::PlanDiagnostic>>
     {
-        crate::integration::build_plan_native(&self.integration_sources()?, &self.catalog)
+        self.integration_plan_for_catalog(&self.catalog)
     }
 
     pub fn validate(&mut self) -> Result<WorkspaceView, crate::message::LocalizedText> {

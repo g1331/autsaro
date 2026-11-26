@@ -389,13 +389,21 @@ impl NativePreparation {
         readme: String,
     ) -> Result<Self, crate::LocalizedText> {
         let profile = crate::integration::PROFILE;
-        if inputs.application.len() != slots.len() {
+        if !slots.iter().all(|slot| {
+            inputs.manifest.application_inputs.iter().any(|member| {
+                slot.producer_slot == member.producer_slot
+                    && slot.source_paths == [member.path.clone()]
+            })
+        }) || inputs.manifest.layers.is_none() && inputs.application.len() != slots.len()
+        {
             return Err(crate::product_message!(
                 "backend.arxml.project.application_live_slot_mismatch"
             ));
         }
-        inputs.manifest.profile_hint = profile.into();
-        inputs.refresh_snapshot_identity()?;
+        if inputs.manifest.layers.is_none() {
+            inputs.manifest.profile_hint = profile.into();
+        }
+        inputs.refresh_active_snapshot_identity(Some(&slots))?;
         let snapshots = generator::delivery::populate_inputs(files, &mut inputs, &slots)?;
         let metadata = generator::delivery::metadata(profile, target, &inputs, snapshots);
         generator::delivery::ownership::validate_metadata(&metadata)?;
@@ -822,9 +830,40 @@ pub fn prepare_ecu_project_for_workspace(
     target: BuildTarget,
     handoff: bool,
 ) -> Result<PreparedProject<'static>, Vec<PlanDiagnostic>> {
+    if workspace
+        .project_manifest()
+        .is_some_and(|manifest| manifest.layers.is_some())
+    {
+        let identity = workspace
+            .layered_plan_identity()
+            .map_err(PlanDiagnostic::source_closure)?;
+        let application =
+            workspace.active_application_identity(&plan.application_slot_descriptors()?);
+        if plan
+            .sources()
+            .first()
+            .and_then(|source| source.project_identity())
+            != Some(identity.as_str())
+            || plan
+                .description()
+                .validation_dependencies
+                .get("project.application.sha256")
+                != application.as_ref()
+        {
+            return Err(PlanDiagnostic::source_closure(crate::product_message!(
+                "backend.prepared.plan_source_members_stale"
+            )));
+        }
+    }
     let native = NativeInputs::from_workspace(
         workspace,
-        plan.description().required_extension_definitions.clone(),
+        workspace
+            .project_manifest()
+            .filter(|manifest| manifest.layers.is_some())
+            .map_or_else(
+                || plan.description().required_extension_definitions.clone(),
+                |manifest| manifest.accepted_extension_definitions.clone(),
+            ),
     )
     .map_err(PlanDiagnostic::source_closure)?;
     if native.configuration.len() != plan.sources().len()
@@ -846,10 +885,7 @@ pub fn prepare_ecu_project_for_workspace(
         .get("definitions.sha256")
         != Some(&native.definition_fingerprint)
     {
-        let scoped = crate::integration::build_plan_native(
-            &native.sources().map_err(PlanDiagnostic::source_closure)?,
-            &native.guard.catalog,
-        )?;
+        let scoped = workspace.integration_plan_for_catalog(&native.guard.catalog)?;
         prepare_ecu_sources(&scoped, target, handoff, native)
     } else {
         prepare_ecu_sources(plan, target, handoff, native)

@@ -6,7 +6,6 @@ use crate::Workspace;
 use crate::arxml::ProjectManifest;
 use crate::definitions::DefinitionCatalog;
 use crate::generator::output::{FILE_HASHES, FILE_LIST};
-use crate::integration::InputSource;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -62,10 +61,12 @@ fn verify_members(
                 .inputs
                 .iter()
                 .any(|member| member.path == input.logical_path && member.role_hint == input.role),
-            InputKind::Application => manifest.application_inputs.iter().any(|member| {
-                member.path == input.logical_path
-                    && Some(member.producer_slot.as_str()) == input.producer_slot.as_deref()
-            }),
+            InputKind::Application | InputKind::InactiveApplication => {
+                manifest.application_inputs.iter().any(|member| {
+                    member.path == input.logical_path
+                        && Some(member.producer_slot.as_str()) == input.producer_slot.as_deref()
+                })
+            }
         };
         if !matched {
             return Err(
@@ -152,19 +153,10 @@ fn prepare_package(
         ));
     }
     let prepared = {
-        let sources = metadata
-            .input_snapshots
-            .iter()
-            .filter(|input| input.kind == InputKind::Arxml)
-            .map(|input| {
-                InputSource::new(&input.logical_path, payload[&input.package_path].clone())
-                    .map_err(|issue| issue.message)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let plan =
-            crate::integration::build_plan_native(&sources, &selected).map_err(diagnostics)?;
-        if plan.description().required_extension_definitions
-            != metadata.resource_identities.required_extension_definitions
+        let plan = workspace.saved_integration_plan().map_err(diagnostics)?;
+        if manifest.layers.is_none()
+            && plan.description().required_extension_definitions
+                != metadata.resource_identities.required_extension_definitions
         {
             return Err(crate::product_message!(
                 "backend.delivery.extension_dependency_mismatch"
@@ -234,7 +226,8 @@ pub fn require_current_format(package: &Path) -> Result<(), crate::LocalizedText
             format @ ("autosar-ecu-handoff-v1"
             | "autosar-host-handoff-v1"
             | "autosar-workbench-handoff-v2"
-            | "autosar-workbench-handoff-v3"),
+            | "autosar-workbench-handoff-v3"
+            | "autosar-workbench-handoff-v4"),
         ) => Err(crate::product_message!(
             "backend.project.retired_handoff_format",
             "format" => format

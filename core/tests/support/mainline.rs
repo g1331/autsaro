@@ -212,7 +212,8 @@ pub(crate) fn live_pipeline_workspace(
         std::fs::write(root.join(source.logical_path()), source.bytes()).unwrap();
     }
     let manifest = autosar_config_core::arxml::ProjectManifest {
-        format_version: 1,
+        format_version: 2,
+        layers: None,
         declared_release: "R24-11".into(),
         profile_hint: "singlecore-ecu-v1".into(),
         inputs: sources

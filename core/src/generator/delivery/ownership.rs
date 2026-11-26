@@ -78,16 +78,21 @@ fn classification(
     if let Some(input) = metadata
         .input_snapshots
         .iter()
-        .find(|input| input.kind == InputKind::Application && input.package_path == path)
+        .find(|input| input.kind != InputKind::Arxml && input.package_path == path)
     {
-        let producer = slots
+        let slot = slots
             .iter()
-            .find(|slot| {
-                input.producer_slot.as_deref() == Some(slot.producer_slot.as_str())
-                    && slot.source_paths == [input.logical_path.clone()]
-                    && application_package_path(&slot.source_paths[0]).as_deref() == Some(path)
-            })
-            .map(|slot| slot.producer_slot.as_str());
+            .find(|slot| input.producer_slot.as_deref() == Some(slot.producer_slot.as_str()));
+        let producer = match (input.kind, slot) {
+            (InputKind::Application, Some(slot))
+                if slot.source_paths == [input.logical_path.clone()]
+                    && application_package_path(&slot.source_paths[0]).as_deref() == Some(path) =>
+            {
+                Some(slot.producer_slot.as_str())
+            }
+            (InputKind::InactiveApplication, None) => input.producer_slot.as_deref(),
+            _ => None,
+        };
         let Some(producer) = producer else {
             return Err(crate::product_message!(
                 "backend.delivery.application_snapshot_unknown"
@@ -129,7 +134,12 @@ fn application_slots(
     if manifest.declared_release != "R24-11"
         || manifest.accepted_extension_definitions
             != metadata.resource_identities.required_extension_definitions
-        || manifest.profile_hint != metadata.profile_id
+        || manifest.layers.is_none() && manifest.profile_hint != metadata.profile_id
+        || manifest.layers.is_none()
+            && metadata
+                .input_snapshots
+                .iter()
+                .any(|input| input.kind == InputKind::InactiveApplication)
         || manifest.inputs.len()
             != metadata
                 .input_snapshots
@@ -140,7 +150,7 @@ fn application_slots(
             != metadata
                 .input_snapshots
                 .iter()
-                .filter(|input| input.kind == InputKind::Application)
+                .filter(|input| input.kind != InputKind::Arxml)
                 .count()
         || !manifest.inputs.iter().all(|member| {
             metadata.input_snapshots.iter().any(|input| {
@@ -160,7 +170,7 @@ fn application_slots(
             })
         || !manifest.application_inputs.iter().all(|member| {
             metadata.input_snapshots.iter().any(|input| {
-                input.kind == InputKind::Application
+                input.kind != InputKind::Arxml
                     && input.logical_path == member.path
                     && input.producer_slot.as_deref() == Some(member.producer_slot.as_str())
             })
@@ -170,13 +180,22 @@ fn application_slots(
             "backend.delivery.application_membership_mismatch"
         ));
     }
-    let sources = metadata.input_snapshots.iter().filter(|input| input.kind == InputKind::Arxml).map(|input| {
+    let mut sources = metadata.input_snapshots.iter().filter(|input| input.kind == InputKind::Arxml).map(|input| {
         let bytes = files.get(&input.package_path).ok_or_else(|| crate::product_message!("backend.delivery.mapped_input_missing"))?;
         if digest(bytes) != input.sha256 {
             return Err(crate::product_message!("backend.delivery.mapped_snapshot_changed", "path" => input.logical_path));
         }
         crate::integration::InputSource::new(&input.logical_path, bytes.to_vec()).map_err(|issue| issue.message)
     }).collect::<Result<Vec<_>, crate::LocalizedText>>()?;
+    crate::arxml::resolve_manifest_sources(
+        &manifest,
+        &mut sources,
+        &crate::definitions::DefinitionCatalog::builtin()?,
+        "",
+    )
+    .map_err(|issues| {
+        crate::LocalizedText::messages(issues.into_iter().map(|issue| issue.message))
+    })?;
     let slots =
         crate::integration::ecu::application_slots_from_sources(&sources).map_err(|issues| {
             issues.into_iter().next().map_or_else(
@@ -184,7 +203,12 @@ fn application_slots(
                 |issue| issue.message,
             )
         })?;
-    if slots.len() != manifest.application_inputs.len()
+    if slots.len()
+        != metadata
+            .input_snapshots
+            .iter()
+            .filter(|input| input.kind == InputKind::Application)
+            .count()
         || !slots.iter().all(|slot| {
             manifest.application_inputs.iter().any(|member| {
                 member.producer_slot == slot.producer_slot
@@ -324,6 +348,17 @@ pub(crate) fn validate_metadata(metadata: &HandoffMetadata) -> Result<(), crate:
                 {
                     return Err(crate::product_message!(
                         "backend.delivery.configuration_mapping_invalid"
+                    ));
+                }
+            }
+            InputKind::InactiveApplication => {
+                if input.package_path != format!("inputs/inactive/{}", input.logical_path)
+                    || application_package_path(&input.logical_path).is_none()
+                    || input.producer_slot.is_none()
+                    || input.role != "inactive-application"
+                {
+                    return Err(crate::product_message!(
+                        "backend.delivery.application_boundary_unsupported"
                     ));
                 }
             }

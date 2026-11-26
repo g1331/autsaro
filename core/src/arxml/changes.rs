@@ -496,6 +496,12 @@ impl Workspace {
         changes: &ChangeSet,
     ) -> Result<Candidate, crate::message::LocalizedText> {
         self.ensure_sources_current()?;
+        if self
+            .project_manifest()
+            .is_some_and(|manifest| manifest.layers.is_some())
+        {
+            return Err("Use layer operations to edit a layered project.".into());
+        }
         // AppState validates both Session-token echoes before entering this core
         // transaction. Confirmation independently binds actual bytes/revision/catalog.
         if changes.workspace_epoch != self.epoch
