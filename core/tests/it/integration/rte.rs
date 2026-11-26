@@ -693,7 +693,6 @@ fn generated_callback_and_lifecycle_declarations_use_their_definition_sections()
                 "RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached);",
                 "RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events);",
                 "RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached);",
-                "RTE_Ecu_CODE int Ecu_StackFrameShape(uint8 channel, uint32 id, uint8 dlc);",
             ][..],
         ),
     ] {
