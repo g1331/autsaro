@@ -16,7 +16,7 @@ pub struct DataPort {
     pub read: bool,
     pub api_symbol: String,
     pub runnable: String,
-    pub initial_value: u32,
+    pub initial_value: i64,
     pub handle_never_received: bool,
     pub alive_timeout_ms: Option<u32>,
 }
@@ -182,34 +182,84 @@ pub(super) fn implementation(
         .flat_map(|set| graph.descendants(set, "DATA-TYPE-MAP"))
         .filter(|map| graph.target(*map, "APPLICATION-DATA-TYPE-REF") == Some(application))
         .collect();
-    let mapping = one(graph, mapping_context, maps, "TYPE_MAP_MISSING")?;
+    let [mapping] = maps.as_slice() else {
+        return Err(reject(
+            graph,
+            maps.get(1).copied().unwrap_or(mapping_context),
+            "TYPE_MAP_MISSING",
+            crate::product_message!(
+                "backend.integration.component.sr_unique_data_type_map_required",
+                "type" => &graph.elements[application].object
+            ),
+        ));
+    };
     let implementation = referenced(
         graph,
-        mapping,
+        *mapping,
         "IMPLEMENTATION-DATA-TYPE-REF",
         "TYPE_MAP_MISSING",
     )?;
-    let base = one(
-        graph,
-        implementation,
-        graph.descendants(implementation, "BASE-TYPE-REF"),
-        "TYPE_CONFLICT",
-    )?;
-    let base = graph.index(&graph.elements[base].text)?;
-    if graph.text(base, "BASE-TYPE-SIZE") != Some("32")
-        || graph.text(base, "NATIVE-DECLARATION") != Some("uint32")
-        || graph.text(implementation, "CATEGORY") != Some("VALUE")
+    if graph.text(implementation, "CATEGORY") != Some("VALUE")
+        || graph
+            .text(implementation, "TYPE-EMITTER")
+            .is_some_and(|emitter| emitter != "RTE")
     {
         return Err(reject(
             graph,
-            context,
+            implementation,
             "TYPE_CONFLICT",
-            crate::product_message!(
-                "backend.integration.component.sr_mapped_uint32_implementation_type_required"
-            ),
+            crate::product_message!("backend.integration.component.sr_integer_type_required"),
         ));
     }
     Ok(implementation)
+}
+
+/// Integer representations shared by the implementation and network layers.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) struct SignalInteger<'a> {
+    pub native: &'a str,
+    pub bits: u16,
+    pub signed: bool,
+}
+
+impl<'a> SignalInteger<'a> {
+    pub fn from_base(graph: &'a Graph, base: usize) -> Option<Self> {
+        let (native, size, _) = super::rte_types::scalar_base(graph, base)?;
+        let bits = size.parse().ok()?;
+        let signed = match native {
+            "uint8" | "uint16" | "uint32" => false,
+            "sint8" | "sint16" | "sint32" => true,
+            _ => return None,
+        };
+        Some(Self {
+            native,
+            bits,
+            signed,
+        })
+    }
+
+    pub fn read(graph: &'a Graph, owner: usize) -> Result<Self, Vec<PlanDiagnostic>> {
+        let reference = one(
+            graph,
+            owner,
+            graph.descendants(owner, "BASE-TYPE-REF"),
+            "TYPE_CONFLICT",
+        )?;
+        let base = graph.index(&graph.elements[reference].text)?;
+        Self::from_base(graph, base).ok_or_else(|| {
+            reject(
+                graph,
+                base,
+                "TYPE_CONFLICT",
+                crate::product_message!("backend.integration.component.sr_integer_type_required"),
+            )
+        })
+    }
+
+    pub fn contains(self, value: i64, bits: u16) -> bool {
+        let upper = 1i64 << (bits - u16::from(self.signed));
+        (if self.signed { -upper } else { 0 }..upper).contains(&value)
+    }
 }
 
 pub(super) fn selected_channel(graph: &Graph, ecu: usize) -> Result<usize, Vec<PlanDiagnostic>> {

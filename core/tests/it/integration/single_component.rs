@@ -574,7 +574,8 @@ fn network_rejections_locate_extract_objects() {
         "/Extract/ReferenceEcu/CanConnector/RxValueFramePort",
     );
 
-    // A 16-bit I-signal cannot carry the 32-bit application value.
+    // The 16-bit network width fits UINT32. The mirrored ECUC mapping still
+    // declares 32 bits and must be corrected at the actual ComSignal.
     let mut length = single_component_sources();
     xml_edit(
         &mut length,
@@ -582,11 +583,14 @@ fn network_rejections_locate_extract_objects() {
         |node| named(node, "I-SIGNAL", "RxValueSignal"),
         |text| text.replace("<LENGTH>32</LENGTH>", "<LENGTH>16</LENGTH>"),
     );
-    rejected_at(
-        &length,
-        "LENGTH_CONFLICT",
-        "extract.arxml",
-        "/Extract/RxValueSignal",
+    let issues = build(&length)
+        .err()
+        .expect("mismatched ComBitSize accepted");
+    assert!(
+        issues.iter().any(|issue| issue.code == "TYPE_CONFLICT"
+            && issue.file.as_deref() == Some("ecuc.arxml")
+            && issue.object.as_deref() == Some("/Configuration/Com/Config/RxValue")),
+        "{issues:?}"
     );
 
     // An I-signal data transformation. Plan construction stops at the
@@ -2463,8 +2467,8 @@ fn pdur_features_outside_the_selection_are_refused_at_their_source() {
     }
 }
 
-/// Com values outside the selected immediate UINT32 profile are refused at the Com
-/// container that holds them.
+/// Unsupported COM parameters and mismatches with the selected source type
+/// are refused at the Com container that holds them.
 #[test]
 fn com_parameters_outside_the_selection_are_refused_at_their_source() {
     let general = "/Configuration/Com/General";

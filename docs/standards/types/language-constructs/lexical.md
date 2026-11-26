@@ -117,8 +117,8 @@ Clang 18.1.3 对这 16 份 GCC 展开逐 TU 以 C99 成功检查语法，保留 
 | --- | --- | --- | --- |
 | CanTp.c:164 | running | cantp_running | 进入 runner 时认领，工作队列耗尽时释放 |
 | Det.c:10 | initialized | det_ready | Init 发布配置和就绪状态，ReportError／ReportRuntimeError 检查就绪 |
-| Com.c:31 | reloaded_before_main | com_rx_reloaded | RxIndication 记录本周期重载，MainFunctionRx 读取并清除 |
-| Com.c:30 | remaining | com_ticks | RxIndication 重载超时计数，MainFunctionRx 递减并在到期后重载 |
+| Com.c:34 | reloaded_before_main | com_rx_reloaded | RxIndication 记录本周期重载，MainFunctionRx 读取并清除 |
+| Com.c:33 | remaining | com_ticks | RxIndication 重载超时计数，MainFunctionRx 递减并在到期后重载 |
 | Dcm.c:101 | pending_session | dcm_pending_session | 请求结果写入对象，抑制响应或成功发送确认时提交会话 |
 | Dcm.c:87 | state | dcm_s | TP 接收、主调度和发送确认读写请求状态 |
 | Dcm.c:100 | session | dcm_ses | 会话设置、公开查询、DID 消费及 S3 到期逻辑读取或更新当前会话 |

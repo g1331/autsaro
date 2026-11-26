@@ -195,7 +195,9 @@ pub(super) fn inspect(
         if value(graph, pdu, "ComIPduSignalProcessing", false) != Some("IMMEDIATE") {
             return Err(fail(graph, pdu, "COM_FEATURE_UNSUPPORTED"));
         }
-        if value(graph, pdu, "ComIPduCallout", false).is_some() {
+        if !values(graph, pdu, "ComIPduSignalGroupRef", true).is_empty()
+            || value(graph, pdu, "ComIPduCallout", false).is_some()
+        {
             return Err(fail(graph, pdu, "COM_FEATURE_UNSUPPORTED"));
         }
         for tx in graph
@@ -255,7 +257,11 @@ pub(super) fn inspect(
     let mut seen = BTreeSet::new();
     let mut receptions = Vec::new();
     let mut accepted = BTreeSet::new();
+    let mut seen_signals = BTreeSet::new();
     for signal in signals.iter().filter(|signal| signal.receive) {
+        if !seen_signals.insert(&signal.com_signal) {
+            continue;
+        }
         let index = graph.index(&signal.com_signal)?;
         let user_signal = unique(
             graph,

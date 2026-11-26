@@ -105,9 +105,11 @@ static void rejection(PduIdType id, Std_ReturnType result)
 }
 static const Det_ErrorHookType error_hooks[] = {error};
 static const Det_ConfigType det_config = {NULL_PTR, 0u, error_hooks, 1u};
-static const Com_PduConfigType pdus[] = {{1u, 10u, TRUE, 7u, 30u, 17u},
-                                         {2u, 11u, FALSE, 9u, 0u, 0u}};
-static const Com_ConfigType com_config = {pdus, 2u, 0u, receive, timeout, lower, rejection};
+static const Com_PduConfigType pdus[] = {{1u, TRUE, 4u, 0u, 0u, 1u}, {2u, FALSE, 4u, 0u, 1u, 1u}};
+static const Com_SignalConfigType signals[] = {{10u, COM_UINT32, 0u, 32u, FALSE, 7u, 30u, 17u},
+                                               {11u, COM_UINT32, 0u, 32u, FALSE, 9u, 0u, 0u}};
+static const Com_ConfigType com_config = {
+    pdus, 2u, signals, 2u, 0u, receive, timeout, lower, rejection};
 static const PduR_RxRouteType pdur_rx[] = {{31u, 1u, Com_RxIndication}};
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_COM, 2u, PDUR_LO_LSDUR, 41u, LSduR_PduRTransmit, confirmed, Com_TriggerTransmit}};
@@ -116,8 +118,8 @@ static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit}};
 static const LSduR_PBConfigType ls_config = {29u, ls_rx, 1u, ls_tx, 1u};
-static const CanIf_RxPduConfigType canif_rx[] = {{0x123u, 21u, 4u, FALSE}};
-static const CanIf_TxPduConfigType canif_tx[] = {{0x456u, 51u, 4u}};
+static const CanIf_RxPduConfigType canif_rx[] = {{0x123u, 21u, 4u, FALSE, 0u, 0u}};
+static const CanIf_TxPduConfigType canif_tx[] = {{0x456u, 51u, 4u, 0u, 0u}};
 static const CanIf_ConfigType canif_config = {
     canif_rx, 1u, canif_tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u};
 static const Can_ConfigType can_config = {.sink = sink};

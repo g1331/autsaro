@@ -469,6 +469,43 @@ def _can_fd_baseline_plan(plan: dict) -> dict:
     }
 
 
+def _com_layout_predecessor(plan: dict, previous: dict) -> dict:
+    """Project the explicit layout onto COM's original four-byte UINT32 profile."""
+    layout = {
+        "bigEndian": False, "nativeType": "uint32", "initialValue": 0,
+        "frameStartBit": 0, "frameBigEndian": False, "frameOffset": 0,
+        "pduLength": 4, "unusedByte": 0,
+    }
+    added = layout.keys() | {"frameMapping"}
+
+    def legacy(signal):
+        if not added <= signal.keys():
+            return signal
+        mapping = signal["frameMapping"]
+        # The sealed input snapshots must still match. The old validator already
+        # required a unique PDU mapping under the selected frame.
+        owner, _, name = mapping.rpartition("/") if isinstance(mapping, str) else ("", "", "")
+        if (signal["startBit"] != 0 or signal["bitLength"] != 32 or signal["dlc"] != 4
+                or any(type(signal.get(key)) is not type(value) or signal[key] != value
+                       for key, value in layout.items())
+                or owner != signal["frame"] or not name):
+            return signal
+        return {key: value for key, value in signal.items() if key not in added}
+
+    signals = previous.get("signals", [])
+    if not signals or any(added & signal.keys() for signal in signals):
+        return plan
+    composition = plan["composition"]
+    return {
+        **plan,
+        "signals": [legacy(signal) for signal in plan["signals"]],
+        "composition": {**composition, "networkEndpoints": [
+            {**endpoint, "transport": legacy(endpoint["transport"])}
+            for endpoint in composition["networkEndpoints"]
+        ]},
+    }
+
+
 def compare(
     current: dict, project: Path, output: Path, baseline: Path, *,
     source_tree: bool = False, renames: dict[str, str] | None = None,
@@ -584,8 +621,11 @@ def compare(
         if can_fd_transition:
             previous_plan = _can_fd_baseline_plan(previous_plan)
         output_plan = _configuration(output / "project", source_tree=source_tree)
-        if (normalized(plan) != normalized(previous_plan)
-                or normalized(plan) != normalized(output_plan)):
+        comparable_plan = normalized(plan)
+        normalized_previous = normalized(previous_plan)
+        if source_tree and comparable_plan != normalized_previous:
+            comparable_plan = normalized(_com_layout_predecessor(plan, previous_plan))
+        if comparable_plan != normalized_previous or normalized(plan) != normalized(output_plan):
             raise ValueError("Sample generation configuration differs")
         def programs(summary, rename=False):
             rows = [(row["name"], renames.get(row["entry"], row["entry"])

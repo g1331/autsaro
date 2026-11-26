@@ -434,14 +434,35 @@ pub(super) fn files(
         if matches!(module.as_str(), "CanIf" | "PduR" | "LSduR" | "Rte") {
             continue;
         }
+        let mut body =
+            c_layout::required_defines(definitions, "Generated handle.", "TPS_ECUC_02108");
+        if module == "Com" {
+            let signals = &description.signals;
+            let pdus = super::signals::pdus(signals).count();
+            let signals_count = description
+                .handles
+                .iter()
+                .filter(|handle| handle.domain == "com_signal")
+                .count();
+            let payload = signals
+                .iter()
+                .map(|signal| signal.pdu_length)
+                .max()
+                .unwrap_or(1);
+            body.push('\n');
+            body.push_str(&c_layout::commented_defines(
+                &[
+                    ("COM_PDU_CAPACITY", format!("{pdus}u")),
+                    ("COM_SIGNAL_CAPACITY", format!("{signals_count}u")),
+                    ("COM_PAYLOAD_CAPACITY", format!("{payload}u")),
+                ],
+                "Storage capacity derived from the selected COM layout.",
+            ));
+        }
         outputs.emit(
             ECU,
             format!("include/{module}_Cfg.h"),
-            header(
-                module,
-                &format!("{}_CFG_H", module.to_uppercase()),
-                &c_layout::required_defines(definitions, "Generated handle.", "TPS_ECUC_02108"),
-            ),
+            header(module, &format!("{}_CFG_H", module.to_uppercase()), &body),
         )?;
     }
 
@@ -792,7 +813,8 @@ pub(super) fn files(
     let mut pd_rx = Vec::new();
     let mut pd_tx = Vec::new();
     let mut pdus = Vec::new();
-    for signal in &description.signals {
+    let mut signal_rows = Vec::new();
+    for signal in super::signals::pdus(&description.signals) {
         let route = description
             .routes
             .iter()
@@ -804,7 +826,6 @@ pub(super) fn files(
         } else {
             name("PduR", "PduRSrcPdu", &route.source)
         };
-        let signal_id = name("Com", "ComSignal", &signal.com_signal);
         let can_if = name(
             "CanIf",
             if signal.receive {
@@ -816,34 +837,54 @@ pub(super) fn files(
         );
         let source = name("PduR", "PduRSrcPdu", &route.source);
         let ls_source = name("LSduR", "LSduRPathSourcePdu", &route.source);
-        // signals::inspect requires source ComSignalInitValue=0.
-        // Receiver ComSpec init is independent RTE state; it must not replace
-        // the actual COM initialization or group Start(TRUE) value.
-        let initial = 0;
-        let reception = com
-            .receptions
-            .iter()
-            .find(|reception| reception.signal == signal.com_signal);
-        let reception_timeout = match reception {
-            Some(rx) => periods(
-                rx.timeout_ms,
-                com.receive_main.period_ms,
-                &com.receive_main.path,
-            )?,
-            None => 0,
-        };
-        let callback = reception.map_or_else(
-            || "0u".into(),
-            |rx| name("Rte", "ComUserSignal", &rx.user_signal),
-        );
+        let first = signal_rows.len();
+        let mut seen = std::collections::BTreeSet::new();
+        for member in description.signals.iter().filter(|member| {
+            member.com_pdu == signal.com_pdu && seen.insert(member.com_signal.as_str())
+        }) {
+            let signal_id = name("Com", "ComSignal", &member.com_signal);
+            let reception = com
+                .receptions
+                .iter()
+                .find(|rx| rx.signal == member.com_signal);
+            let timeout = match reception {
+                Some(rx) => periods(
+                    rx.timeout_ms,
+                    com.receive_main.period_ms,
+                    &com.receive_main.path,
+                )?,
+                None => 0,
+            };
+            let callback = reception.map_or_else(
+                || "0u".into(),
+                |rx| name("Rte", "ComUserSignal", &rx.user_signal),
+            );
+            let initial = member.initial_value & ((1i64 << member.bit_length) - 1);
+            signal_rows.push(row(&format!(
+                "{signal_id}, COM_{}, {}u, {}u, {}, {initial}u, {timeout}u, {callback}",
+                member.native_type.to_ascii_uppercase(),
+                member.start_bit,
+                member.bit_length,
+                if member.big_endian { "TRUE" } else { "FALSE" },
+            )));
+        }
+        let count = signal_rows.len() - first;
         pdus.push(row(&format!(
-            "{pdu}, {signal_id}, {}, {initial}u, {}u, {callback}",
+            "{pdu}, {}, {}u, {}u, {first}u, {count}u",
             if signal.receive { "TRUE" } else { "FALSE" },
-            reception_timeout
+            signal.pdu_length,
+            signal.unused_byte
         )));
+        let length = signal.pdu_length;
+        let offset = signal.frame_offset;
+        let frame_length = if offset == 0 && length == signal.dlc {
+            0
+        } else {
+            signal.dlc
+        };
         if signal.receive {
             receive.push(row(&format!(
-                "{}u, {can_if}, 4u, {}",
+                "{}u, {can_if}, {length}u, {}, {offset}u, {frame_length}u",
                 signal.encoded_id(),
                 if signal.accepts_fd { "TRUE" } else { "FALSE" }
             )));
@@ -852,7 +893,10 @@ pub(super) fn files(
             )));
             pd_rx.push(row(&format!("{source}, {pdu}, &Com_RxIndication")));
         } else {
-            transmit.push(row(&format!("{}u, {can_if}, 4u", signal.encoded_id())));
+            transmit.push(row(&format!(
+                "{}u, {can_if}, {length}u, {offset}u, {frame_length}u",
+                signal.encoded_id()
+            )));
             ls_tx.push(row(&format!(
                 "LSDUR_UP_PDUR, {ls_source}, {can_if}, &PduR_CanIfTxConfirmation, &PduR_CanIfTriggerTransmit"
             )));
@@ -865,13 +909,20 @@ pub(super) fn files(
         "static const Com_PduConfigType com_pdus[]",
         &pdus,
     );
+    config_data(
+        &mut config,
+        "Com",
+        "static const Com_SignalConfigType com_signals[]",
+        &signal_rows,
+    );
     init_data(
         &mut config,
         "Com",
         "static const Com_ConfigType com_config",
         &values(&format!(
-            "com_pdus, {}u, {}, &Rte_COMCbk, &Rte_COMCbkRxTOut, &PduR_ComTransmit, &Ecu_ComRecordRejection",
-            description.signals.len(),
+            "com_pdus, {}u, com_signals, {}u, {}, &Rte_COMCbk, &Rte_COMCbkRxTOut, &PduR_ComTransmit, &Ecu_ComRecordRejection",
+            pdus.len(),
+            signal_rows.len(),
             name("Com", "ComIPduGroup", &com.receive_group.path)
         )),
     );
@@ -900,10 +951,13 @@ pub(super) fn files(
         let ls_rx_source = name("LSduR", "LSduRPathSourcePdu", &rx_route.source);
         let ls_tx_source = name("LSduR", "LSduRPathSourcePdu", &tx_route.source);
         receive.push(row(&format!(
-            "{}u, {can_rx}, 8u, FALSE",
+            "{}u, {can_rx}, 8u, FALSE, 0u, 0u",
             tp.encoded_request_id(),
         )));
-        transmit.push(row(&format!("{}u, {can_tx}, 8u", tp.encoded_response_id())));
+        transmit.push(row(&format!(
+            "{}u, {can_tx}, 8u, 0u, 0u",
+            tp.encoded_response_id()
+        )));
         ls_rx.push(row(&format!(
             "{ls_rx_source}, {tp_rx}, &CanTp_RxIndication"
         )));
@@ -997,15 +1051,11 @@ pub(super) fn files(
             entries,
         );
     }
-    let rx_signals = description
-        .signals
-        .iter()
+    let rx_signals = super::signals::pdus(&description.signals)
         .filter(|signal| signal.receive)
         .count();
     let rx_count = rx_signals + usize::from(transport.is_some());
-    let tx_count = description
-        .signals
-        .iter()
+    let tx_count = super::signals::pdus(&description.signals)
         .filter(|signal| !signal.receive)
         .count()
         + usize::from(transport.is_some());
@@ -1062,7 +1112,7 @@ pub(super) fn files(
                 module,
                 &format!("{}_CFG_H", module.to_uppercase()),
                 &format!(
-                    "#include \"{module}.h\"\n{}{}extern const {ty} {module}_Config RTE_{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED;\n{}{}",
+                    "#include \"{module}.h\"\n{}{}{}extern const {ty} {module}_Config RTE_{module}_CONFIG_DATA_PREBUILD_UNSPECIFIED;\n{}{}",
                     if module == "LSduR" {
                         format!(
                             "/* ECUC_LSduR_00004: fixed derived pre-compile selection. */\n{}\n{}",
@@ -1082,6 +1132,12 @@ pub(super) fn files(
                             "TPS_ECUC_02108",
                         )
                     },
+                    if module == "CanIf" {
+                        c_layout::commented_defines(
+                            &[("CANIF_TX_CAPACITY", format!("{}u", tx_count.max(1)))],
+                            "Storage capacity derived from the selected Tx PDUs.",
+                        )
+                    } else { String::new() },
                     c_layout::section(&format!("RTE_{module}"), "Rte", "CONFIG_DATA_PREBUILD_UNSPECIFIED", true),
                     c_layout::section(&format!("RTE_{module}"), "Rte", "CONFIG_DATA_PREBUILD_UNSPECIFIED", false),
                     c_layout::release_check(&format!("{module}_Cfg.h"), "Rte_MemMap.h", "MEMMAP")
@@ -1466,29 +1522,28 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
     }
 "#,
     );
-    for signal in &description.signals {
+    for signal in super::signals::pdus(&description.signals) {
         let id = signal.encoded_id();
+        let dlc = signal.dlc;
         let condition = if signal.receive && signal.accepts_fd {
             format!("(id & ~CAN_ID_FD_FLAG) == {id}u")
         } else {
             format!("id == {id}u")
         };
+        let check = if !signal.receive {
+            "0".into()
+        } else if signal.accepts_fd {
+            format!("((id & CAN_ID_FD_FLAG) != 0u) ? (dlc >= {dlc}u) : (dlc == {dlc}u)")
+        } else if signal.fd {
+            format!("dlc >= {dlc}u")
+        } else {
+            format!("dlc == {dlc}u")
+        };
         config.push_str(&format!(
             r#"    if ({condition}) {{
-        return {};
+        return {check};
     }}
-"#,
-            if signal.receive {
-                if signal.accepts_fd {
-                    "((id & CAN_ID_FD_FLAG) != 0u) ? (dlc >= 4u) : (dlc == 4u)"
-                } else if signal.fd {
-                    "dlc >= 4u"
-                } else {
-                    "dlc == 4u"
-                }
-            } else {
-                "0"
-            }
+"#
         ));
     }
     if let Some(tp) = transport {

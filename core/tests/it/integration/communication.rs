@@ -721,3 +721,330 @@ fn actual_partition_owns_all_instances_and_all_com_producers() {
     );
     rejects_in_both(&sources, "RTE_PARTITION_CONFIGURATION");
 }
+
+#[test]
+fn com_integer_plan_keeps_two_levels_and_locates_invalid_fields() {
+    let sources = integer_signal_sources();
+    let plan = build(&sources).unwrap();
+    // Assert the delivered plan fields through serialization. The current
+    // suite also compiles against the first-parent C-analysis generator.
+    let channels = serde_json::to_value(&plan.description().signals).unwrap();
+    let channels = channels.as_array().unwrap();
+    let rx = channels
+        .iter()
+        .find(|channel| channel["receive"] == true)
+        .unwrap();
+    let tx = channels
+        .iter()
+        .find(|channel| channel["receive"] == false)
+        .unwrap();
+    for (channel, big, start) in [(rx, false, 8), (tx, true, 15)] {
+        assert_eq!(channel["startBit"], 5);
+        assert_eq!(channel["bigEndian"], big);
+        assert_eq!(channel["frameStartBit"], start);
+        assert_eq!(channel["frameOffset"], 1);
+        assert_eq!(channel["bitLength"], 10);
+        assert_eq!(channel["pduLength"], 2);
+        assert_eq!(channel["dlc"], 4);
+    }
+    assert_eq!(tx["initialValue"], -7);
+
+    let mut inherited = sources.clone();
+    xml_edit(
+        &mut inherited,
+        "extract.arxml",
+        |node| named(node, "I-SIGNAL", "RxValueSignal"),
+        |block| {
+            let start = block.find("<NETWORK-REPRESENTATION-PROPS>").unwrap();
+            let end = block.find("</NETWORK-REPRESENTATION-PROPS>").unwrap()
+                + "</NETWORK-REPRESENTATION-PROPS>".len();
+            format!("{}{}", &block[..start], &block[end..])
+                .replace(">OVERRIDE<", ">NETWORK-REPRESENTATION-FROM-COM-SPEC<")
+        },
+    );
+    let plan = build(&inherited).unwrap();
+    let channels = serde_json::to_value(&plan.description().signals).unwrap();
+    assert_eq!(
+        channels
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|channel| channel["receive"] == true)
+            .unwrap()["nativeType"],
+        "sint16"
+    );
+
+    for (tag, object, field, replacement, path) in [
+        (
+            "I-SIGNAL",
+            "TxValueSignal",
+            "LENGTH",
+            "17",
+            "/Extract/TxValueSignal",
+        ),
+        (
+            "I-SIGNAL-TO-I-PDU-MAPPING",
+            "TxValueMap",
+            "START-POSITION",
+            "13",
+            "/Extract/TxValuePdu/TxValueMap",
+        ),
+        (
+            "PDU-TO-FRAME-MAPPING",
+            "TxValuePduMap",
+            "START-POSITION",
+            "31",
+            "/Extract/TxValueFrame/TxValuePduMap",
+        ),
+        (
+            "PDU-TO-FRAME-MAPPING",
+            "TxValuePduMap",
+            "START-POSITION",
+            "8",
+            "/Extract/TxValueFrame/TxValuePduMap",
+        ),
+    ] {
+        let mut invalid = sources.clone();
+        xml_edit(
+            &mut invalid,
+            "extract.arxml",
+            |node| named(node, tag, object),
+            |block| {
+                let start = block.find(&format!("<{field}>")).unwrap() + field.len() + 2;
+                let end = start + block[start..].find('<').unwrap();
+                format!("{}{replacement}{}", &block[..start], &block[end..])
+            },
+        );
+        let issues = build(&invalid).err().expect("invalid layout accepted");
+        assert!(
+            issues.iter().any(|issue| issue.code == "LENGTH_CONFLICT"
+                && issue.file.as_deref() == Some("extract.arxml")
+                && issue.object.as_deref() == Some(path)),
+            "{issues:?}"
+        );
+    }
+
+    let mut overlap = sources.clone();
+    xml_edit(
+        &mut overlap,
+        "extract.arxml",
+        |node| named(node, "I-SIGNAL", "TxValueSignal"),
+        |block| {
+            let extra = block
+                .replace("TxValueSignal", "ExtraSignal")
+                .replace("TxValueSystemSignal", "ExtraSystemSignal");
+            format!(
+                "{block}{extra}<SYSTEM-SIGNAL><SHORT-NAME>ExtraSystemSignal</SHORT-NAME></SYSTEM-SIGNAL>"
+            )
+        },
+    );
+    xml_edit(
+        &mut overlap,
+        "extract.arxml",
+        |node| named(node, "I-SIGNAL-TO-I-PDU-MAPPING", "TxValueMap"),
+        |block| {
+            let extra = block
+                .replace("TxValueMap", "OverlappingMap")
+                .replace("TxValueSignal", "ExtraSignal");
+            format!("{block}{extra}")
+        },
+    );
+    let issues = build(&overlap).err().expect("overlapping signal accepted");
+    assert!(
+        issues.iter().any(|issue| issue.code == "CAN_SIGNAL_OVERLAP"
+            && issue.file.as_deref() == Some("extract.arxml")
+            && issue.object.as_deref() == Some("/Extract/TxValuePdu/OverlappingMap")),
+        "{issues:?}"
+    );
+
+    fn mapping_set(node: roxmltree::Node<'_, '_>) -> bool {
+        named(node, "DATA-TYPE-MAPPING-SET", "ApplicationTypes")
+    }
+    let mut ambiguous = sources.clone();
+    xml_edit(&mut ambiguous, "types.arxml", mapping_set, |block| {
+        let start = block.find("<DATA-TYPE-MAP>").unwrap();
+        let end = block.find("</DATA-TYPE-MAP>").unwrap() + "</DATA-TYPE-MAP>".len();
+        format!("{}{}{}", &block[..end], &block[start..end], &block[end..])
+    });
+    let issues = build(&ambiguous)
+        .err()
+        .expect("ambiguous DataTypeMap accepted");
+    assert!(
+        issues.iter().any(|issue| issue.code == "TYPE_MAP_MISSING"
+            && issue.file.as_deref() == Some("types.arxml")
+            && issue.object.as_deref() == Some("/Types/ApplicationTypes")),
+        "{issues:?}"
+    );
+
+    let mut missing = sources.clone();
+    xml_edit(&mut missing, "types.arxml", mapping_set, |block| {
+        let start = block.find("<DATA-TYPE-MAPS>").unwrap();
+        let end = block.find("</DATA-TYPE-MAPS>").unwrap() + "</DATA-TYPE-MAPS>".len();
+        format!("{}{}", &block[..start], &block[end..])
+    });
+    let issues = build(&missing).err().expect("missing DataTypeMap accepted");
+    assert!(
+        issues.iter().any(|issue| issue.code == "TYPE_MAP_MISSING"
+            && issue.file.as_deref() == Some("types.arxml")
+            && issue.object.as_deref() == Some("/Types/ApplicationTypes")),
+        "{issues:?}"
+    );
+}
+
+#[test]
+fn com_shared_pdu_refuses_different_monitored_port_deadlines() {
+    let mut sources = two_receiver_inputs();
+    for name in ["RxValueSignal", "RxSecondSignal"] {
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| named(node, "I-SIGNAL", name),
+            |block| block.replace("<LENGTH>32<", "<LENGTH>16<"),
+        );
+    }
+    parameter(&mut sources, "RxValue", "ComBitSize", "16");
+    parameter(&mut sources, "RxSecond", "ComBitSize", "16");
+    parameter(&mut sources, "RxSecond", "ComBitPosition", "16");
+
+    let extract = sources
+        .iter()
+        .find(|source| source.logical_path() == "extract.arxml")
+        .unwrap();
+    let source = std::str::from_utf8(extract.bytes()).unwrap();
+    let document = roxmltree::Document::parse(source).unwrap();
+    let second = document
+        .descendants()
+        .find(|node| named(*node, "I-SIGNAL-TO-I-PDU-MAPPING", "RxSecondMap"))
+        .unwrap();
+    let mapping = source[second.range()].replace("<START-POSITION>0<", "<START-POSITION>16<");
+    xml_edit(
+        &mut sources,
+        "extract.arxml",
+        |node| named(node, "I-SIGNAL-I-PDU", "RxValuePdu"),
+        |block| {
+            block.replace(
+                "</I-SIGNAL-TO-PDU-MAPPINGS>",
+                &format!("{mapping}</I-SIGNAL-TO-PDU-MAPPINGS>"),
+            )
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "extract.arxml",
+        |node| named(node, "PDU-TRIGGERING", "RxValuePduTrigger"),
+        |block| {
+            let reference = "<I-SIGNAL-TRIGGERING-REF-CONDITIONAL><I-SIGNAL-TRIGGERING-REF DEST=\"I-SIGNAL-TRIGGERING\">/Extract/ReferenceCan/Channel/RxSecondSignalTrigger</I-SIGNAL-TRIGGERING-REF></I-SIGNAL-TRIGGERING-REF-CONDITIONAL>";
+            block.replace(
+                "</I-SIGNAL-TRIGGERINGS>",
+                &format!("{reference}</I-SIGNAL-TRIGGERINGS>"),
+            )
+        },
+    );
+    for (tag, name) in [
+        ("I-SIGNAL-I-PDU", "RxSecondPdu"),
+        ("CAN-FRAME", "RxSecondFrame"),
+        ("CAN-FRAME-TRIGGERING", "RxSecondTrigger"),
+        ("PDU-TRIGGERING", "RxSecondPduTrigger"),
+    ] {
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| named(node, tag, name),
+            |_| String::new(),
+        );
+    }
+    replace_all(
+        &mut sources,
+        "/Extract/RxSecondPdu/RxSecondMap",
+        "/Extract/RxValuePdu/RxSecondMap",
+    );
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "RxValuePdu")
+                && node.children().any(|field| {
+                    field.has_tag_name("DEFINITION-REF")
+                        && field
+                            .text()
+                            .is_some_and(|value| value.ends_with("/ComIPdu"))
+                })
+        },
+        |block| {
+            let definition = "/AUTOSAR/EcucDefs/Com/ComConfig/ComIPdu/ComIPduSignalRef";
+            let reference = format!(
+                "<ECUC-REFERENCE-VALUE><DEFINITION-REF DEST=\"ECUC-REFERENCE-DEF\">{definition}</DEFINITION-REF><VALUE-REF DEST=\"ECUC-CONTAINER-VALUE\">/Configuration/Com/Config/RxSecond</VALUE-REF></ECUC-REFERENCE-VALUE>"
+            );
+            block.replace(
+                "</REFERENCE-VALUES>",
+                &format!("{reference}</REFERENCE-VALUES>"),
+            )
+        },
+    );
+    for (name, definition) in [
+        ("RxSecondPdu", "/EcucPduCollection/Pdu"),
+        ("RxSecondPdu", "/ComConfig/ComIPdu"),
+        ("RxSecond", "/CanIfInitCfg/CanIfRxPduCfg"),
+        ("RxSecondSource", "/PduRRoutingPaths/PduRSrcPdu"),
+        ("RxSecondDestination", "/PduRRoutingPaths/PduRDestPdu"),
+        ("RxSecond", "/PduRRoutingPaths/PduRRoutingPath"),
+    ] {
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| {
+                named(node, "ECUC-CONTAINER-VALUE", name)
+                    && node.children().any(|field| {
+                        field.has_tag_name("DEFINITION-REF")
+                            && field
+                                .text()
+                                .is_some_and(|value| value.ends_with(definition))
+                    })
+            },
+            |_| String::new(),
+        );
+    }
+
+    let issues = build(&sources)
+        .err()
+        .expect("shared PDU accepted divergent deadlines");
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "COM_SHARED_DEADLINE"
+                && issue.file.as_deref() == Some("ecuc.arxml")
+                && issue.object.as_deref() == Some("/Configuration/Com/Config/RxValue")),
+        "{issues:?}"
+    );
+
+    parameter(&mut sources, "RxSecond", "ComTimeout", "0.03");
+    xml_edit(
+        &mut sources,
+        "ingress.arxml",
+        |node| named(node, "R-PORT-PROTOTYPE", "RxSecond"),
+        |block| block.replace("<ALIVE-TIMEOUT>0.05<", "<ALIVE-TIMEOUT>0.03<"),
+    );
+    xml_edit(
+        &mut sources,
+        "extract.arxml",
+        |node| named(node, "I-SIGNAL-PORT", "RxSecondSignalPort"),
+        |block| block.replace("<TIMEOUT>0.05<", "<TIMEOUT>0.03<"),
+    );
+    let plan = build(&sources).unwrap();
+    assert_eq!(
+        plan.description()
+            .signals
+            .iter()
+            .filter(|signal| signal.receive)
+            .count(),
+        2
+    );
+    assert_eq!(
+        plan.description()
+            .routes
+            .iter()
+            .filter(|route| route.receive && !route.transport)
+            .count(),
+        1
+    );
+}

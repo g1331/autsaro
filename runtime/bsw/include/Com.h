@@ -1,4 +1,4 @@
-/** @file Selected R24-11 immediate UINT32 COM interface and immutable configuration. */
+/** @file Selected R24-11 immediate integer COM interface and immutable configuration. */
 #ifndef COM_H
 #define COM_H
 #include "Com_Version.h"
@@ -34,23 +34,39 @@ typedef enum {
 typedef uint16 Com_SignalIdType;
 /** Zero-based I-PDU group handle (SWS_Com_00822); one Rx group is selected. */
 typedef uint16 Com_IpduGroupIdType;
-/** Generated signal/PDU binding. Counts are Rx-main-function periods and PDU data is four-byte
- * little endian; derived fields are not independent ECUC parameters. One four-byte little-endian
- * signal per PDU, no update bits or metadata.
- *  * Timer counts are configured Rx main-function periods, not host timestamps.
- */
+/** Generated native scalar representation of ComSignalType. */
+typedef enum {
+    COM_UINT8,  /**< Native uint8. */
+    COM_UINT16, /**< Native uint16. */
+    COM_UINT32, /**< Native uint32. */
+    COM_SINT8,  /**< Native sint8. */
+    COM_SINT16, /**< Native sint16. */
+    COM_SINT32  /**< Native sint32. */
+} Com_IntegerType;
+/** Signal layout in its logical I-PDU. The generator validates the occupied bit set. */
 typedef struct {
-    PduIdType pdu;              /**< Generated ComIPduHandleId from the referenced route. */
-    Com_SignalIdType signal_id; /**< Generated zero-based Com signal handle. */
-    boolean receive;            /**< TRUE for ComIPduDirection RECEIVE, FALSE for SEND. */
-    uint32 initial_value;       /**< Native UINT32 ComSignalInitValue; selected value is zero. */
-    uint32 timeout_ticks;       /**< ComTimeout in Rx-main periods; 0 disables the deadline. */
+    Com_SignalIdType signal_id;      /**< ComSignal symbolic handle. */
+    Com_IntegerType type;            /**< Native integer passed to signal services. */
+    uint16 start_bit;                /**< LSB for Intel, MSB for Motorola. */
+    uint8 bit_length;                /**< Network width, within the integer representation. */
+    boolean big_endian;              /**< TRUE for Motorola sawtooth ordering. */
+    uint32 initial_value;            /**< ComSignalInitValue encoded in bit_length bits. */
+    uint32 timeout_ticks;            /**< ComTimeout in Rx-main periods; 0 disables it. */
     CbkHandleIdType callback_handle; /**< ComUserCbkHandleId for Rx; unused for Tx. */
+} Com_SignalConfigType;
+/** One logical I-PDU and its signal table slice. */
+typedef struct {
+    PduIdType pdu;       /**< Generated COM Rx or PduR Tx handle. */
+    boolean receive;     /**< TRUE for RECEIVE; FALSE for SEND. */
+    uint8 length;        /**< Logical I-PDU length in bytes. */
+    uint8 unused_byte;   /**< ComTxIPduUnusedAreasDefault repeated over unused PDU bits. */
+    uint16 first_signal; /**< First signal table index for this I-PDU. */
+    uint16 signal_count; /**< Number of consecutive signal rows. */
 } Com_PduConfigType;
 /** Generated RTE receive/timeout callback; handle is ComUserCbkHandleId, called outside COM_STATE.
  */
 typedef void (*Com_NotificationType)(CbkHandleIdType handle);
-/** Generated PduR transmit binding; borrows the four-byte COM snapshot only until return. */
+/** Generated PduR transmit binding; borrows the logical I-PDU snapshot only until return. */
 typedef Std_ReturnType (*Com_TransmitType)(PduIdType id, const PduInfoType *info);
 /** Synchronous lower-refusal observer; called once per non-E_OK transmit result, outside
  * COM_STATE, after lower return. Task/ISR safe, no retry or synchronous I/O. Values are copied;
@@ -59,8 +75,10 @@ typedef void (*Com_TxRejectionType)(PduIdType id, Std_ReturnType result);
 /** Implementation configuration (SWS_Com_00825); counts and callback bindings are derived from the
  * validated COM/PduR plan, not independent ECUC parameters. */
 typedef struct {
-    const Com_PduConfigType *pdus; /**< Immutable PDU table; must be non-NULL. */
-    uint16 pdu_count;              /**< PDU count, 1..32. */
+    const Com_PduConfigType *pdus;       /**< Immutable PDU table; must be non-NULL. */
+    uint16 pdu_count;                    /**< Number of PDU rows within generated capacity. */
+    const Com_SignalConfigType *signals; /**< Immutable signal table; must be non-NULL. */
+    uint16 signal_count;                 /**< Number of signal rows within generated capacity. */
     Com_IpduGroupIdType
         receive_group; /**< The configured ComIPduGroup handle; contains Rx PDUs only. */
     Com_NotificationType
@@ -71,14 +89,14 @@ typedef struct {
     Com_TxRejectionType tx_rejection; /**< Required for Tx; snapshots with transmit. */
 } Com_ConfigType;
 
-/** Reset COM state and install the selected UINT32 configuration (SWS_Com_00432).
- * @param[in] config Immutable configuration, 1 to 32 PDUs and one Rx group; invalid or NULL leaves
- * COM_UNINIT.
+/** Reset COM state and install the selected integer configuration (SWS_Com_00432).
+ * @param[in] config Immutable configuration within generated capacity and one Rx group; invalid or
+ * NULL leaves COM_UNINIT.
  * @par Return
  * None.
  * Preconditions: None; reinitialization replaces the previous configuration and restarts reception
  * state. Context: startup task; not inside an exclusive area. Reentrancy: not reentrant. Ownership:
- * The configuration and PDU table remain valid until DeInit or the next Init; callback code
+ * The configuration and its tables remain valid until DeInit or the next Init; callback code
  * remains valid for the process lifetime; signal data is copied into COM storage.
  */
 COM_CODE void Com_Init(const Com_ConfigType *config);
@@ -100,21 +118,21 @@ COM_CODE void Com_DeInit(void);
  * Ownership: None.
  */
 COM_CODE Com_StatusType Com_GetStatus(void);
-/** Copy one UINT32 Tx signal into COM storage (SWS_Com_00197).
+/** Copy one integer Tx signal into COM storage (SWS_Com_00197).
  * @param[in] SignalId A configured Tx signal handle.
- * @param[in] SignalDataPtr Non-NULL caller-owned storage containing four bytes of native UINT32
- * signal data.
+ * @param[in] SignalDataPtr Non-NULL caller-owned storage of the configured native integer type.
  * @return E_OK on update; COM_SERVICE_NOT_AVAILABLE when uninitialized; E_NOT_OK for an unknown/Rx
- * signal or NULL data. Preconditions: Initialized; otherwise COM_SERVICE_NOT_AVAILABLE.
+ * signal, NULL data or a value outside the configured network width. Rejection preserves the
+ * previous signal. Preconditions: Initialized; otherwise COM_SERVICE_NOT_AVAILABLE.
  * Transmission occurs separately in the Tx main function. Context: task or upper-layer callback;
- * not inside an exclusive area. Reentrancy: reentrant. Ownership: Four bytes are copied before
+ * not inside an exclusive area. Reentrancy: reentrant. Ownership: Signal data is copied before
  * return; the pointer is never retained.
  */
 COM_CODE uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataPtr);
-/** Copy the current UINT32 Rx signal to the caller (SWS_Com_00198).
+/** Copy the current integer Rx signal to the caller (SWS_Com_00198).
  * @param[in] SignalId A configured Rx signal handle.
- * @param[out] SignalDataPtr Non-NULL caller-owned four-byte output; receives current/initial data
- * even when the Rx group is stopped.
+ * @param[out] SignalDataPtr Non-NULL caller-owned output of the configured integer type; receives
+ * current/initial data even when the Rx group is stopped.
  * @return E_OK for a started Rx group; COM_SERVICE_NOT_AVAILABLE when stopped or uninitialized;
  * E_NOT_OK for invalid arguments. Preconditions: A valid configuration is required to write output;
  * otherwise output is preserved. Context: task or upper-layer callback; not inside an exclusive
@@ -177,10 +195,10 @@ COM_CODE void Com_EnableReceptionDM(Com_IpduGroupIdType IpduGroupId);
  * Ownership: None.
  */
 COM_CODE void Com_DisableReceptionDM(Com_IpduGroupIdType IpduGroupId);
-/** Update reception timing and unpack a complete four-byte signal (SWS_Com_00123).
+/** Update reception timing and unpack a complete configured-length signal (SWS_Com_00123).
  * @param[in] RxPduId A configured Rx I-PDU handle.
- * @param[in] PduInfoPtr Borrowed descriptor and bytes; a short PDU resets deadline monitoring but
- * does not overwrite signal data.
+ * @param[in] PduInfoPtr Borrowed descriptor and bytes. A short PDU resets deadline monitoring and
+ * updates only signals whose complete bit sets are present.
  * @par Return
  * None.
  * Preconditions: Initialized and the Rx group started; invalid inputs and unknown PDUs are ignored.
@@ -196,8 +214,8 @@ COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
  * @return E_OK for an initialized Tx PDU; E_NOT_OK otherwise. The lower refusal is not reported
  * here because retry is disabled. Preconditions: Initialized; otherwise E_NOT_OK. Context: task,
  * interrupt or upper-layer callback; not inside an exclusive area. Reentrancy: not reentrant.
- * Ownership: The four-byte snapshot is borrowed by the lower transmit callback only until it
- * returns, outside COM_STATE. Each non-E_OK lower result is synchronously observed after lower
+ * Ownership: The configured-length snapshot is borrowed by the lower transmit callback only until
+ * it returns, outside COM_STATE. Each non-E_OK lower result is synchronously observed after lower
  * return.
  */
 COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
@@ -213,10 +231,11 @@ COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId);
  * Ownership: None.
  */
 COM_CODE void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode);
-/** Copy the current four-byte Tx PDU into a lower buffer (SWS_Com_00001).
+/** Copy the current configured-length Tx PDU into a lower buffer (SWS_Com_00001).
  * @param[in] TxPduId A configured Tx I-PDU handle.
  * @param[in,out] PduInfoPtr Non-NULL caller-owned descriptor and destination; input capacity must
- * be at least four bytes. Success writes four bytes and SduLength=4.
+ * be at least the configured I-PDU length. Success writes the payload and sets SduLength to that
+ * length.
  * @return E_OK after copying; E_NOT_OK preserves the descriptor and payload.
  * Preconditions: Initialized, a configured Tx PDU and adequate non-NULL output; otherwise E_NOT_OK.
  * Context: lower-layer callback, including interrupt context; not inside an exclusive area.

@@ -71,9 +71,13 @@ int main(void)
     void (*const receive)(CbkHandleIdType handle) = &Rte_COMCbk;
     void (*const timeout)(CbkHandleIdType handle) = &Rte_COMCbkRxTOut;
     /* 两条接收 PDU 的超时分别为 30 与 50 个 Rx 主函数周期；PDU/信号编号按配置容器名排序。 */
-    static const Com_PduConfigType pdus[2] = {{0u, 1u, TRUE, 0u, 30u, FIRST_HANDLE},
-                                              {4u, 0u, TRUE, 0u, 50u, SECOND_HANDLE}};
-    const Com_ConfigType configuration = {pdus, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR};
+    static const Com_PduConfigType pdus[] = {{0u, TRUE, 4u, 0u, 0u, 1u},
+                                             {4u, TRUE, 4u, 0u, 1u, 1u}};
+    static const Com_SignalConfigType signals[] = {
+        {1u, COM_UINT32, 0u, 32u, FALSE, 0u, 30u, FIRST_HANDLE},
+        {0u, COM_UINT32, 0u, 32u, FALSE, 0u, 50u, SECOND_HANDLE}};
+    const Com_ConfigType configuration = {
+        pdus, 2u, signals, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR};
     uint8 first_payload[4] = {21u, 0u, 0u, 0u};
     uint8 second_payload[4] = {33u, 0u, 0u, 0u};
     const PduInfoType first_info = {first_payload, NULL_PTR, 4u};

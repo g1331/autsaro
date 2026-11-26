@@ -1482,8 +1482,8 @@ class AcceptanceTests(unittest.TestCase):
         for filename, line, old, new in (
             ("CanTp.c", 164, "running", "cantp_running"),
             ("Det.c", 10, "initialized", "det_ready"),
-            ("Com.c", 31, "reloaded_before_main", "com_rx_reloaded"),
-            ("Com.c", 30, "remaining", "com_ticks"),
+            ("Com.c", 34, "reloaded_before_main", "com_rx_reloaded"),
+            ("Com.c", 33, "remaining", "com_ticks"),
             ("Dcm.c", 101, "pending_session", "dcm_pending_session"),
             ("Dcm.c", 87, "state", "dcm_s"),
             ("Dcm.c", 100, "session", "dcm_ses"),

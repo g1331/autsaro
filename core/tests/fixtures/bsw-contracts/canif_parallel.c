@@ -124,15 +124,17 @@ static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code
 }
 static const Det_ErrorHookType hooks[] = {error};
 static const Det_ConfigType det = {NULL_PTR, 0u, hooks, 1u};
-static const Com_PduConfigType com_pdus[] = {{1u, 11u, FALSE, 0u, 0u, 0u},
-                                             {2u, 12u, FALSE, 0u, 0u, 0u}};
+static const Com_PduConfigType com_pdus[] = {{1u, FALSE, 4u, 0u, 0u, 1u},
+                                             {2u, FALSE, 4u, 0u, 1u, 1u}};
+static const Com_SignalConfigType signals[] = {{11u, COM_UINT32, 0u, 32u, FALSE, 0u, 0u, 0u},
+                                               {12u, COM_UINT32, 0u, 32u, FALSE, 0u, 0u, 0u}};
 static void rejection(PduIdType id, Std_ReturnType result)
 {
     (void)id;
     (void)result;
 }
 static const Com_ConfigType com = {
-    com_pdus, 2u, 0u, NULL_PTR, NULL_PTR, PduR_ComTransmit, rejection};
+    com_pdus, 2u, signals, 2u, 0u, NULL_PTR, NULL_PTR, PduR_ComTransmit, rejection};
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_COM, 1u, PDUR_LO_LSDUR, 41u, LSduR_PduRTransmit, confirmed, Com_TriggerTransmit},
     {PDUR_UP_COM, 2u, PDUR_LO_LSDUR, 42u, LSduR_PduRTransmit, confirmed, Com_TriggerTransmit}};
@@ -141,7 +143,7 @@ static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit},
     {LSDUR_UP_PDUR, 42u, 61u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit}};
 static const LSduR_PBConfigType ls = {29u, NULL_PTR, 0u, ls_tx, 2u};
-static const CanIf_TxPduConfigType tx[] = {{0x456u, 51u, 4u}, {0x457u, 61u, 4u}};
+static const CanIf_TxPduConfigType tx[] = {{0x456u, 51u, 4u, 0u, 0u}, {0x457u, 61u, 4u, 0u, 0u}};
 static const CanIf_ConfigType canif = {NULL_PTR, 0u, tx, 2u, mode, bus_off, 0u, 0u, 0u, 0u};
 static const Can_ConfigType can = {.sink = sink};
 static void produce(Worker *worker) {

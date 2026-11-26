@@ -48,12 +48,17 @@ typedef struct {
     PduIdType pdu;        /**< CanIf Rx handle (CanIfRxPduId), passed to LSduR. */
     uint8 minimum_length; /**< Minimum accepted payload bytes, 0..64 (CanIfRxPduDataLength). */
     boolean accepts_fd;   /**< TRUE accepts both formats with this width and ID. */
+    uint8 frame_offset;   /**< Byte offset of the logical PDU within the frame. */
+    uint8 frame_length;   /**< Mapped frame length, or 0 for an identity mapping. */
 } CanIf_RxPduConfigType;
 /** One fixed-ID transmit route, generated from CanIfTxPduCfg and its referenced PDU. */
 typedef struct {
     Can_IdType can_id;    /**< Encoded transmitted ID (CanIfTxPduCanId). */
     PduIdType pdu;        /**< CanIf Tx handle (CanIfTxPduId), used for confirmations. */
-    uint8 maximum_length; /**< Maximum payload bytes, 1..8, from the referenced PDU length. */
+    uint8 maximum_length; /**< Maximum logical payload bytes, 1..64, from the referenced PDU length.
+                           */
+    uint8 frame_offset;   /**< Byte offset of the logical PDU within the frame. */
+    uint8 frame_length;   /**< Mapped frame length, or 0 for an identity mapping. */
 } CanIf_TxPduConfigType;
 /** Generated dispatch callback; called after releasing CANIF_STATE with the abstract controller ID.
  */
