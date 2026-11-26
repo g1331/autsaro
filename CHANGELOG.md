@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- ComM, BswM and the host BusSM use immutable channel tables. ComM also stores each user's channel relations. Regenerate ECU packages and update direct initializers of `ComM_ConfigType`, `BswM_ConfigType` and `Ecu_HostBusSM_ConfigType` before rebuilding consumers (#464)
+
 - Host CAN supports standard and extended FD frames, explicit receive policies and driver padding through 64 wire bytes. Regenerate ECU packages from ARXML for the FD-capable HostBatchV2 tools. Rebuild native consumers and update private `Can_ConfigType` initializers for bitrates, BRS and HTH padding. Rebuild host output consumers for the probe’s FD timing fields. CanTp continues to use Classical CAN (#485)
 
 - CanIf now accepts standard and extended Classical CAN on one controller and filters by frame format and numeric ID. Regenerate ECU packages from ARXML for the HostBatchV2 handshake, typed CAN records, and updated delivery metadata. Update private CanIf Rx route initializers to supply the FD acceptance policy (#117)

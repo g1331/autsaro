@@ -1,4 +1,4 @@
-/** @file Single CDD channel ComM for NM variant NONE, without PNC, inhibition or NvM.
+/** @file CDD channel ComM for NM variant NONE, without PNC, inhibition or NvM.
  * COMM_STATE protects module data only: bus requests, the actual mode
  * publication and the bus mode query run outside it.
  */
@@ -21,6 +21,7 @@
 #elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
 #error "ComM.c -> SchM_ComM.h: incompatible AUTOSAR release"
 #endif
+#include "Ecu_ProfileConfig.h"
 /* SWS_ComM_00418: source release is independent of the imported header producer. */
 #define COMM_C_AR_RELEASE_MAJOR_VERSION    4U
 #define COMM_C_AR_RELEASE_MINOR_VERSION    10U
@@ -45,7 +46,7 @@
     (COMM_SW_PATCH_VERSION != COMM_C_SW_PATCH_VERSION)
 #error "ComM.c -> ComM.h: inconsistent internal software version"
 #endif
-#define COMM_USER_CAPACITY 32u /**< Users per channel; the generator enforces it. */
+#define COMM_USER_CAPACITY 32u /**< Maximum configured users across the ECU. */
 #define COMM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "ComM_MemMap.h"
 /* Ordered handshake with <Bus>SM_RequestComMode. Entering a main state claims the
@@ -58,20 +59,29 @@ typedef enum {
     COMM_BUS_CALLING,    /**< The target is on a caller's stack. */
     COMM_BUS_CALLING_DUE /**< On a caller's stack; a newer target follows it. */
 } ComM_BusPhaseType;
-/* All COMM_STATE. Init resets the channel and the published mode, but preserves an
- * in-flight bus call and publisher so that no second caller overtakes them. */
+/* Init resets each configured channel, preserving an in-flight call or publisher. */
+typedef struct {
+    ComM_StateType state;     /**< Figure 7.7 state. */
+    boolean allowed;          /**< CommunicationAllowed. */
+    boolean diagnostic;       /**< Active diagnostic demand. */
+    boolean wakeup;           /**< Wake-up until FULL. */
+    uint32 minimum_remaining; /**< Minimum FULL periods. */
+    ComM_ModeType target;     /**< Mode of the entered state. */
+    ComM_BusPhaseType phase;  /**< Ordered lower-layer request. */
+    ComM_ModeType indicated;  /**< Latest actual bus mode. */
+    ComM_ModeType published;  /**< Last actual mode claimed for publication. */
+} ComM_ChannelStateType;
 static const ComM_ConfigType *comm_configuration COMM_VAR_CLEARED; /**< NULL when uninitialized. */
-static ComM_ModeType comm_requests[COMM_USER_CAPACITY] COMM_VAR_CLEARED; /**< Per user. */
-static ComM_StateType channel_state COMM_VAR_CLEARED;                    /**< Figure 7.7 state. */
-static boolean communication_allowed COMM_VAR_CLEARED; /**< CommunicationAllowed. */
-static boolean diagnostic COMM_VAR_CLEARED;            /**< Dcm active diagnostic. */
-static boolean wakeup_pending COMM_VAR_CLEARED;        /**< Wake-up until FULL. */
-static uint32 minimum_remaining COMM_VAR_CLEARED;      /**< Minimum FULL periods. */
-static ComM_ModeType bus_target COMM_VAR_CLEARED;      /**< Mode of the entered state. */
-static ComM_BusPhaseType bus_phase COMM_VAR_CLEARED;   /**< Init preserves a call. */
-static ComM_ModeType indicated COMM_VAR_CLEARED;       /**< Latest actual bus mode. */
-static ComM_ModeType comm_published COMM_VAR_CLEARED;  /**< Last mode sent to users. */
-static boolean comm_publishing COMM_VAR_CLEARED;       /**< Publisher; Init preserves. */
+static ComM_ChannelStateType
+    comm_channels[COMM_CHANNEL_CAPACITY] COMM_VAR_CLEARED; /**< Per-channel state under COMM_STATE;
+                                                              initialized by ComM_Init. */
+static ComM_ModeType
+    comm_requests[COMM_USER_CAPACITY] COMM_VAR_CLEARED; /**< Latest request per user; ComM_Init sets
+                                                           NO. */
+static ComM_ModeType
+    comm_user_published[COMM_USER_CAPACITY] COMM_VAR_CLEARED; /**< Last indicated user mode;
+                                                                 initialized to NO. */
+static boolean comm_publishing COMM_VAR_CLEARED;              /**< Publisher; Init preserves. */
 #define COMM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "ComM_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -82,33 +92,35 @@ static boolean comm_publishing COMM_VAR_CLEARED;       /**< Publisher; Init pres
 #endif
 #define COMM_START_SEC_CODE
 #include "ComM_MemMap.h"
-static COMM_CODE boolean ComM_ValidUserModes(const ComM_ConfigType *config)
+/* Configuration positions index the generated state table; public handles may be sparse. */
+static COMM_CODE uint16 ComM_Channel(const ComM_ConfigType *config, NetworkHandleType channel)
+{
+    uint16 result = COMM_CHANNEL_CAPACITY;
+    if (config != NULL_PTR) {
+        for (uint16 i = 0u; i < config->channel_count; ++i) {
+            if (config->channels[i].channel == channel) {
+                result = i;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+static COMM_CODE boolean ComM_ValidUsers(const ComM_ConfigType *config)
 {
     boolean valid = TRUE;
-    if ((config->user_mode_count > config->user_count) ||
-        ((config->user_mode_count != 0u) && (config->user_modes == NULL_PTR))) {
-        valid = FALSE;
-    } else {
-        for (uint16 i = 0u; i < config->user_mode_count; ++i) {
-            const ComM_UserModeConfigType *user = &config->user_modes[i];
-            boolean found = FALSE;
-            for (uint16 j = 0u; j < config->user_count; ++j) {
-                if (config->users[j] == user->user) {
-                    found = TRUE;
-                }
-            }
-            if ((found == FALSE) || (user->notify == NULL_PTR) || (user->channels == NULL_PTR) ||
-                (user->channel_count != 1u)) {
-                valid = FALSE;
-            } else if (user->channels[0] != config->channel) {
-                valid = FALSE;
-            } else {
-                /* The immutable mapping selects this profile's single channel. */
-            }
-            for (uint16 j = 0u; j < i; ++j) {
-                if (config->user_modes[j].user == user->user) {
-                    valid = FALSE;
-                }
+    for (uint16 i = 0u; (i < config->user_count) && valid; ++i) {
+        const ComM_UserModeConfigType *user = &config->users[i];
+        valid = (user->user != COMM_NOT_USED_USER_ID) && (user->channels != NULL_PTR) &&
+                (user->channel_count > 0u) && (user->channel_count <= config->channel_count);
+        for (uint16 j = 0u; (j < i) && valid; ++j) {
+            valid = config->users[j].user != user->user;
+        }
+        for (uint16 j = 0u; (j < user->channel_count) && valid; ++j) {
+            valid = ComM_Channel(config, user->channels[j]) < COMM_CHANNEL_CAPACITY;
+            for (uint16 k = 0u; (k < j) && valid; ++k) {
+                valid = user->channels[k] != user->channels[j];
             }
         }
     }
@@ -116,34 +128,28 @@ static COMM_CODE boolean ComM_ValidUserModes(const ComM_ConfigType *config)
 }
 static COMM_CODE boolean ComM_Valid(const ComM_ConfigType *config)
 {
-    boolean valid = FALSE;
-    if ((config != NULL_PTR) && (config->users != NULL_PTR) && (config->user_count > 0u) &&
-        (config->user_count <= COMM_USER_CAPACITY) && (config->request != NULL_PTR) &&
-        (config->current != NULL_PTR) &&
-        ((config->dcm_no == NULL_PTR) == (config->dcm_silent == NULL_PTR)) &&
-        ((config->dcm_no == NULL_PTR) == (config->dcm_full == NULL_PTR))) {
-        valid = ComM_ValidUserModes(config);
-        for (uint16 i = 0u; i < config->user_count; ++i) {
-            uint16 j;
-            if (config->users[i] == COMM_NOT_USED_USER_ID) {
-                valid = FALSE;
-            }
-            for (j = 0u; j < i; ++j) {
-                if (config->users[i] == config->users[j]) {
-                    valid = FALSE;
-                }
-            }
+    boolean valid =
+        (config != NULL_PTR) && (config->channels != NULL_PTR) && (config->channel_count != 0u) &&
+        (config->channel_count <= COMM_CHANNEL_CAPACITY) && (config->users != NULL_PTR) &&
+        (config->user_count > 0u) && (config->user_count <= COMM_USER_CAPACITY) &&
+        (config->request != NULL_PTR) && (config->current != NULL_PTR);
+    if (valid) {
+        for (uint16 i = 0u; (i < config->channel_count) && valid; ++i) {
+            const ComM_ChannelConfigType *channel = &config->channels[i];
+            valid = ((channel->dcm_no == NULL_PTR) == (channel->dcm_silent == NULL_PTR)) &&
+                    ((channel->dcm_no == NULL_PTR) == (channel->dcm_full == NULL_PTR)) &&
+                    (ComM_Channel(config, channel->channel) == i);
         }
+        valid = valid && ComM_ValidUsers(config);
     }
     return valid;
 }
-static COMM_CODE uint16 ComM_User(ComM_UserHandleType User)
+static COMM_CODE uint16 ComM_User(ComM_UserHandleType user)
 {
     uint16 index = COMM_USER_CAPACITY;
     if (comm_configuration != NULL_PTR) {
-        uint16 i;
-        for (i = 0u; i < comm_configuration->user_count; ++i) {
-            if (comm_configuration->users[i] == User) {
+        for (uint16 i = 0u; i < comm_configuration->user_count; ++i) {
+            if (comm_configuration->users[i].user == user) {
                 index = i;
                 break;
             }
@@ -151,68 +157,72 @@ static COMM_CODE uint16 ComM_User(ComM_UserHandleType User)
     }
     return index;
 }
-static COMM_CODE boolean ComM_Demand(void)
+static COMM_CODE boolean ComM_Demand(const ComM_ChannelStateType *state, NetworkHandleType channel)
 {
-    boolean demand = diagnostic || wakeup_pending;
-    uint16 i;
-    for (i = 0u; i < comm_configuration->user_count; ++i) {
+    boolean demand = state->diagnostic || state->wakeup;
+    for (uint16 i = 0u; (i < comm_configuration->user_count) && !demand; ++i) {
+        const ComM_UserModeConfigType *user = &comm_configuration->users[i];
         if (comm_requests[i] == COMM_FULL_COMMUNICATION) {
-            demand = TRUE;
+            for (uint16 j = 0u; (j < user->channel_count) && !demand; ++j) {
+                demand = user->channels[j] == channel;
+            }
         }
     }
     return demand;
 }
 /* Entering a main state requests its mode from the bus state manager
  * (SWS_ComM_00073, SWS_ComM_00069). */
-static COMM_CODE void ComM_ClaimBus(ComM_ModeType target)
+static COMM_CODE void ComM_ClaimBus(ComM_ChannelStateType *state, ComM_ModeType target)
 {
-    bus_target = target;
-    bus_phase = ((bus_phase == COMM_BUS_CALLING) || (bus_phase == COMM_BUS_CALLING_DUE))
-                    ? COMM_BUS_CALLING_DUE
-                    : COMM_BUS_DUE;
+    state->target = target;
+    state->phase = ((state->phase == COMM_BUS_CALLING) || (state->phase == COMM_BUS_CALLING_DUE))
+                       ? COMM_BUS_CALLING_DUE
+                       : COMM_BUS_DUE;
 }
-static COMM_CODE void ComM_Evaluate(void)
+static COMM_CODE void ComM_Evaluate(uint16 index)
 {
-    const boolean demand = ComM_Demand();
-    if ((channel_state == COMM_NO_COM_NO_PENDING_REQUEST) && demand) {
-        channel_state = COMM_NO_COM_REQUEST_PENDING;
+    ComM_ChannelStateType *state = &comm_channels[index];
+    const ComM_ChannelConfigType *config = &comm_configuration->channels[index];
+    const boolean demand = ComM_Demand(state, config->channel);
+    if ((state->state == COMM_NO_COM_NO_PENDING_REQUEST) && demand) {
+        state->state = COMM_NO_COM_REQUEST_PENDING;
     }
-    if (channel_state == COMM_NO_COM_REQUEST_PENDING) {
+    if (state->state == COMM_NO_COM_REQUEST_PENDING) {
         if (!demand) {
-            channel_state = COMM_NO_COM_NO_PENDING_REQUEST;
-        } else if (communication_allowed) {
-            channel_state = COMM_FULL_COM_NETWORK_REQUESTED;
-            minimum_remaining = comm_configuration->minimum_full_ticks;
-            wakeup_pending = FALSE;
-            ComM_ClaimBus(COMM_FULL_COMMUNICATION);
+            state->state = COMM_NO_COM_NO_PENDING_REQUEST;
+        } else if (state->allowed) {
+            state->state = COMM_FULL_COM_NETWORK_REQUESTED;
+            state->minimum_remaining = config->minimum_full_ticks;
+            state->wakeup = FALSE;
+            ComM_ClaimBus(state, COMM_FULL_COMMUNICATION);
         } else {
             /* Only REQUEST_PENDING evaluates CommunicationAllowed. */
         }
-    } else if ((channel_state == COMM_FULL_COM_READY_SLEEP) && demand) {
-        channel_state = COMM_FULL_COM_NETWORK_REQUESTED;
-        minimum_remaining = comm_configuration->minimum_full_ticks;
-    } else if ((channel_state == COMM_FULL_COM_NETWORK_REQUESTED) && (minimum_remaining == 0u) &&
-               !demand) {
-        channel_state = COMM_FULL_COM_READY_SLEEP;
+    } else if ((state->state == COMM_FULL_COM_READY_SLEEP) && demand) {
+        state->state = COMM_FULL_COM_NETWORK_REQUESTED;
+        state->minimum_remaining = config->minimum_full_ticks;
+    } else if ((state->state == COMM_FULL_COM_NETWORK_REQUESTED) &&
+               (state->minimum_remaining == 0u) && !demand) {
+        state->state = COMM_FULL_COM_READY_SLEEP;
     } else {
         /* NM NONE has no READY_SLEEP -> NO transition and no SILENT state. */
     }
 }
-/* Issue claimed bus targets in order; a caller that finds a call in flight leaves its
- * target to that call's owner. */
-static COMM_CODE void ComM_IssueBus(void)
+/* The claimant keeps its slot while the lower-layer call runs outside COMM_STATE. */
+static COMM_CODE void ComM_IssueBus(NetworkHandleType channel)
 {
     boolean owner = TRUE;
     while (owner) {
         ComM_BusRequestType request = NULL_PTR;
-        NetworkHandleType channel = 0u;
+        ComM_ChannelStateType *state = NULL_PTR;
         ComM_ModeType target = COMM_NO_COMMUNICATION;
         SchM_Enter_ComM_COMM_STATE();
-        if ((comm_configuration != NULL_PTR) && (bus_phase == COMM_BUS_DUE)) {
-            bus_phase = COMM_BUS_CALLING;
+        const uint16 index = ComM_Channel(comm_configuration, channel);
+        if ((index < COMM_CHANNEL_CAPACITY) && (comm_channels[index].phase == COMM_BUS_DUE)) {
+            state = &comm_channels[index];
+            state->phase = COMM_BUS_CALLING;
             request = comm_configuration->request;
-            channel = comm_configuration->channel;
-            target = bus_target;
+            target = state->target;
         } else {
             owner = FALSE;
         }
@@ -220,17 +230,16 @@ static COMM_CODE void ComM_IssueBus(void)
         if (owner) {
             const Std_ReturnType result = request(channel, target);
             SchM_Enter_ComM_COMM_STATE();
-            if (bus_phase == COMM_BUS_CALLING) {
-                /* A refusal keeps the target; the main function retries it. */
-                bus_phase = (result == E_OK) ? COMM_BUS_ACCEPTED : COMM_BUS_REFUSED;
+            if (state->phase == COMM_BUS_CALLING) {
+                state->phase = (result == E_OK) ? COMM_BUS_ACCEPTED : COMM_BUS_REFUSED;
             } else {
-                bus_phase = COMM_BUS_DUE;
+                state->phase = COMM_BUS_DUE;
             }
             SchM_Exit_ComM_COMM_STATE();
         }
     }
 }
-static COMM_CODE void ComM_NotifyDcm(const ComM_ConfigType *config, ComM_ModeType mode)
+static COMM_CODE void ComM_NotifyDcm(const ComM_ChannelConfigType *config, ComM_ModeType mode)
 {
     if (config->dcm_full != NULL_PTR) {
         if (mode == COMM_FULL_COMMUNICATION) {
@@ -242,91 +251,137 @@ static COMM_CODE void ComM_NotifyDcm(const ComM_ConfigType *config, ComM_ModeTyp
         }
     }
 }
-/* Select the lowest actual mode through the user's immutable channel relation.
- * Configuration validation restricts the relation to the selected CDD channel. */
-static COMM_CODE void ComM_NotifyUsers(const ComM_ConfigType *config, ComM_ModeType mode)
+typedef struct {
+    ComM_UserModeType notify; /**< Claimed RTE publication. */
+    ComM_ModeType mode;       /**< Lowest indicated channel mode. */
+} ComM_UserPublicationType;
+
+/* Inside COMM_STATE; use the actual modes even if another bus publication is queued. */
+static COMM_CODE uint16 ComM_ClaimUsers(ComM_UserPublicationType *publications)
 {
-    uint16 i;
-    for (i = 0u; i < config->user_mode_count; ++i) {
-        const ComM_UserModeConfigType *user = &config->user_modes[i];
+    uint16 count = 0u;
+    for (uint16 i = 0u; i < comm_configuration->user_count; ++i) {
+        const ComM_UserModeConfigType *user = &comm_configuration->users[i];
         ComM_ModeType lowest = COMM_FULL_COMMUNICATION;
-        uint16 channel;
-        for (channel = 0u; channel < user->channel_count; ++channel) {
-            if ((user->channels[channel] == config->channel) && (mode < lowest)) {
-                lowest = mode;
+        for (uint16 j = 0u; j < user->channel_count; ++j) {
+            const uint16 index = ComM_Channel(comm_configuration, user->channels[j]);
+            if (comm_channels[index].indicated < lowest) {
+                lowest = comm_channels[index].indicated;
             }
         }
-        user->notify(lowest);
+        if (comm_user_published[i] != lowest) {
+            comm_user_published[i] = lowest;
+            if (user->notify != NULL_PTR) {
+                publications[count].notify = user->notify;
+                publications[count].mode = lowest;
+                ++count;
+            }
+        }
     }
+    return count;
 }
-/* Called by the claimed publisher only; publishes until the latest indication is out. */
+/* The one publisher reconciles channel indications and dispatches outside COMM_STATE. */
 static COMM_CODE void ComM_Publish(void)
 {
     boolean owner = TRUE;
     while (owner) {
-        const ComM_ConfigType *config = NULL_PTR;
+        ComM_UserPublicationType users[COMM_USER_CAPACITY];
+        const ComM_ChannelConfigType *channel = NULL_PTR;
+        uint16 count = 0u;
         ComM_ModeType mode = COMM_NO_COMMUNICATION;
         SchM_Enter_ComM_COMM_STATE();
-        if ((comm_configuration != NULL_PTR) && (comm_published != indicated)) {
-            comm_published = indicated;
-            config = comm_configuration;
-            mode = comm_published;
-        } else {
+        if (comm_configuration != NULL_PTR) {
+            for (uint16 i = 0u; i < comm_configuration->channel_count; ++i) {
+                if (comm_channels[i].published != comm_channels[i].indicated) {
+                    comm_channels[i].published = comm_channels[i].indicated;
+                    channel = &comm_configuration->channels[i];
+                    mode = comm_channels[i].published;
+                    count = ComM_ClaimUsers(users);
+                    break;
+                }
+            }
+        }
+        if (channel == NULL_PTR) {
             comm_publishing = FALSE;
             owner = FALSE;
         }
         SchM_Exit_ComM_COMM_STATE();
         if (owner) {
-            ComM_NotifyUsers(config, mode);
-            BswM_ComM_CurrentMode(config->channel, mode);
-            ComM_NotifyDcm(config, mode);
+            for (uint16 i = 0u; i < count; ++i) {
+                users[i].notify(users[i].mode);
+            }
+            BswM_ComM_CurrentMode(channel->channel, mode);
+            ComM_NotifyDcm(channel, mode);
         }
     }
+}
+static COMM_CODE void ComM_ResetChannel(ComM_ChannelStateType *state)
+{
+    state->state = COMM_NO_COM_NO_PENDING_REQUEST;
+    state->allowed = FALSE;
+    state->diagnostic = FALSE;
+    state->wakeup = FALSE;
+    state->minimum_remaining = 0u;
+    state->indicated = COMM_NO_COMMUNICATION;
+    if (!comm_publishing) {
+        state->published = COMM_NO_COMMUNICATION;
+    }
+    ComM_ClaimBus(state, COMM_NO_COMMUNICATION);
 }
 COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr)
 {
     if (ComM_Valid(ConfigPtr) == TRUE) {
-        uint16 i;
         SchM_Enter_ComM_COMM_STATE();
         comm_configuration = ConfigPtr;
-        for (i = 0u; i < COMM_USER_CAPACITY; ++i) {
+        for (uint16 i = 0u; i < ConfigPtr->user_count; ++i) {
             comm_requests[i] = COMM_NO_COMMUNICATION;
+            if (!comm_publishing) {
+                comm_user_published[i] = COMM_NO_COMMUNICATION;
+            }
         }
-        channel_state = COMM_NO_COM_NO_PENDING_REQUEST;
-        communication_allowed = FALSE;
-        diagnostic = FALSE;
-        wakeup_pending = FALSE;
-        minimum_remaining = 0u;
-        /* The default NO is not notified (SWS_ComM_00313); a publisher still in flight
-         * follows its mode with NO, so BswM and Dcm do not keep the previous one. */
-        indicated = COMM_NO_COMMUNICATION;
-        if (!comm_publishing) {
-            comm_published = COMM_NO_COMMUNICATION;
+        for (uint16 i = 0u; i < ConfigPtr->channel_count; ++i) {
+            ComM_ResetChannel(&comm_channels[i]);
         }
-        ComM_ClaimBus(COMM_NO_COMMUNICATION);
         SchM_Exit_ComM_COMM_STATE();
-        ComM_IssueBus();
+        for (uint16 i = 0u; i < ConfigPtr->channel_count; ++i) {
+            ComM_IssueBus(ConfigPtr->channels[i].channel);
+        }
     }
+}
+static COMM_CODE boolean ComM_NoPendingRequest(const ComM_ConfigType *config)
+{
+    boolean idle = config != NULL_PTR;
+    if (idle) {
+        for (uint16 i = 0u; (i < config->channel_count) && idle; ++i) {
+            idle = comm_channels[i].state == COMM_NO_COM_NO_PENDING_REQUEST;
+        }
+    }
+    return idle;
+}
+static COMM_CODE boolean ComM_AllBusesNoCom(const ComM_ConfigType *config)
+{
+    boolean idle = TRUE;
+    for (uint16 i = 0u; (i < config->channel_count) && idle; ++i) {
+        ComM_ModeType mode = COMM_FULL_COMMUNICATION;
+        idle = (config->current(config->channels[i].channel, &mode) == E_OK) &&
+               (mode == COMM_NO_COMMUNICATION);
+    }
+    return idle;
 }
 /* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_00147) that no
  * module of the selected program calls; see the ComM deviation record. */
 COMM_CODE void ComM_DeInit(void)
 {
     const ComM_ConfigType *config = NULL_PTR;
-    ComM_ModeType actual = COMM_FULL_COMMUNICATION;
-    Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
-    if (channel_state == COMM_NO_COM_NO_PENDING_REQUEST) {
+    if (ComM_NoPendingRequest(comm_configuration)) {
         config = comm_configuration;
     }
     SchM_Exit_ComM_COMM_STATE();
-    if (config != NULL_PTR) {
-        result = config->current(config->channel, &actual);
-    }
-    if ((result == E_OK) && (actual == COMM_NO_COMMUNICATION)) {
+    if ((config != NULL_PTR) && ComM_AllBusesNoCom(config)) {
         SchM_Enter_ComM_COMM_STATE();
-        /* A request accepted during the query left NO_PENDING_REQUEST and keeps ComM. */
-        if ((comm_configuration == config) && (channel_state == COMM_NO_COM_NO_PENDING_REQUEST)) {
+        /* A request accepted during the query can keep ComM. */
+        if ((comm_configuration == config) && ComM_NoPendingRequest(config)) {
             comm_configuration = NULL_PTR;
         }
         SchM_Exit_ComM_COMM_STATE();
@@ -352,8 +407,7 @@ COMM_CODE Std_ReturnType ComM_GetInhibitionStatus(NetworkHandleType Channel,
 {
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
-    if ((comm_configuration != NULL_PTR) && (Channel == comm_configuration->channel) &&
-        (Status != NULL_PTR)) {
+    if (ComM_Channel(comm_configuration, Channel) < COMM_CHANNEL_CAPACITY && (Status != NULL_PTR)) {
         /* Wake-up inhibition and mode limitation are disabled. */
         *Status = 0u;
         result = E_OK;
@@ -378,17 +432,24 @@ COMM_CODE Std_ReturnType ComM_SetECUGroupClassification(ComM_InhibitionStatusTyp
 COMM_CODE Std_ReturnType ComM_RequestComMode(ComM_UserHandleType User, ComM_ModeType ComMode)
 {
     Std_ReturnType result = E_NOT_OK;
-    uint16 index;
+    const ComM_UserModeConfigType *user = NULL_PTR;
     SchM_Enter_ComM_COMM_STATE();
-    index = ComM_User(User);
+    const uint16 index = ComM_User(User);
     if ((index < COMM_USER_CAPACITY) &&
         ((ComMode == COMM_NO_COMMUNICATION) || (ComMode == COMM_FULL_COMMUNICATION))) {
+        user = &comm_configuration->users[index];
         comm_requests[index] = ComMode;
-        ComM_Evaluate();
+        for (uint16 i = 0u; i < user->channel_count; ++i) {
+            ComM_Evaluate(ComM_Channel(comm_configuration, user->channels[i]));
+        }
         result = E_OK;
     }
     SchM_Exit_ComM_COMM_STATE();
-    ComM_IssueBus();
+    if (user != NULL_PTR) {
+        for (uint16 i = 0u; i < user->channel_count; ++i) {
+            ComM_IssueBus(user->channels[i]);
+        }
+    }
     return result;
 }
 /* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_00079) that no
@@ -411,14 +472,28 @@ COMM_CODE Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User, ComM
 COMM_CODE Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_ModeType *ComMode)
 {
     Std_ReturnType result = E_NOT_OK;
-    const ComM_ConfigType *config = NULL_PTR;
+    const ComM_UserModeConfigType *user = NULL_PTR;
+    ComM_BusGetType current = NULL_PTR;
     SchM_Enter_ComM_COMM_STATE();
-    if ((ComM_User(User) < COMM_USER_CAPACITY) && (ComMode != NULL_PTR)) {
-        config = comm_configuration;
+    const uint16 index = ComM_User(User);
+    if ((index < COMM_USER_CAPACITY) && (ComMode != NULL_PTR)) {
+        user = &comm_configuration->users[index];
+        current = comm_configuration->current;
     }
     SchM_Exit_ComM_COMM_STATE();
-    if (config != NULL_PTR) {
-        result = config->current(config->channel, ComMode);
+    if (user != NULL_PTR) {
+        ComM_ModeType lowest = COMM_FULL_COMMUNICATION;
+        result = E_OK;
+        for (uint16 i = 0u; (i < user->channel_count) && (result == E_OK); ++i) {
+            ComM_ModeType mode = COMM_NO_COMMUNICATION;
+            result = current(user->channels[i], &mode);
+            if (mode < lowest) {
+                lowest = mode;
+            }
+        }
+        if (result == E_OK) {
+            *ComMode = lowest;
+        }
     }
     return result;
 }
@@ -454,46 +529,47 @@ COMM_CODE Std_ReturnType ComM_GetMaxComMode(ComM_UserHandleType User, ComM_ModeT
 COMM_CODE void ComM_CommunicationAllowed(NetworkHandleType Channel, boolean Allowed)
 {
     SchM_Enter_ComM_COMM_STATE();
-    if ((comm_configuration != NULL_PTR) && (Channel == comm_configuration->channel)) {
-        communication_allowed = Allowed;
-        ComM_Evaluate();
+    const uint16 index = ComM_Channel(comm_configuration, Channel);
+    if (index < COMM_CHANNEL_CAPACITY) {
+        comm_channels[index].allowed = Allowed;
+        ComM_Evaluate(index);
     }
     SchM_Exit_ComM_COMM_STATE();
-    ComM_IssueBus();
+    ComM_IssueBus(Channel);
 }
 /* MR12 RULE 8.7 VIOLATION: standard API with external linkage (SWS_ComM_00275) that no
  * module of the selected program calls; see the ComM deviation record. */
 COMM_CODE void ComM_EcuM_WakeUpIndication(NetworkHandleType Channel)
 {
     SchM_Enter_ComM_COMM_STATE();
-    if ((comm_configuration != NULL_PTR) && (Channel == comm_configuration->channel) &&
-        (channel_state == COMM_NO_COM_NO_PENDING_REQUEST)) {
-        /* A wake-up is a pending request of its own. Ordinary NO requests must
-         * not cancel it while communication is still waiting for permission.
-         * The selected single channel has SynchronousWakeUp=false and NM NONE.
-         */
-        wakeup_pending = TRUE;
-        ComM_Evaluate();
+    const uint16 index = ComM_Channel(comm_configuration, Channel);
+    if ((index < COMM_CHANNEL_CAPACITY) &&
+        (comm_channels[index].state == COMM_NO_COM_NO_PENDING_REQUEST)) {
+        /* Wake-up remains pending until this channel is allowed to request FULL. */
+        comm_channels[index].wakeup = TRUE;
+        ComM_Evaluate(index);
     }
     SchM_Exit_ComM_COMM_STATE();
-    ComM_IssueBus();
+    ComM_IssueBus(Channel);
 }
 COMM_CODE void ComM_DCM_ActiveDiagnostic(NetworkHandleType Channel)
 {
     SchM_Enter_ComM_COMM_STATE();
-    if ((comm_configuration != NULL_PTR) && (Channel == comm_configuration->channel)) {
-        diagnostic = TRUE;
-        ComM_Evaluate();
+    const uint16 index = ComM_Channel(comm_configuration, Channel);
+    if (index < COMM_CHANNEL_CAPACITY) {
+        comm_channels[index].diagnostic = TRUE;
+        ComM_Evaluate(index);
     }
     SchM_Exit_ComM_COMM_STATE();
-    ComM_IssueBus();
+    ComM_IssueBus(Channel);
 }
 COMM_CODE void ComM_DCM_InactiveDiagnostic(NetworkHandleType Channel)
 {
     SchM_Enter_ComM_COMM_STATE();
-    if ((comm_configuration != NULL_PTR) && (Channel == comm_configuration->channel)) {
-        diagnostic = FALSE;
-        ComM_Evaluate();
+    const uint16 index = ComM_Channel(comm_configuration, Channel);
+    if (index < COMM_CHANNEL_CAPACITY) {
+        comm_channels[index].diagnostic = FALSE;
+        ComM_Evaluate(index);
     }
     SchM_Exit_ComM_COMM_STATE();
 }
@@ -501,9 +577,9 @@ COMM_CODE void ComM_BusSM_ModeIndication(NetworkHandleType Channel, ComM_ModeTyp
 {
     boolean owner = FALSE;
     SchM_Enter_ComM_COMM_STATE();
-    if ((comm_configuration != NULL_PTR) && (Channel == comm_configuration->channel) &&
-        (ComMode <= COMM_FULL_COMMUNICATION)) {
-        indicated = ComMode;
+    const uint16 index = ComM_Channel(comm_configuration, Channel);
+    if ((index < COMM_CHANNEL_CAPACITY) && (ComMode <= COMM_FULL_COMMUNICATION)) {
+        comm_channels[index].indicated = ComMode;
         if (!comm_publishing) {
             comm_publishing = TRUE;
             owner = TRUE;
@@ -514,22 +590,24 @@ COMM_CODE void ComM_BusSM_ModeIndication(NetworkHandleType Channel, ComM_ModeTyp
         ComM_Publish();
     }
 }
-COMM_CODE ComM_StateType ComM_RunChannel(void)
+COMM_CODE ComM_StateType ComM_RunChannel(NetworkHandleType Channel)
 {
-    ComM_StateType result;
+    ComM_StateType result = COMM_NO_COM_NO_PENDING_REQUEST;
     SchM_Enter_ComM_COMM_STATE();
-    if (comm_configuration != NULL_PTR) {
-        if ((channel_state == COMM_FULL_COM_NETWORK_REQUESTED) && (minimum_remaining != 0u)) {
-            --minimum_remaining;
+    const uint16 index = ComM_Channel(comm_configuration, Channel);
+    if (index < COMM_CHANNEL_CAPACITY) {
+        ComM_ChannelStateType *state = &comm_channels[index];
+        if ((state->state == COMM_FULL_COM_NETWORK_REQUESTED) && (state->minimum_remaining != 0u)) {
+            --state->minimum_remaining;
         }
-        ComM_Evaluate();
-        if (bus_phase == COMM_BUS_REFUSED) {
-            bus_phase = COMM_BUS_DUE;
+        ComM_Evaluate(index);
+        if (state->phase == COMM_BUS_REFUSED) {
+            state->phase = COMM_BUS_DUE;
         }
+        result = state->state;
     }
-    result = channel_state;
     SchM_Exit_ComM_COMM_STATE();
-    ComM_IssueBus();
+    ComM_IssueBus(Channel);
     return result;
 }
 #define COMM_STOP_SEC_CODE

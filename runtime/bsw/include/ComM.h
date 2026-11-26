@@ -56,33 +56,31 @@ typedef Std_ReturnType (*ComM_BusGetType)(NetworkHandleType Channel, ComM_ModeTy
 typedef void (*ComM_DcmModeType)(uint8 NetworkId);
 /** RTE adapter for one user's currentMode; called outside COMM_STATE. */
 typedef void (*ComM_UserModeType)(ComM_ModeType ComMode);
-/** Static user-to-channel relation and its RTE publisher (SWS_ComM_00091/00778).
- * The selected profile accepts one mapped CDD channel per user.
- */
+/** Static user-to-channel relation and optional RTE publisher (SWS_ComM_00091/00778). */
 typedef struct {
     ComM_UserHandleType user;          /**< Configured ComMUserIdentifier. */
     const NetworkHandleType *channels; /**< Borrowed immutable mapped channel handles. */
-    uint16 channel_count;              /**< One channel in the selected profile. */
-    ComM_UserModeType notify;          /**< RTE publisher for this user's UM port. */
+    uint16 channel_count;              /**< Number of mapped channels, at least one. */
+    ComM_UserModeType notify;          /**< RTE publisher for this user's UM port, or NULL. */
 } ComM_UserModeConfigType;
-/** Implementation-defined configuration (SWS_ComM_00162), emitted as immutable comm_config.
- * One channel with ComMNmVariant NONE and bus type CDD. The Dcm notifications are
- * all NULL when no Dcm connection references the channel, otherwise all set.
- */
+/** One CDD channel with ComMNmVariant NONE. */
 typedef struct {
-    NetworkHandleType channel;                 /**< Channel handle (ComMChannelId). */
-    const ComM_UserHandleType *users;          /**< Distinct user handles (ComMUserIdentifier). */
-    uint16 user_count;                         /**< 1..32 users, all mapped to the channel. */
-    uint32 minimum_full_ticks;                 /**< ComMTMinFullComModeDuration, in main periods. */
-    ComM_BusRequestType request;               /**< CDD bus mode request (ComMCDDBusPrefix). */
-    ComM_BusGetType current;                   /**< CDD actual bus mode query (ComMCDDBusPrefix). */
-    ComM_DcmModeType dcm_no;                   /**< Dcm_ComM_NoComModeEntered or NULL. */
-    ComM_DcmModeType dcm_silent;               /**< Dcm_ComM_SilentComModeEntered or NULL. */
-    ComM_DcmModeType dcm_full;                 /**< Dcm_ComM_FullComModeEntered or NULL. */
-    const ComM_UserModeConfigType *user_modes; /**< Connected users' immutable RTE mappings. */
-    uint16 user_mode_count;                    /**< 0..user_count; zero permits NULL mappings. */
+    NetworkHandleType channel;   /**< Channel handle (ComMChannelId). */
+    uint32 minimum_full_ticks;   /**< ComMTMinFullComModeDuration, in main periods. */
+    ComM_DcmModeType dcm_no;     /**< Dcm_ComM_NoComModeEntered or NULL. */
+    ComM_DcmModeType dcm_silent; /**< Dcm_ComM_SilentComModeEntered or NULL. */
+    ComM_DcmModeType dcm_full;   /**< Dcm_ComM_FullComModeEntered or NULL. */
+} ComM_ChannelConfigType;
+/** Implementation-defined configuration (SWS_ComM_00162), emitted as immutable comm_config. */
+typedef struct {
+    const ComM_ChannelConfigType *channels; /**< Distinct configured channels. */
+    uint16 channel_count;                   /**< Number of configured channels. */
+    const ComM_UserModeConfigType *users;   /**< Users and their channel relations. */
+    uint16 user_count;                      /**< Number of distinct users, 1..32. */
+    ComM_BusRequestType request;            /**< CDD bus mode request (ComMCDDBusPrefix). */
+    ComM_BusGetType current;                /**< CDD actual bus mode query (ComMCDDBusPrefix). */
 } ComM_ConfigType;
-/** Start or restart the channel in COMM_NO_COM_NO_PENDING_REQUEST (SWS_ComM_00146).
+/** Start or restart every channel in COMM_NO_COM_NO_PENDING_REQUEST (SWS_ComM_00146).
  * Clears requests, Allowed and diagnostic demand, then requests NO from the bus
  * state manager without notifying the default mode (SWS_ComM_00313).
  * @param[in] ConfigPtr Valid configuration; an invalid one leaves ComM unchanged.
@@ -95,7 +93,7 @@ typedef struct {
  * Ownership: ConfigPtr is retained until the next Init or a successful DeInit.
  */
 COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr);
-/** Deinitialize while the channel is in COMM_NO_COM_NO_PENDING_REQUEST and the bus
+/** Deinitialize while every channel is in COMM_NO_COM_NO_PENDING_REQUEST and the bus
  * state manager reports actual NO (SWS_ComM_00794); otherwise no action.
  * @par Return
  * None.

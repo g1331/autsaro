@@ -64,10 +64,13 @@ signals、diagnostic trigger 查找与 plan 判重；#487 按实际连接接收 
 
 ## 2. 首批主机拓扑与模式归属
 
-**决定。** 单 driver，每条物理通道连接一个 controller；N＝2、3、4 分别验收，
+**决定。** 单 driver，每条物理通道连接一个 controller；N＝2、3、4、6 分别验收，
 保留单通道回归。首批每个网络对应一条物理通道。多 driver、一网络多 controller 的配置
 在生成前按源引用明确拒绝。计划仍保留 network、physical channel、connector、CanIf
 abstract controller 与 driver controller 的独立路径，以便以后按新决定扩展拓扑。
+
+controller、通道及 HOH 的运行时表容量由实际配置静态生成。controller 和通道受
+`uint8` 标识范围约束，HOH 受其标准句柄范围约束，容量不设 4 路或 6 路上限。
 
 driver 内 controller 从 0 连续；HRH／HTH 共用从 0 连续的 driver 级对象编号。
 CanIf controller 自 0 起，经 CanIfCtrlCanCtrlRef 显式引用 driver controller。
@@ -79,6 +82,7 @@ CanIf controller 自 0 起，经 CanIfCtrlCanCtrlRef 显式引用 driver control
 | 2 | 0→1，1→0 | (2,3)，(0,1) |
 | 3 | 0→2，1→1，2→0 | (4,5)，(2,3)，(0,1) |
 | 4 | 0→3，1→2，2→1，3→0 | (6,7)，(4,5)，(2,3)，(0,1) |
+| 6 | 0→5，1→4，2→3，3→2，4→1，5→0 | (10,11)，(8,9)，(6,7)，(4,5)，(2,3)，(0,1) |
 
 ComM NetworkHandle、用户映射、BswM 动作、BusSM 与 DcmDslProtocolComMChannelRef
 均由显式引用连接。请求、保持计时、controller／PDU mode、bus-off、恢复及通知按通道归属；

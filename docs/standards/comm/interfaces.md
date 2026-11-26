@@ -2,7 +2,7 @@
 
 本篇属于 [ComM](README.md)。条款来自固定 R24-11 原始 SpecificationsARXML；标记仅作用于同一格中紧随其后的编号。行为测试的 `Verifies:` 与这里的处置共同核算。
 
-ComM 提供的 C API 与回调按标准签名实现；`ComM_GetCurrentPNCComMode` 在 PNC 关闭时对每个已配置用户返回 `COMM_E_NO_PNC_ASSIGNED`。`ComMService` 经共同类型化 C/S、port-defined argument 和显式 SWC-BSW mapping 提供五项用户服务；每个用户有独立的 `UR_{user_name}`／`UM_{user_name}` 端口。通知按保存的用户／通道关系发布，当前配置只接纳一个 CDD／NM NONE 通道，多通道最低模式聚合由 [#464](https://github.com/g1331/autsaro/issues/464) 承接。
+ComM 提供的 C API 与回调按标准签名实现。`ComM_GetCurrentPNCComMode` 在 PNC 关闭时对每个已配置用户返回 `COMM_E_NO_PNC_ASSIGNED`。`ComMService` 经共同类型化 C/S、port-defined argument 和显式 SWC-BSW mapping 提供五项用户服务，每个用户有独立的 `UR_{user_name}`／`UM_{user_name}` 端口。ComM 根据静态用户／通道关系查询和发布最低模式，运行时通道表由生成容量约束。集成生成入口当前接纳一个 CDD／NM NONE 通道。
 
 R24-11 的 `SWS_ComM_01000` 表把 Request／GetRequested 的两项 API 映射交叉书写；本实现按同条 IN／OUT 参数、`SWS_ComM_00745` 连接及两项 API 正文绑定同名 API。`SWS_ComM_00662` 与 00744 的旧示例使用 UM000 序列，01010／01011 的端口定义表使用 ECUC 用户名；交付采用端口定义表的名称，用户顺序由配置对象路径确定，端口常量独立使用 ComMUserIdentifier。`ComMMode` 的 ALPHABETIC_ORDER 为 FULL＝0、NO＝1、SILENT＝2，桥接层按名称转换 ComM C 枚举。
 
@@ -26,11 +26,11 @@ R24-11 的 `SWS_ComM_01000` 表把 Request／GetRequested 的两项 API 映射�
 | 用户请求接口及端口 | 已核对（ComM_UserRequest 五项操作、参数和各自错误集合；UR_HostUser 的 ComM_UserHandleType 常量；comm_service_rejects_nonstandard_input_at_its_source 定位拒绝错误方向和用户句柄；rte_comm_contract.c 经两个 R-port 请求并回读独立用户）：SWS_ComM_00848、01000、01011 |
 | 模式接口、模式声明与每用户端口 | 已核对（ComM_CurrentMode/currentMode、ComMMode 的 ALPHABETIC_ORDER 和默认 NO、UM_HostUser；comm_two_users_keep_distinct_handles_publishers_and_mapping_relations 核对两用户独立 publisher；声明／初值反例定位到 ComMMode）：SWS_ComM_00733、00847、01001、01010、01012 |
 | 用户顺序与模式端口对应 | 已核对（mode.rs 按配置路径排序用户，comm_service.rs 逐一比较 UR_／UM_ 名称和用户句柄；名称按上述端口定义表处理，rte_comm_contract.c 分别观察用户 0／43 的模式端口）：SWS_ComM_00662 |
-| ComM 承担逐用户 fanout | 已核对（ComM_NotifyUsers 遍历不可变 user_modes，按各用户 channels 关系选择通道模式；rte_comm_contract.c 的两个独立 SchM publisher 计数均随实际模式变化增加）：SWS_ComM_00091 |
+| ComM 承担逐用户 fanout | 已核对（ComM_ClaimUsers 遍历不可变用户表，按各用户 channels 关系选择最低实际模式。rte_comm_contract.c 经两个独立 SchM publisher 观察模式变化）：SWS_ComM_00091 |
 | 主模式变化及初始化例外 | 已核对（ComM_Publish 的 indicated／comm_published 去重保留；rte_comm_contract.c 检查初始 NO 零通知、SILENT／FULL／NO 变化、重复 FULL 零新增以及回调重入后的最终 NO）：SWS_ComM_00472 |
 | BusSM 实际模式向上传播 | 已核对（ComM_BusSM_ModeIndication 经单飞 ComM_Publish 在 COMM_STATE 外调用用户桥、BswM_ComM_CurrentMode 与 ComM_NotifyDcm；rte_comm_contract.c 读回 RTE 实际模式，mode_contract.c／bussm_parallel.c 保留真实下层模式及 BswM／Dcm 通知回归）：SWS_ComM_00675 |
 | 每用户 UM 端口对应正确 API | 已核对（ecu_config::files 为各用户生成独立 Ecu_ComMMode_UM_* 桥接函数，分别调用对应 SchM_Switch_ComM_UM_*；rte_comm_contract.c 同时观察两个 Rte_Mode，错绑第二用户 publisher 的变异被拒绝）：SWS_ComM_00778 |
-| 一个用户关联多个通道时的最低模式聚合 | 差距 #464：SWS_ComM_00663（当前一个通道的关系计算由 mode.rs 的 channels 和 ComM_NotifyUsers 覆盖；comm_multichannel_configuration_is_rejected_at_the_added_channel 在第二通道源对象拒绝，多通道聚合和隔离待承接项实现） |
+| 一个用户关联多个通道时的最低模式聚合 | 差距 #464：SWS_ComM_00176、00663（comm_multichannel.c 通过六通道 CDD 配置核对不同映射的 GetCurrentComMode、最低模式发布、去重、初始 NO 和保持计时，实际 ARXML 生成与 CanIf／BusSM／Dcm 闭环待验收） |
 | 版本 API | 不适用（配置：ECUC_ComM_00622）：SWS_ComM_00370 |
 | 开发错误检测 | 不适用（配置：ECUC_ComM_00555）：SWS_ComM_00234、00858 |
 | Nm 回调与 BusSM_BusSleepMode | 不适用（配置：ECUC_ComM_00568）：SWS_ComM_00383–00392、00792、91000 |

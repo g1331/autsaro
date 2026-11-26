@@ -3,6 +3,64 @@ use super::*;
 use autosar_config_core::integration::InputSource;
 use std::path::Path;
 
+/// Verifies: ECUC_EcuC_00052, ECUC_EcuC_00054
+#[test]
+fn diagnostic_global_pdu_reference_selects_the_extract_trigger() {
+    for (definition, destination, trigger) in [
+        (
+            "SysTPduToFrameTriggeringRef",
+            "CAN-FRAME-TRIGGERING",
+            "DiagRequestTrigger",
+        ),
+        (
+            "SysTPduToPduTriggeringRef",
+            "PDU-TRIGGERING",
+            "DiagRequestPduTrigger",
+        ),
+    ] {
+        let mut sources = single_component_sources();
+        let path = format!("/Extract/ReferenceCan/Channel/{trigger}");
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| named(node, "ECUC-CONTAINER-VALUE", "DiagRequestPdu"),
+            |text| {
+                text.replace("</PARAMETER-VALUES>", &format!(
+                    "</PARAMETER-VALUES>
+                    <REFERENCE-VALUES>
+                      <ECUC-REFERENCE-VALUE>
+                        <DEFINITION-REF DEST=\"ECUC-FOREIGN-REFERENCE-DEF\">/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu/{definition}</DEFINITION-REF>
+                        <VALUE-REF DEST=\"{destination}\">{path}</VALUE-REF>
+                      </ECUC-REFERENCE-VALUE>
+                    </REFERENCE-VALUES>"
+                ))
+            },
+        );
+        let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+        assert!(plan.description().diagnostic_transport.is_some());
+        let validation = normal_validation(&sources);
+        assert!(
+            validation.diagnostics.is_empty(),
+            "{:?}",
+            validation.diagnostics
+        );
+
+        let wrong_path = path.replace("DiagRequest", "DiagResponse");
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| named(node, "ECUC-CONTAINER-VALUE", "DiagRequestPdu"),
+            |text| text.replace(&path, &wrong_path),
+        );
+        rejected_at(
+            &sources,
+            "SIGNAL_MAPPING",
+            "ecuc.arxml",
+            "/Configuration/EcuC/Config/Pdus/DiagRequestPdu",
+        );
+    }
+}
+
 /// Verifies: ECUC_Can_00473, ECUC_Can_00475, ECUC_Can_00481, ECUC_Can_00485
 #[test]
 fn fd_configuration_requires_the_selected_controller_and_preserves_brs_and_padding() {

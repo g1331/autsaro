@@ -210,7 +210,8 @@ static const PduR_RxRouteType pdur_rx[] = {{31u, 17u, rx}};
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_COM, 18u, PDUR_LO_LSDUR, 41u, LSduR_PduRTransmit, tx, NULL_PTR}};
 static const PduR_PBConfigType pdur = {23u, pdur_rx, 1u, pdur_tx, 1u, NULL_PTR, 0u};
-static const Ecu_HostBusSM_ConfigType bussm = {0u, 0u};
+static const Ecu_HostBusSM_ChannelConfigType bus_channels[] = {{0u, 0u}};
+static const Ecu_HostBusSM_ConfigType bussm = {bus_channels, 1u};
 static void initialize(void) {
     Can_Init(&can);
     CanIf_Init(&canif);

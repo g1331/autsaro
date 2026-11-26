@@ -21,13 +21,18 @@
 #endif
 #define ECU_HOSTBUSSM_START_SEC_CODE
 #include "Ecu_HostBusSM_MemMap.h"
-/** Generated immutable bus_config: the ComM channel and its CanIf controller. */
+/** One immutable ComM channel to CanIf controller mapping. */
 typedef struct {
     NetworkHandleType channel; /**< ComM channel (ComMChannelId). */
     uint8 controller;          /**< CanIf controller (CanIfCtrlId). */
+} Ecu_HostBusSM_ChannelConfigType;
+/** Generated immutable BusSM channels. */
+typedef struct {
+    const Ecu_HostBusSM_ChannelConfigType *channels; /**< Channel-to-controller mappings. */
+    uint16 channel_count;                            /**< Number of mappings. */
 } Ecu_HostBusSM_ConfigType;
-/** Start the provider in requested NO.
- * @param[in] ConfigPtr Configuration whose controller CanIf knows; otherwise no action.
+/** Start each configured channel in requested NO.
+ * @param[in] ConfigPtr Configuration whose controllers CanIf knows; otherwise no action.
  * @par Return
  * None.
  * Preconditions: CanIf initialized.

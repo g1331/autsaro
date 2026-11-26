@@ -43,6 +43,12 @@ pub struct DiagnosticContract {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct DiagnosticTransportContract {
+    #[serde(skip)]
+    pub(super) physical_channel: String,
+    #[serde(skip)]
+    pub(super) can_if_rx_pdu: String,
+    #[serde(skip)]
+    pub(super) can_if_tx_pdu: String,
     pub rx_sdu: String,
     pub tx_sdu: String,
     pub rx_npdu: String,
@@ -172,11 +178,20 @@ fn transport_timer(
     Ok(value)
 }
 
+struct DiagnosticCanLink {
+    id: u32,
+    handle: u16,
+    accepts_fd: bool,
+    physical_channel: usize,
+    can_if_pdu: usize,
+}
+
 fn can_link(
     graph: &Graph,
     pdu: usize,
     receive: bool,
-) -> Result<(u32, u16, bool), Vec<PlanDiagnostic>> {
+    physical_channel: Option<usize>,
+) -> Result<DiagnosticCanLink, Vec<PlanDiagnostic>> {
     let prefix = if receive { "CanIfRxPdu" } else { "CanIfTxPdu" };
     let found: Vec<_> = graph
         .of_kind("ECUC-CONTAINER-VALUE")
@@ -232,16 +247,27 @@ fn can_link(
             ),
         ));
     }
+    let target = super::can_id::pdu_trigger_reference(graph, pdu)?;
     let triggers: Vec<_> = graph
         .of_kind("CAN-FRAME-TRIGGERING")
         .into_iter()
-        .filter(|trigger| super::can_id::trigger_id(graph, *trigger) == Some(id))
+        .filter(|trigger| {
+            physical_channel.is_none_or(|channel| {
+                graph.ancestor(*trigger, "CAN-PHYSICAL-CHANNEL") == Some(channel)
+            }) && target
+                .is_none_or(|target| super::can_id::trigger_references(graph, *trigger, target))
+                && super::can_id::trigger_id(graph, *trigger) == Some(id)
+        })
         .collect();
     if triggers.len() != 1 {
         return Err(reject(
             graph,
-            can_if,
-            "CAN_ID_CONFLICT",
+            target.map_or(can_if, |_| pdu),
+            if target.is_some() {
+                "SIGNAL_MAPPING"
+            } else {
+                "CAN_ID_CONFLICT"
+            },
             crate::product_message!(
                 "backend.integration.diagnostic.diagnostic_extract_trigger_not_unique"
             ),
@@ -289,7 +315,7 @@ fn can_link(
             ),
         ));
     }
-    check_trigger(graph, trigger, system_pdu, None, receive)?;
+    let physical_channel = check_trigger(graph, trigger, system_pdu, None, receive)?;
     let ports = graph.descendants(trigger, "FRAME-PORT-REF");
     if ports.len() != 1 || graph.text(frame, "FRAME-LENGTH") != Some("8") {
         return Err(reject(
@@ -326,7 +352,13 @@ fn can_link(
             crate::product_message!("backend.integration.diagnostic.diagnostic_rx_dlc_required"),
         ));
     }
-    Ok((id, handle, accepts_fd))
+    Ok(DiagnosticCanLink {
+        id,
+        handle,
+        accepts_fd,
+        physical_channel,
+        can_if_pdu: can_if,
+    })
 }
 
 pub(super) fn inspect_service(
@@ -827,9 +859,9 @@ pub(super) fn inspect_transport(
             ),
         ));
     }
-    let (request_can_id, request_handle, request_accepts_fd) = can_link(graph, rx_npdu, true)?;
-    let (response_can_id, response_handle, _) = can_link(graph, tx_npdu, false)?;
-    if request_can_id == response_can_id {
+    let request = can_link(graph, rx_npdu, true, None)?;
+    let response = can_link(graph, tx_npdu, false, Some(request.physical_channel))?;
+    if request.id == response.id {
         return Err(reject(
             graph,
             protocol,
@@ -870,17 +902,20 @@ pub(super) fn inspect_transport(
         ));
     }
     Ok(DiagnosticTransportContract {
+        physical_channel: graph.elements[request.physical_channel].object.clone(),
+        can_if_rx_pdu: graph.elements[request.can_if_pdu].object.clone(),
+        can_if_tx_pdu: graph.elements[response.can_if_pdu].object.clone(),
         rx_sdu: graph.elements[rx_sdu].object.clone(),
         tx_sdu: graph.elements[tx_sdu].object.clone(),
         rx_npdu: graph.elements[rx_npdu].object.clone(),
         tx_npdu: graph.elements[tx_npdu].object.clone(),
-        request_can_id: request_can_id & super::can_id::EXTENDED_MAX,
-        request_extended: request_can_id & super::can_id::EXTENDED != 0,
-        request_accepts_fd,
-        response_can_id: response_can_id & super::can_id::EXTENDED_MAX,
-        response_extended: response_can_id & super::can_id::EXTENDED != 0,
-        request_can_if_handle: request_handle,
-        response_can_if_handle: response_handle,
+        request_can_id: request.id & super::can_id::EXTENDED_MAX,
+        request_extended: request.id & super::can_id::EXTENDED != 0,
+        request_accepts_fd: request.accepts_fd,
+        response_can_id: response.id & super::can_id::EXTENDED_MAX,
+        response_extended: response.id & super::can_id::EXTENDED != 0,
+        request_can_if_handle: request.handle,
+        response_can_if_handle: response.handle,
         p2_ms,
         p2_star_ms,
         s3_ms: 5000,

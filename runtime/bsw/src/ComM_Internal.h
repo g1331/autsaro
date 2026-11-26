@@ -8,7 +8,7 @@
 #include "ComM.h"
 #define COMM_START_SEC_CODE
 #include "ComM_MemMap.h"
-COMM_CODE ComM_StateType ComM_RunChannel(void);
+COMM_CODE ComM_StateType ComM_RunChannel(NetworkHandleType Channel);
 #define COMM_STOP_SEC_CODE
 #include "ComM_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */

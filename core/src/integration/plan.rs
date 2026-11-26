@@ -493,38 +493,48 @@ pub(super) fn inspect_composition(
     }
     let mut can_ids = BTreeSet::new();
     let mut can_handles = BTreeSet::new();
-    for (object, id, handle, receive, dual, fd_trigger) in signals
+    let signal_endpoints = signals
         .iter()
         .map(|signal| {
-            (
+            let trigger = graph.index(&signal.trigger)?;
+            let channel = graph
+                .ancestor(trigger, "CAN-PHYSICAL-CHANNEL")
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&signal.trigger))?;
+            Ok((
                 signal.can_if_pdu.as_str(),
+                graph.elements[channel].object.as_str(),
                 signal.encoded_id(),
                 signal.can_if_handle,
                 signal.receive,
                 signal.accepts_fd,
                 signal.fd,
-            )
+            ))
         })
-        .chain(diagnostic_transport.iter().flat_map(|diagnostic| {
-            [
-                (
-                    diagnostic.rx_sdu.as_str(),
-                    diagnostic.encoded_request_id(),
-                    diagnostic.request_can_if_handle,
-                    true,
-                    false,
-                    false,
-                ),
-                (
-                    diagnostic.tx_sdu.as_str(),
-                    diagnostic.encoded_response_id(),
-                    diagnostic.response_can_if_handle,
-                    false,
-                    false,
-                    false,
-                ),
-            ]
-        }))
+        .collect::<Result<Vec<_>, Vec<PlanDiagnostic>>>()?;
+    let diagnostic_endpoints = diagnostic_transport.iter().flat_map(|diagnostic| {
+        [
+            (
+                diagnostic.can_if_rx_pdu.as_str(),
+                diagnostic.physical_channel.as_str(),
+                diagnostic.encoded_request_id(),
+                diagnostic.request_can_if_handle,
+                true,
+                diagnostic.request_accepts_fd,
+                false,
+            ),
+            (
+                diagnostic.can_if_tx_pdu.as_str(),
+                diagnostic.physical_channel.as_str(),
+                diagnostic.encoded_response_id(),
+                diagnostic.response_can_if_handle,
+                false,
+                false,
+                false,
+            ),
+        ]
+    });
+    for (object, channel, id, handle, receive, dual, fd_trigger) in
+        signal_endpoints.into_iter().chain(diagnostic_endpoints)
     {
         // The delivered ComStack_Types.h defines PduIdType as uint8_t: a wider
         // handle is a target width limit, not an identifier collision.
@@ -549,8 +559,9 @@ pub(super) fn inspect_composition(
             )]);
         }
         let dual_on_fd_controller = dual && communication_runtime.can.data_bitrate.is_some();
-        if !can_ids.insert(id)
-            || (dual_on_fd_controller && !can_ids.insert(id | super::can_id::FD))
+        if !can_ids.insert((channel, receive, id))
+            || (dual_on_fd_controller
+                && !can_ids.insert((channel, receive, id | super::can_id::FD)))
             || !can_handles.insert((receive, handle))
         {
             return Err(vec![graph.diagnostic(

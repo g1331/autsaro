@@ -5,6 +5,7 @@ use super::graph::Graph;
 use super::schedule::{ScheduleContract, definition_is, value, values};
 use super::{DiagnosticCategory, PlanDiagnostic};
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -99,6 +100,37 @@ fn one(graph: &Graph, kind: &str) -> Result<usize, Vec<PlanDiagnostic>> {
             "COMMUNICATION_CONFIGURATION",
         ))
     }
+}
+
+/// The controller and hardware object IDs are independent, dense namespaces.
+/// A single driver owns the complete HRH/HTH namespace (ECUC_Can_00326).
+fn numbered(
+    graph: &Graph,
+    kind: &str,
+    name: &str,
+    maximum: u16,
+    code: &str,
+) -> Result<BTreeMap<u16, usize>, Vec<PlanDiagnostic>> {
+    let mut items = BTreeMap::new();
+    for index in graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, kind))
+    {
+        let id = value(graph, index, name, false)
+            .and_then(|text| text.parse::<u16>().ok())
+            .filter(|id| *id <= maximum)
+            .ok_or_else(|| fail(graph, index, code))?;
+        if items.insert(id, index).is_some() {
+            return Err(fail(graph, index, code));
+        }
+    }
+    for (expected, (&id, &index)) in items.iter().enumerate() {
+        if usize::from(id) != expected {
+            return Err(fail(graph, index, code));
+        }
+    }
+    Ok(items)
 }
 fn integer_type(
     graph: &Graph,
@@ -306,6 +338,20 @@ pub(super) fn inspect(
             }
         }
     }
+    numbered(
+        graph,
+        "CanController",
+        "CanControllerId",
+        u16::from(u8::MAX),
+        "CAN_CONTROLLER_ID",
+    )?;
+    numbered(
+        graph,
+        "CanIfCtrlCfg",
+        "CanIfCtrlId",
+        u16::from(u8::MAX),
+        "CAN_CONTROLLER_ID",
+    )?;
     let controller = one(graph, "CanController")?;
     let (nominal_bitrate, data_bitrate, brs) = bitrates(graph, controller)?;
     let mut fd_padding = 0;
@@ -334,14 +380,16 @@ pub(super) fn inspect(
     }
     let rw = one(graph, "CanMainFunctionRWPeriods")?;
     let rw_path = graph.elements[rw].object.as_str();
-    let hardware: Vec<_> = graph
-        .of_kind("ECUC-CONTAINER-VALUE")
-        .into_iter()
-        .filter(|index| definition_is(graph, *index, "CanHardwareObject"))
-        .collect();
+    let hardware = numbered(
+        graph,
+        "CanHardwareObject",
+        "CanObjectId",
+        u16::MAX,
+        "CAN_HARDWARE_HANDLES",
+    )?;
     let mut receive = None;
     let mut transmit = None;
-    for index in hardware {
+    for (handle, index) in hardware {
         if value(graph, index, "CanMainFunctionRWPeriodRef", true) != Some(rw_path) {
             return Err(fail(graph, index, "CAN_POLLING_REFERENCE"));
         }
@@ -351,9 +399,6 @@ pub(super) fn inspect(
         ) {
             return Err(fail(graph, index, "CAN_FEATURE_UNSUPPORTED"));
         }
-        let handle = value(graph, index, "CanObjectId", false)
-            .and_then(|text| text.parse::<u16>().ok())
-            .ok_or_else(|| fail(graph, index, "CAN_HARDWARE_HANDLES"))?;
         let selected = match value(graph, index, "CanObjectType", false) {
             Some("RECEIVE") => &mut receive,
             Some("TRANSMIT") => &mut transmit,
@@ -386,21 +431,14 @@ pub(super) fn inspect(
         receive.ok_or_else(|| fail(graph, controller, "CAN_HARDWARE_HANDLES"))?;
     let (transmit_hardware, transmit_handle, transmit_id_type) =
         transmit.ok_or_else(|| fail(graph, controller, "CAN_HARDWARE_HANDLES"))?;
-    // The selected two-object common HRH/HTH range is contiguous from zero
-    // (ECUC_Can_00326, SWS_CANIF_00115).
-    if (receive_handle == transmit_handle) || (receive_handle > 1) || (transmit_handle > 1) {
-        return Err(fail(graph, controller, "CAN_HARDWARE_HANDLES"));
-    }
     // Both selected namespaces contain one controller, numbered from zero
     // (ECUC_Can_00316, SWS_CANIF_00653 and 00433), despite the wider metadata range.
     let controller_id = value(graph, controller, "CanControllerId", false)
         .and_then(|text| text.parse::<u8>().ok())
-        .filter(|id| *id == 0)
         .ok_or_else(|| fail(graph, controller, "CAN_CONTROLLER_ID"))?;
     let can_if_controller = one(graph, "CanIfCtrlCfg")?;
     let can_if_controller_id = value(graph, can_if_controller, "CanIfCtrlId", false)
         .and_then(|text| text.parse::<u8>().ok())
-        .filter(|id| *id == 0)
         .ok_or_else(|| fail(graph, can_if_controller, "CAN_CONTROLLER_ID"))?;
     for (symbol, configured) in [
         (
@@ -467,10 +505,12 @@ pub(super) fn inspect(
 pub(super) fn profile_header(
     communication: &CommunicationRuntimeContract,
     can_if_controller: &str,
+    comm_channel_count: usize,
 ) -> (String, Vec<u8>) {
     let can = &communication.can;
     let profile = super::c_layout::commented_defines(
         &[
+            ("COMM_CHANNEL_CAPACITY", format!("{comm_channel_count}u")),
             ("CAN_HOST_QUEUED_COMPLETION", "STD_ON".to_owned()),
             ("CAN_RX_POLLING", "STD_ON".to_owned()),
             ("CAN_TX_POLLING", "STD_ON".to_owned()),

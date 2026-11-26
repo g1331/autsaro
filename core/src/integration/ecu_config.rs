@@ -427,8 +427,16 @@ pub(super) fn files(
     )?;
     outputs.emit_rendered(super::outputs::OS, super::ecu::ECU_CONFIG, os_config)?;
     outputs.emit_all(ECU, super::can_runtime::type_headers(communication))?;
-    let (path, bytes) =
-        super::can_runtime::profile_header(communication, symbolic.parameter("CanIfCtrlId")?);
+    let comm_channel_count = description
+        .configuration
+        .iter()
+        .filter(|record| super::short_name(&record.definition) == "ComMChannel")
+        .count();
+    let (path, bytes) = super::can_runtime::profile_header(
+        communication,
+        symbolic.parameter("CanIfCtrlId")?,
+        comm_channel_count,
+    );
     outputs.emit(ECU, path, bytes)?;
     for (module, definitions) in &symbolic.headers {
         if matches!(module.as_str(), "CanIf" | "PduR" | "LSduR" | "Rte") {
@@ -1099,25 +1107,21 @@ pub(super) fn files(
         outputs.emit(ECU, format!("src/{module}_PBcfg.c"), source)?;
     }
 
+    config_data(
+        &mut config,
+        "Ecu_HostBusSM",
+        "static const Ecu_HostBusSM_ChannelConfigType bus_channels[]",
+        &[row(&format!(
+            "{}, {}",
+            name("ComM", "ComMChannel", &mode.channel),
+            symbolic.parameter("CanIfCtrlId")?
+        ))],
+    );
     init_data(
         &mut config,
         "Ecu_HostBusSM",
         "static const Ecu_HostBusSM_ConfigType bus_config",
-        &values(&format!(
-            "{}, {}",
-            name("ComM", "ComMChannel", &mode.channel),
-            symbolic.parameter("CanIfCtrlId")?
-        )),
-    );
-    config_data(
-        &mut config,
-        "ComM",
-        "static const ComM_UserHandleType ecu_comm_users[]",
-        &mode
-            .users
-            .iter()
-            .map(|user| Item::Value(name("ComM", "ComMUser", &user.path)))
-            .collect::<Vec<_>>(),
+        &values("bus_channels, 1u"),
     );
     let mut user_modes = Vec::new();
     for user in &mode.users {
@@ -1176,36 +1180,50 @@ pub(super) fn files(
         "static const ComM_UserModeConfigType comm_user_modes[]",
         &user_modes,
     );
-    init_data(
+    config_data(
         &mut config,
         "ComM",
-        "static const ComM_ConfigType comm_config",
-        &values(&format!(
-            "{}, ecu_comm_users, {}u, {}u, &Ecu_HostBusSM_RequestComMode, &Ecu_HostBusSM_GetCurrentComMode, {}, comm_user_modes, {}u",
+        "static const ComM_ChannelConfigType comm_channel_config[]",
+        &[row(&format!(
+            "{}, {}u, {}",
             name("ComM", "ComMChannel", &mode.channel),
-            mode.users.len(),
             periods(mode.minimum_full_ms, mode.period_ms, &mode.main_symbol)?,
             if transport.is_some() {
                 "&Dcm_ComM_NoComModeEntered, &Dcm_ComM_SilentComModeEntered, &Dcm_ComM_FullComModeEntered"
             } else {
                 "NULL_PTR, NULL_PTR, NULL_PTR"
-            },
+            }
+        ))],
+    );
+    init_data(
+        &mut config,
+        "ComM",
+        "static const ComM_ConfigType comm_config",
+        &values(&format!(
+            "comm_channel_config, 1u, comm_user_modes, {}u, &Ecu_HostBusSM_RequestComMode, &Ecu_HostBusSM_GetCurrentComMode",
             mode.users.len()
         )),
+    );
+    let comm_main = format!(
+        "(void)ComM_RunChannel({});",
+        name("ComM", "ComMChannel", &mode.channel)
+    );
+    config_data(
+        &mut config,
+        "BswM",
+        "static const NetworkHandleType bswm_comm_channels[]",
+        &[Item::Value(name("ComM", "ComMChannel", &mode.channel))],
     );
     init_data(
         &mut config,
         "BswM",
         "static const BswM_ConfigType bswm_config",
-        &values(&format!(
-            "{}, &Ecu_BswMAction",
-            name("ComM", "ComMChannel", &mode.channel)
-        )),
+        &values("bswm_comm_channels, 1u, &Ecu_BswMAction"),
     );
     for (symbol, scope, body) in [
         (&com.receive_main.symbol, "Com", "Ecu_ComMainFunctionRx();"),
         (&com.transmit_main.symbol, "Com", "Ecu_ComMainFunctionTx();"),
-        (&mode.main_symbol, "ComM", "(void)ComM_RunChannel();"),
+        (&mode.main_symbol, "ComM", comm_main.as_str()),
     ] {
         let function =
             c_layout::short_function(&format!("RTE_{scope}_CODE void {symbol}(void)"), body);

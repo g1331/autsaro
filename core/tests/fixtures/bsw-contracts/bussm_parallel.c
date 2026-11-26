@@ -91,20 +91,14 @@ static const CanIf_ConfigType canif = {receives,
                                        0u,
                                        0u};
 static const Can_ConfigType can = {.sink = sink};
-static const Ecu_HostBusSM_ConfigType bussm = {0u, 0u};
-static const ComM_UserHandleType users[] = {1u};
-/* The Dcm notifications observe what ComM receives from the provider. */
-static const ComM_ConfigType comm = {0u,
-                                     users,
-                                     1u,
-                                     1u,
-                                     Ecu_HostBusSM_RequestComMode,
-                                     Ecu_HostBusSM_GetCurrentComMode,
-                                     entered_no,
-                                     entered_silent,
-                                     entered_full,
-                                     NULL_PTR,
-                                     0u};
+static const Ecu_HostBusSM_ChannelConfigType bus_channels[] = {{0u, 0u}};
+static const Ecu_HostBusSM_ConfigType bussm = {bus_channels, 1u};
+static const NetworkHandleType user_channels[] = {0u};
+static const ComM_UserModeConfigType users[] = {{1u, user_channels, 1u, NULL_PTR}};
+static const ComM_ChannelConfigType channels[] = {
+    {0u, 1u, entered_no, entered_silent, entered_full}};
+static const ComM_ConfigType comm = {
+    channels, 1u, users, 1u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode};
 
 Std_ReturnType __real_CanIf_SetControllerMode(uint8 ControllerId,
                                               Can_ControllerStateType ControllerMode);

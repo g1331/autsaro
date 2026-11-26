@@ -1,4 +1,4 @@
-/** @file BswM with one IMMEDIATE ComM mode input and a single action, run in caller context.
+/** @file BswM with IMMEDIATE ComM mode inputs and generated actions, run in caller context.
  * BSWM_STATE protects module data only; the action runs outside it.
  */
 #include "BswM.h"
@@ -10,6 +10,7 @@
 #elif (RTE_AR_RELEASE_MAJOR_VERSION != 4U) || (RTE_AR_RELEASE_MINOR_VERSION != 10U)
 #error "BswM.c -> SchM_BswM.h: incompatible AUTOSAR release"
 #endif
+#include "Ecu_ProfileConfig.h"
 #define BSWM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "BswM_MemMap.h"
 /* All BSWM_STATE. Postponed inputs imply processing: an input received while an action
@@ -20,9 +21,14 @@
  * input checks configuration and Deinit drops postponed inputs, so they also imply a
  * configuration. */
 static const BswM_ConfigType *bswm_configuration BSWM_VAR_CLEARED; /**< NULL when uninitialized. */
-static ComM_ModeType port_mode BSWM_VAR_CLEARED;                   /**< Latest input. */
-static uint32 postponed BSWM_VAR_CLEARED;   /**< Inputs awaiting arbitration. */
-static boolean processing BSWM_VAR_CLEARED; /**< An arbitration is in flight. */
+typedef struct {
+    ComM_ModeType mode; /**< Latest indication for this port. */
+    uint32 postponed;   /**< Inputs awaiting arbitration. */
+} BswM_PortType;
+static BswM_PortType
+    bswm_ports[COMM_CHANNEL_CAPACITY] BSWM_VAR_CLEARED; /**< Port states in configuration order;
+                                                           cleared by Init or Deinit. */
+static boolean processing BSWM_VAR_CLEARED;             /**< An arbitration is in flight. */
 #define BSWM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "BswM_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -33,12 +39,33 @@ static boolean processing BSWM_VAR_CLEARED; /**< An arbitration is in flight. */
 #endif
 #define BSWM_START_SEC_CODE
 #include "BswM_MemMap.h"
+static BSWM_CODE void BswM_ResetPorts(void)
+{
+    for (uint16 i = 0u; i < COMM_CHANNEL_CAPACITY; ++i) {
+        bswm_ports[i].mode = COMM_NO_COMMUNICATION;
+        bswm_ports[i].postponed = 0u;
+    }
+}
+static BSWM_CODE boolean BswM_Valid(const BswM_ConfigType *config)
+{
+    boolean valid =
+        (config != NULL_PTR) && (config->channels != NULL_PTR) && (config->channel_count != 0u) &&
+        (config->channel_count <= COMM_CHANNEL_CAPACITY) && (config->action != NULL_PTR);
+    if (valid) {
+        for (uint16 i = 0u; (i < config->channel_count) && valid; ++i) {
+            for (uint16 j = 0u; (j < i) && valid; ++j) {
+                valid = config->channels[i] != config->channels[j];
+            }
+        }
+    }
+    return valid;
+}
 BSWM_CODE void BswM_Init(const BswM_ConfigType *ConfigPtr)
 {
-    if ((ConfigPtr != NULL_PTR) && (ConfigPtr->action != NULL_PTR)) {
+    if (BswM_Valid(ConfigPtr)) {
         SchM_Enter_BswM_BSWM_STATE();
         bswm_configuration = ConfigPtr;
-        postponed = 0u;
+        BswM_ResetPorts();
         SchM_Exit_BswM_BSWM_STATE();
     }
 }
@@ -46,7 +73,7 @@ BSWM_CODE void BswM_Deinit(void)
 {
     SchM_Enter_BswM_BSWM_STATE();
     bswm_configuration = NULL_PTR;
-    postponed = 0u;
+    BswM_ResetPorts();
     SchM_Exit_BswM_BSWM_STATE();
 }
 /* MR12 RULE 8.7 VIOLATION: standard main function (SWS_BswM_00053) that the selected
@@ -67,12 +94,19 @@ static BSWM_CODE void BswM_Process(void)
         NetworkHandleType network = 0u;
         ComM_ModeType mode = COMM_NO_COMMUNICATION;
         SchM_Enter_BswM_BSWM_STATE();
-        if (postponed > 0u) {
-            --postponed;
-            action = bswm_configuration->action;
-            network = bswm_configuration->channel;
-            mode = port_mode;
-        } else {
+        if (bswm_configuration != NULL_PTR) {
+            for (uint16 i = 0u; i < bswm_configuration->channel_count; ++i) {
+                BswM_PortType *port = &bswm_ports[i];
+                if (port->postponed != 0u) {
+                    --port->postponed;
+                    action = bswm_configuration->action;
+                    network = bswm_configuration->channels[i];
+                    mode = port->mode;
+                    break;
+                }
+            }
+        }
+        if (action == NULL_PTR) {
             processing = FALSE;
             owner = FALSE;
         }
@@ -88,13 +122,17 @@ BSWM_CODE void BswM_ComM_CurrentMode(NetworkHandleType Network, ComM_ModeType Re
 {
     boolean owner = FALSE;
     SchM_Enter_BswM_BSWM_STATE();
-    if ((bswm_configuration != NULL_PTR) && (Network == bswm_configuration->channel) &&
-        (RequestedMode <= COMM_FULL_COMMUNICATION)) {
-        port_mode = RequestedMode;
-        ++postponed;
-        if (!processing) {
-            processing = TRUE;
-            owner = TRUE;
+    if ((bswm_configuration != NULL_PTR) && (RequestedMode <= COMM_FULL_COMMUNICATION)) {
+        for (uint16 i = 0u; i < bswm_configuration->channel_count; ++i) {
+            if (Network == bswm_configuration->channels[i]) {
+                bswm_ports[i].mode = RequestedMode;
+                ++bswm_ports[i].postponed;
+                if (!processing) {
+                    processing = TRUE;
+                    owner = TRUE;
+                }
+                break;
+            }
         }
     }
     SchM_Exit_BswM_BSWM_STATE();

@@ -2566,6 +2566,11 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             "ComM_UserModeType",
             "ComM_UserModeConfigType",
             "comm_user_modes",
+            "comm_channel_config",
+            "bswm_comm_channels",
+            "bus_channels",
+            "Ecu_HostBusSM_ChannelConfigType",
+            "ComM_ChannelConfigType",
         ]
         .into_iter()
         .map(str::to_owned),

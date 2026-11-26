@@ -61,7 +61,8 @@ OsAlarmSetEventRef OsAlarmSetEventTaskRef OsTaskAppModeRef OsTaskEventRef OsMemo
 PduRDestPduRRef PduRDestPduRef PduRSrcPduRRef PduRSrcPduRef RteBswEventRef
 RteBswImplementationRef RteBswMappedToTaskRef RteBswUsedOsAlarmRef RteBswUsedOsEventRef
 RteEventRef RteMappedToTaskRef RteSoftwareComponentInstanceRef RteUsedOsAlarmRef RteUsedOsEventRef
-RteUsedOsSchTblExpiryPointRef RteBswUsedOsSchTblExpiryPointRef OsScheduleTableCounterRef OsScheduleTableAppModeRef OsScheduleTableSetEventTaskRef OsScheduleTableSetEventRef";
+RteUsedOsSchTblExpiryPointRef RteBswUsedOsSchTblExpiryPointRef OsScheduleTableCounterRef OsScheduleTableAppModeRef OsScheduleTableSetEventTaskRef OsScheduleTableSetEventRef
+SysTPduToFrameTriggeringRef SysTPduToPduTriggeringRef";
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -157,6 +158,22 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
             ),
         ));
     }
+    let driver = one(graph, can_if_controller, "CanIfCtrlDrvCfg")?;
+    let general = one(graph, controller, "CanGeneral")?;
+    let handles = reference(graph, driver, "CanIfCtrlDrvInitHohConfigRef")?;
+    if !graph.within(can_if_controller, driver)
+        || reference(graph, driver, "CanIfCtrlDrvNameRef")? != general
+        || !definition_is(graph, handles, "CanIfInitHohCfg")
+    {
+        return Err(reject(
+            graph,
+            driver,
+            "CONTROLLER_MAPPING",
+            crate::product_message!(
+                "backend.integration.configuration.canif_controller_binding_required"
+            ),
+        ));
+    }
     // No CanSM: both controller notifications go to the host CDD BusSM by name
     // (SWS_CANIF_00560, SWS_CANIF_00692).
     let dispatch = one(graph, can_if_controller, "CanIfDispatchCfg")?;
@@ -239,8 +256,16 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
             ),
         ));
     }
-    // Each HOH names its Can hardware object and controller (SWS_CANIF_00467,
-    // 00468); Tx L-PDUs reach the HTH through their CanIfBufferCfg (SWS_CANIF_00466).
+    // The current driver profile still emits one RX and one TX hardware object.
+    one(graph, controller, "CanIfHrhCfg")?;
+    one(graph, controller, "CanIfHthCfg")?;
+    canif_hardware(graph, handles)
+}
+
+// Verify each PDU through its own HRH or Tx buffer/HTH reference chain
+// (SWS_CANIF_00466–00468).
+fn canif_hardware(graph: &Graph, handles: usize) -> Result<(), Vec<PlanDiagnostic>> {
+    let mut hardware_objects = BTreeMap::new();
     for (kind, symbol_ref, controller_ref, direction) in [
         (
             "CanIfHrhCfg",
@@ -255,73 +280,72 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
             "TRANSMIT",
         ),
     ] {
-        let handle = one(graph, controller, kind)?;
-        let hardware = reference(graph, handle, symbol_ref)?;
-        if !definition_is(graph, hardware, "CanHardwareObject")
-            || reference(graph, hardware, "CanControllerRef")? != controller
-            || reference(graph, handle, controller_ref)? != can_if_controller
-            || value(graph, hardware, "CanObjectType", false) != Some(direction)
-            || value(graph, hardware, "CanObjectId", false)
-                .and_then(|value| value.parse::<u16>().ok())
-                .is_none()
+        for handle in graph
+            .of_kind("ECUC-CONTAINER-VALUE")
+            .into_iter()
+            .filter(|index| definition_is(graph, *index, kind))
         {
+            let hardware = reference(graph, handle, symbol_ref)?;
+            let abstract_controller = reference(graph, handle, controller_ref)?;
+            if !graph.within(handle, handles)
+                || !definition_is(graph, hardware, "CanHardwareObject")
+                || !definition_is(graph, abstract_controller, "CanIfCtrlCfg")
+                || reference(graph, hardware, "CanControllerRef")?
+                    != reference(graph, abstract_controller, "CanIfCtrlCanCtrlRef")?
+                || value(graph, hardware, "CanObjectType", false) != Some(direction)
+            {
+                return Err(reject(
+                    graph,
+                    handle,
+                    "CONTROLLER_MAPPING",
+                    crate::product_message!(
+                        "backend.integration.configuration.can_hardware_controller_direction_mismatch"
+                    ),
+                ));
+            }
+            hardware_objects.insert(handle, (hardware, direction == "RECEIVE"));
+        }
+    }
+    for pdu in graph.of_kind("ECUC-CONTAINER-VALUE") {
+        let receive = definition_is(graph, pdu, "CanIfRxPduCfg");
+        let handle = if receive {
+            reference(graph, pdu, "CanIfRxPduHrhIdRef")?
+        } else if definition_is(graph, pdu, "CanIfTxPduCfg") {
+            let buffer = reference(graph, pdu, "CanIfTxPduBufferRef")?;
+            reference(graph, buffer, "CanIfBufferHthRef")?
+        } else {
+            continue;
+        };
+        let Some(&(hardware, _)) = hardware_objects
+            .get(&handle)
+            .filter(|(_, rx)| *rx == receive)
+        else {
             return Err(reject(
                 graph,
-                handle,
+                pdu,
                 "CONTROLLER_MAPPING",
                 crate::product_message!(
-                    "backend.integration.configuration.can_hardware_controller_direction_mismatch"
+                    "backend.integration.configuration.pdu_hardware_handle_mismatch"
                 ),
             ));
-        }
+        };
         let hardware_format = value(graph, hardware, "CanIdType", false);
-        for pdu in graph.of_kind("ECUC-CONTAINER-VALUE") {
-            if definition_is(
+        if !super::can_id::pdu_id(graph, pdu, receive).is_some_and(
+            |(id, _)| match hardware_format {
+                Some("MIXED") => true,
+                Some("STANDARD") => id & super::can_id::EXTENDED == 0,
+                Some("EXTENDED") => id & super::can_id::EXTENDED != 0,
+                _ => false,
+            },
+        ) {
+            return Err(reject(
                 graph,
                 pdu,
-                if direction == "RECEIVE" {
-                    "CanIfRxPduCfg"
-                } else {
-                    "CanIfTxPduCfg"
-                },
-            ) {
-                let receive = direction == "RECEIVE";
-                let compatible =
-                    super::can_id::pdu_id(graph, pdu, receive).is_some_and(|(id, _)| {
-                        match hardware_format {
-                            Some("MIXED") => true,
-                            Some("STANDARD") => id & super::can_id::EXTENDED == 0,
-                            Some("EXTENDED") => id & super::can_id::EXTENDED != 0,
-                            _ => false,
-                        }
-                    });
-                if !compatible {
-                    return Err(reject(
-                        graph,
-                        pdu,
-                        "CAN_ID_CONFLICT",
-                        crate::product_message!(
-                            "backend.integration.communication.canif_identifier_or_addressing_type_mismatch"
-                        ),
-                    ));
-                }
-                let actual = if direction == "RECEIVE" {
-                    reference(graph, pdu, "CanIfRxPduHrhIdRef")?
-                } else {
-                    let buffer = reference(graph, pdu, "CanIfTxPduBufferRef")?;
-                    reference(graph, buffer, "CanIfBufferHthRef")?
-                };
-                if actual != handle {
-                    return Err(reject(
-                        graph,
-                        pdu,
-                        "CONTROLLER_MAPPING",
-                        crate::product_message!(
-                            "backend.integration.configuration.pdu_hardware_handle_mismatch"
-                        ),
-                    ));
-                }
-            }
+                "CAN_ID_CONFLICT",
+                crate::product_message!(
+                    "backend.integration.communication.canif_identifier_or_addressing_type_mismatch"
+                ),
+            ));
         }
     }
     Ok(())
