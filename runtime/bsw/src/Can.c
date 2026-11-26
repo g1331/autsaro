@@ -645,7 +645,7 @@ static CAN_CODE EcuStatus Can_ReceiveHost(uint32 id, uint8 dlc, const uint8 *dat
     return result;
 }
 
-CAN_CODE EcuStatus Can_InternalInject(uint32 id, uint8 dlc, const uint8 *data, uint64 now_ms)
+CAN_CODE EcuStatus Can_InternalInject(uint32 id, uint8 dlc, const uint8 data[8], uint64 now_ms)
 {
     (void)now_ms; /* CanIf_RxIndication carries no reception time. */
     return Can_ReceiveHost(id, dlc, data, 0u);

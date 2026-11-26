@@ -13,7 +13,16 @@ CAN_CODE Std_ReturnType Can_HostCompleteTransmit(PduIdType handle, uint64_t toke
 
 CAN_CODE EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t *data, uint64_t now_ms)
 {
-    return Can_InternalInject(id, dlc, data, now_ms);
+    uint8 short_frame[CAN_CLASSICAL_MAX_LENGTH] = {0};
+    const uint8 *driver_data = data;
+    /* The host caller supplies only the stated bytes. The driver takes at least eight. */
+    if ((data != NULL_PTR) && (dlc < CAN_CLASSICAL_MAX_LENGTH)) {
+        for (uint8 i = 0u; i < dlc; ++i) {
+            short_frame[i] = data[i];
+        }
+        driver_data = short_frame;
+    }
+    return Can_InternalInject(id, dlc, driver_data, now_ms);
 }
 #define CAN_STOP_SEC_CODE
 #include "Can_MemMap.h"

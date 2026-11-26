@@ -156,6 +156,11 @@ static void verify_fd_wire_length(void)
     assert(Can_HostFlush() == ECU_OK);
     Can_MainFunction_Write();
     assert(frames == before_frames && confirmations == before_confirmations);
+    const uint8 short_frame[] = {0x57u};
+    assert(Can_Inject(0x40000321u, sizeof(short_frame), short_frame, 0u) == ECU_OK);
+    Can_MainFunction_Read();
+    assert(mailbox.CanId == 0x40000321u && received_length == 1u && received[0] == short_frame[0]);
+    assert(Can_Inject(0x40000321u, 1u, NULL_PTR, 0u) == ECU_ERR_CONFIG);
     for (unsigned i = 0u; i < sizeof(dlcs); ++i) {
         assert(Can_FdDlcToLength(dlcs[i]) == decoded[i]);
         assert(Can_FdLengthToDlc(decoded[i]) == dlcs[i]);
