@@ -469,7 +469,7 @@ pub(super) fn inspect_composition(
     }
     let mut can_ids = BTreeSet::new();
     let mut can_handles = BTreeSet::new();
-    for (object, id, handle, receive) in signals
+    for (object, id, handle, receive, dual, fd_trigger) in signals
         .iter()
         .map(|signal| {
             (
@@ -477,6 +477,8 @@ pub(super) fn inspect_composition(
                 signal.encoded_id(),
                 signal.can_if_handle,
                 signal.receive,
+                signal.accepts_fd,
+                signal.fd,
             )
         })
         .chain(diagnostic_transport.iter().flat_map(|diagnostic| {
@@ -486,11 +488,15 @@ pub(super) fn inspect_composition(
                     diagnostic.encoded_request_id(),
                     diagnostic.request_can_if_handle,
                     true,
+                    false,
+                    false,
                 ),
                 (
                     diagnostic.tx_sdu.as_str(),
                     diagnostic.encoded_response_id(),
                     diagnostic.response_can_if_handle,
+                    false,
+                    false,
                     false,
                 ),
             ]
@@ -507,7 +513,22 @@ pub(super) fn inspect_composition(
                 crate::product_message!("backend.integration.plan.use_uint8_canif_handles"),
             )]);
         }
-        if !can_ids.insert(id) || !can_handles.insert((receive, handle)) {
+        if ((id & super::can_id::FD != 0) || fd_trigger)
+            && communication_runtime.can.data_bitrate.is_none()
+        {
+            return Err(vec![graph.diagnostic(
+                graph.index(object)?,
+                DiagnosticCategory::Input,
+                "CAN_FD_CONFIGURATION",
+                crate::product_message!("backend.integration.composition.contract_invalid", "code" => "CAN_FD_CONFIGURATION"),
+                crate::product_message!("backend.integration.composition.repair_contract"),
+            )]);
+        }
+        let dual_on_fd_controller = dual && communication_runtime.can.data_bitrate.is_some();
+        if !can_ids.insert(id)
+            || (dual_on_fd_controller && !can_ids.insert(id | super::can_id::FD))
+            || !can_handles.insert((receive, handle))
+        {
             return Err(vec![graph.diagnostic(
                 graph.index(object)?,
                 DiagnosticCategory::Input,

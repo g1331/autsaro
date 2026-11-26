@@ -30,6 +30,9 @@ def verify(project: Path, build_directory: Path) -> None:
     period = inputs["periodMs"]
     if period <= 0 or inputs["receiveTimeoutMs"] <= 0 or not 0 <= inputs["did"] <= 65535:
         raise ValueError("Independent verification timing or DID input is invalid")
+    can_fd = inputs.get("canFd")
+    if type(can_fd) is not bool:
+        raise ValueError("Verification input lacks its CAN frame capability. Regenerate from the original ARXML.")
     channels = inputs.get("channels")
     endpoints = inputs.get("endpoints")
     roles = {"receive": ("RX", 4), "transmit": ("TX", 4),
@@ -40,10 +43,14 @@ def verify(project: Path, build_directory: Path) -> None:
         raise ValueError("Actual endpoint/configuration inputs are incomplete")
     for role, (direction, length) in roles.items():
         endpoint = endpoints[role]
+        policies = {"CLASSICAL"}
+        if role == "receive":
+            policies.add("CLASSICAL_OR_FD")
+        if can_fd and role in ("receive", "transmit"):
+            policies.add("FD")
         if (not isinstance(endpoint, dict) or endpoint.get("module") != "CanIf"
                 or endpoint.get("direction") != direction or endpoint.get("channel") != 0
-                or endpoint.get("fdPolicy") not in (("CLASSICAL", "CLASSICAL_OR_FD") if direction == "RX"
-                                                    else ("CLASSICAL",))
+                or endpoint.get("fdPolicy") not in policies
                 or endpoint.get("format") not in ("STANDARD", "EXTENDED")
                 or type(endpoint.get("id")) is not int
                 or not 0 <= endpoint["id"] <= (0x7FF if endpoint["format"] == "STANDARD" else 0x1FFFFFFF)
@@ -51,13 +58,15 @@ def verify(project: Path, build_directory: Path) -> None:
                 or endpoint.get("logicalLength") != length or endpoint.get("wireLength") != length):
             raise ValueError(f"Invalid configured endpoint: {role}")
 
-    def receive_frame(role: str, data: str) -> str:
+    def receive_frame(role: str, data: str, fd: int | None = None) -> str:
         ep = endpoints[role]
-        return f"RX {ep['channel']} {ep['format']} 0 {ep['id']} {ep['wireLength']} {data}"
+        if fd is None:
+            fd = int(ep["fdPolicy"] == "FD" or (can_fd and ep["fdPolicy"] == "CLASSICAL_OR_FD"))
+        return f"RX {ep['channel']} {ep['format']} {fd} {ep['id']} {ep['wireLength']} {data}"
 
     def expected_frame(at: int, role: str, data: str) -> tuple[int, int, int, str, int, int, int, str]:
         ep = endpoints[role]
-        return at, ep["handle"], ep["channel"], ep["format"], 0, ep["id"], ep["wireLength"], data
+        return at, ep["handle"], ep["channel"], ep["format"], int(ep["fdPolicy"] == "FD"), ep["id"], ep["wireLength"], data
 
     binary = build(project, build_directory, "host-batch")
     logs = binary.parent / "logs"
@@ -195,6 +204,14 @@ def verify(project: Path, build_directory: Path) -> None:
         (recovery, [rx], "78563412", [], False),
         (recovery + 1, [rx, diagnostic(request)], "78563412", [response], False),
     ])
+    if can_fd:
+        policy = endpoints["receive"]["fdPolicy"]
+        actor("can-fd-policy", [
+            (period, [receive_frame("receive", "78563412", 0)],
+             initial if policy == "FD" else "78563412", [], False),
+            (2 * period, [receive_frame("receive", "2a000000", 1)],
+             "78563412" if policy == "CLASSICAL" else "2a000000", [], False),
+        ])
     actor("malformed", [], malformed=True)
     probe = build(project, build_directory / "probe", "probe")
     probe_output = query([str(probe)], logs, "probe", timeout=60)

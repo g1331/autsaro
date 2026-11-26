@@ -422,7 +422,7 @@ DWORD FixtureWait(HANDLE object)
                 "patch.diff": "--- a/unit.c\n+++ b/unit.c\n@@ -1 +1 @@\n-int kernel(void) { return 0; }\n+" + delivered,
             })
             target = json.loads((project / "target.json").read_text())
-            target.update(profile="ecu", hostBatchProtocol="HostBatchV2",
+            target.update(profile="ecu", hostBatchProtocol="HostBatchV2", canFrameProfile="classical-and-fd",
                           sources=["bsw/src/main.c"], kernelSources=["unit.c"],
                           entries={"host-batch": "host.c", "probe": "probe.c"},
                           kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}],
@@ -498,7 +498,7 @@ DWORD FixtureWait(HANDLE object)
                 target = json.loads((project / "target.json").read_text())
                 if stage == "patch-0":
                     target["compilerFlags"].append("-fexceptions")
-                    target.update(profile="ecu", hostBatchProtocol="HostBatchV2", kernelSources=["unit.c"],
+                    target.update(profile="ecu", hostBatchProtocol="HostBatchV2", canFrameProfile="classical-and-fd", kernelSources=["unit.c"],
                                   kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}])
                     (project / "target.json").write_text(json.dumps(target))
                     seal = project / "meta/files.sha256"

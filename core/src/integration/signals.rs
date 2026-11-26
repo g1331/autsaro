@@ -22,6 +22,7 @@ pub struct SignalChannel {
     pub can_id: u32,
     pub extended: bool,
     pub accepts_fd: bool,
+    pub fd: bool,
     pub can_if_handle: u16,
     pub receive: bool,
     pub dlc: u8,
@@ -34,6 +35,11 @@ pub struct SignalChannel {
 impl SignalChannel {
     pub(super) fn encoded_id(&self) -> u32 {
         super::can_id::encoded(self.can_id, self.extended)
+            | if self.fd && !self.accepts_fd {
+                super::can_id::FD
+            } else {
+                0
+            }
     }
 }
 
@@ -403,7 +409,7 @@ pub(super) fn inspect_ports(
                 trigger,
                 "CAN_ID_CONFLICT",
                 crate::product_message!(
-                    "backend.integration.communication.classical_can_identifier_or_format_invalid"
+                    "backend.integration.communication.can_identifier_or_format_invalid"
                 ),
             )
         })?;
@@ -518,8 +524,8 @@ pub(super) fn inspect_ports(
                 .collect(),
             "SIGNAL_MAPPING",
         )?;
-        let Some((_, accepts_fd)) =
-            super::can_id::pdu_id(graph, can_if, port.read).filter(|(id, _)| *id == can_id)
+        let Some((_, accepts_fd)) = super::can_id::pdu_id(graph, can_if, port.read)
+            .filter(|(id, dual)| super::can_id::accepts(*id, *dual, can_id))
         else {
             return Err(reject(
                 graph,
@@ -639,6 +645,7 @@ pub(super) fn inspect_ports(
             can_id: can_id & super::can_id::EXTENDED_MAX,
             extended: can_id & super::can_id::EXTENDED != 0,
             accepts_fd,
+            fd: can_id & super::can_id::FD != 0,
             can_if_handle: can_handle,
             receive: port.read,
             dlc: 4,

@@ -1,4 +1,4 @@
-/** @file Standard Can driver for one Classical CAN controller on the controlled host. */
+/** @file Standard Can driver for one CAN controller on the controlled host. */
 #include "Can_Internal.h"
 #include "Ecu_ProfileConfig.h"
 #include "Det.h"
@@ -72,9 +72,11 @@
  * another lifetime drops its result. tx_sink is the synchronous output from the Init
  * configuration and is NULL after Can_DeInit. bus_off stays set after a host bus-off until
  * STARTED or a host mode change. */
-static uint8 can_initialized CAN_VAR_CLEARED;             /**< 1 between Init and DeInit. */
-static uint64 driver_lifetime CAN_VAR_CLEARED;            /**< Successful Init count. */
-static Can_TxSinkType tx_sink CAN_VAR_CLEARED;            /**< Host output; set by Init. */
+static uint8 can_initialized CAN_VAR_CLEARED;  /**< 1 between Init and DeInit. */
+static uint64 driver_lifetime CAN_VAR_CLEARED; /**< Successful Init count. */
+static Can_TxSinkType tx_sink CAN_VAR_CLEARED; /**< Host output; set by Init. */
+static uint8 fd_padding CAN_VAR_CLEARED;       /**< FD padding byte; set by Init. */
+static uint32 fd_tx_bitrate CAN_VAR_CLEARED;   /**< FD Tx bitrate; zero disables FD; set by Init. */
 static CanMode can_controller_mode CAN_VAR_CLEARED;       /**< Controller state; Init: STOPPED. */
 static uint8 can_bus_off CAN_VAR_CLEARED;                 /**< In bus-off; Init resets. */
 static uint8 busoff_notification_pending CAN_VAR_CLEARED; /**< Bus-off for CanIf; Init resets. */
@@ -98,11 +100,11 @@ static uint8 tx_confirming CAN_VAR_CLEARED;           /**< CanIf_TxConfirmation 
 
 /* Admitted frame, valid while tx_pending; tx_confirmation_handle is valid while
  * tx_confirmation_pending. */
-static uint32 tx_id CAN_VAR_CLEARED;                     /**< Standard identifier. */
-static uint8 tx_length CAN_VAR_CLEARED;                  /**< Length, 0 to 8 bytes. */
-static uint8 tx_payload[8] CAN_VAR_CLEARED;              /**< tx_length bytes valid. */
-static PduIdType tx_handle CAN_VAR_CLEARED;              /**< swPduHandle of the frame. */
-static PduIdType tx_confirmation_handle CAN_VAR_CLEARED; /**< swPduHandle to confirm. */
+static uint32 tx_id CAN_VAR_CLEARED;                        /**< Encoded identifier. */
+static uint8 tx_length CAN_VAR_CLEARED;                     /**< Wire length, 0 to 64 bytes. */
+static uint8 tx_payload[CAN_FD_MAX_LENGTH] CAN_VAR_CLEARED; /**< tx_length bytes valid. */
+static PduIdType tx_handle CAN_VAR_CLEARED;                 /**< swPduHandle of the frame. */
+static PduIdType tx_confirmation_handle CAN_VAR_CLEARED;    /**< swPduHandle to confirm. */
 #define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Can_MemMap.h"
 
@@ -133,11 +135,11 @@ static uint8 mode_notification_pending CAN_VAR_CLEARED;                 /**< Mod
 static uint8 indication_processing[2] CAN_VAR_CLEARED;                  /**< Kind in delivery. */
 
 /* Shadow receive buffer: rx_id, rx_length and rx_payload are valid while rx_pending. */
-static uint8 rx_pending CAN_VAR_CLEARED;         /**< Frame buffered; Init resets. */
-static uint8 rx_processing CAN_VAR_CLEARED;      /**< CanIf_RxIndication running. */
-static uint32 rx_id CAN_VAR_CLEARED;             /**< Standard identifier. */
-static uint8 rx_length CAN_VAR_CLEARED;          /**< Length, 0 to 8 bytes. */
-static uint8 rx_payload[8] CAN_VAR_CLEARED;      /**< rx_length bytes valid. */
+static uint8 rx_pending CAN_VAR_CLEARED;                    /**< Frame buffered; Init resets. */
+static uint8 rx_processing CAN_VAR_CLEARED;                 /**< CanIf_RxIndication running. */
+static uint32 rx_id CAN_VAR_CLEARED;                        /**< Encoded identifier. */
+static uint8 rx_length CAN_VAR_CLEARED;                     /**< Wire length, 0 to 64 bytes. */
+static uint8 rx_payload[CAN_FD_MAX_LENGTH] CAN_VAR_CLEARED; /**< rx_length bytes valid. */
 static uint8 rx_overrun_pending CAN_VAR_CLEARED; /**< CAN_E_DATALOST to report; Init resets. */
 
 #define CAN_STOP_SEC_VAR_CLEARED_UNSPECIFIED
@@ -153,7 +155,7 @@ static uint8 rx_overrun_pending CAN_VAR_CLEARED; /**< CAN_E_DATALOST to report; 
 #include "Can_MemMap.h"
 
 static CAN_CODE void Can_CancelHostTransmit(void);
-static CAN_CODE EcuStatus Can_AdmitTransmit(const Can_PduType *pdu);
+static CAN_CODE EcuStatus Can_AdmitTransmit(const Can_PduType *pdu, const uint8 *data);
 static CAN_CODE void Can_ClearPolledRx(void);
 static CAN_CODE EcuStatus Can_DeliverImmediateRx(void);
 static CAN_CODE void Can_ReadImmediateRx(void);
@@ -170,10 +172,16 @@ CAN_CODE void Can_Init(const Can_ConfigType *Config)
     SchM_Enter_Can_CAN_STATE();
     if ((can_initialized == 0u) && (Config != NULL_PTR) &&
         ((Ecu_Policy.tx_confirmation == ECU_TX_QUEUED) || (Config->sink != NULL_PTR)) &&
+        ((Config->data_bitrate == 0u) || (Config->nominal_bitrate != 0u)) &&
         (driver_lifetime != UINT64_MAX)) {
         (void)Can_CancelHostTransmit();
         ++driver_lifetime;
         tx_sink = Config->sink;
+        fd_padding = Config->fd_padding;
+        fd_tx_bitrate = Config->data_bitrate;
+        if ((fd_tx_bitrate != 0u) && (!Config->brs)) {
+            fd_tx_bitrate = Config->nominal_bitrate;
+        }
         can_initialized = 1u;
         can_controller_mode = CAN_STOPPED;
         can_bus_off = 0u;
@@ -322,14 +330,22 @@ CAN_CODE void Can_EnableControllerInterrupts(uint8 Controller)
     SchM_Exit_Can_CAN_STATE();
 }
 
-static CAN_CODE EcuStatus Can_StoreTransmit(const Can_PduType *pdu)
+static CAN_CODE EcuStatus Can_StoreTransmit(const Can_PduType *pdu, const uint8 *data)
 {
     uint8 i;
-    tx_id = pdu->id & ~CAN_ID_FD_FLAG;
+    /* SWS_Can_00486: a non-FD controller ignores the FD bit. */
+    tx_id = (fd_tx_bitrate != 0u) ? pdu->id : (pdu->id & ~CAN_ID_FD_FLAG);
     tx_handle = pdu->swPduHandle;
     tx_length = pdu->length;
+    if ((tx_id & CAN_ID_FD_FLAG) != 0u) {
+        tx_length = Can_FdDlcToLength(Can_FdLengthToDlc(pdu->length));
+    }
     for (i = 0u; i < pdu->length; ++i) {
-        tx_payload[i] = pdu->sdu[i];
+        tx_payload[i] = data[i];
+    }
+    /* SWS_Can_00502: the driver owns the bytes added to reach the wire DLC. */
+    for (i = pdu->length; i < tx_length; ++i) {
+        tx_payload[i] = fd_padding;
     }
     tx_pending = 1u;
     return ECU_OK;
@@ -341,30 +357,33 @@ static CAN_CODE boolean Can_HohMatchesId(uint8 format, Can_IdType id)
            ((format == CAN_HOH_ID_EXTENDED) == ((id & CAN_ID_EXTENDED_FLAG) != 0u));
 }
 
-static CAN_CODE EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu)
+static CAN_CODE EcuStatus Can_WriteHost(Can_HwHandleType hth,
+                                        const Can_PduType *pdu,
+                                        const uint8 *data)
 {
     EcuStatus result = ECU_ERR_CONFIG;
-    if ((hth != CAN_TX_HOH) || (pdu == NULL_PTR) || (pdu->sdu == NULL_PTR)) {
+    if ((hth != CAN_TX_HOH) || (pdu == NULL_PTR) || (data == NULL_PTR)) {
         /* Invalid host configuration or caller input. */
-    } else if (!Can_IsClassicalId(pdu->id & ~CAN_ID_FD_FLAG) ||
-               !Can_HohMatchesId(CAN_TX_ID_TYPE, pdu->id)) {
-        /* No FD configuration: the FD bit is not evaluated (SWS_Can_00486). */
+    } else if (!Can_IsValidId(pdu->id) || !Can_HohMatchesId(CAN_TX_ID_TYPE, pdu->id)) {
         result = ECU_ERR_FRAME_ID;
-    } else if (pdu->length > 8u) {
-        result = ECU_ERR_FRAME_DLC;
     } else {
         /* The area guards data only, so entering it is bounded and keeps
          * Can_Write non-blocking (SWS_Can_00275); CAN_BUSY means an occupied slot. */
         SchM_Enter_Can_CAN_STATE();
         if (can_initialized == 0u) {
             /* Can_Init has not installed a host output callback. */
+        } else if ((pdu->length > CAN_FD_MAX_LENGTH) ||
+                   ((pdu->length > CAN_CLASSICAL_MAX_LENGTH) &&
+                    ((fd_tx_bitrate == 0u) || ((pdu->id & CAN_ID_FD_FLAG) == 0u)))) {
+            /* SWS_Can_00218: CanDevErrorDetect is disabled in this profile. */
+            result = ECU_ERR_FRAME_DLC;
         } else if (can_controller_mode != CAN_STARTED) {
             result = ECU_ERR_CONTROLLER;
         } else if ((tx_pending != 0u) || (tx_in_flight != 0u) || (tx_confirmation_pending != 0u) ||
                    (tx_confirming != 0u)) {
             result = ECU_ERR_CAN_BUSY;
         } else {
-            result = Can_AdmitTransmit(pdu);
+            result = Can_AdmitTransmit(pdu, data);
         }
         SchM_Exit_Can_CAN_STATE();
     }
@@ -374,7 +393,8 @@ static CAN_CODE EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType 
 CAN_CODE Std_ReturnType Can_Write(Can_HwHandleType Hth, const Can_PduType *PduInfo)
 {
     Std_ReturnType result = E_NOT_OK;
-    EcuStatus host_result = Can_WriteHost(Hth, PduInfo);
+    EcuStatus host_result =
+        Can_WriteHost(Hth, PduInfo, (PduInfo != NULL_PTR) ? PduInfo->sdu : NULL_PTR);
     if (host_result == ECU_OK) {
         result = E_OK;
     } else if (host_result == ECU_ERR_CAN_BUSY) {
@@ -397,7 +417,7 @@ CAN_CODE EcuStatus Can_InternalHostFlush(void)
         const PduIdType handle = tx_handle;
         const Can_TxSinkType sink = tx_sink;
         const uint64 lifetime = driver_lifetime;
-        uint8 payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+        uint8 payload[CAN_FD_MAX_LENGTH] = {0u};
         uint8 i;
         for (i = 0u; i < length; ++i) {
             payload[i] = tx_payload[i];
@@ -556,24 +576,12 @@ CAN_CODE CanMode Can_InternalGetMode(void)
 CAN_CODE EcuStatus Can_InternalTransmitPdu(PduIdType pdu_id,
                                            uint32 id,
                                            uint8 dlc,
-                                           const uint8 data[8])
+                                           const uint8 *data)
 {
-    uint8 payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
-    Can_PduType pdu;
-    EcuStatus result = ECU_ERR_CONFIG;
-    if (data != NULL_PTR) {
-        uint8 i;
-        for (i = 0u; (i < dlc) && (i < sizeof(payload)); ++i) {
-            payload[i] = data[i];
-        }
-        pdu.swPduHandle = pdu_id;
-        pdu.length = dlc;
-        pdu.id = id;
-        pdu.sdu = payload;
-        result = Can_WriteHost(CAN_TX_HOH, &pdu);
-        if (result == ECU_OK) {
-            result = Can_InternalHostFlush();
-        }
+    const Can_PduType pdu = {pdu_id, dlc, id, NULL_PTR};
+    EcuStatus result = Can_WriteHost(CAN_TX_HOH, &pdu, data);
+    if (result == ECU_OK) {
+        result = Can_InternalHostFlush();
     }
     return result;
 }
@@ -593,14 +601,15 @@ static CAN_CODE void Can_ConfirmTx(void)
     SchM_Exit_Can_CAN_STATE();
 }
 
-static CAN_CODE EcuStatus Can_ReceiveHost(uint32 id, uint8 dlc, const uint8 data[8], uint8 accepted)
+static CAN_CODE EcuStatus Can_ReceiveHost(uint32 id, uint8 dlc, const uint8 *data, uint8 accepted)
 {
     EcuStatus result = ECU_OK;
     uint8 lost = 0u;
     SchM_Enter_Can_CAN_STATE();
-    if (!Can_IsClassicalId(id)) {
+    if (!Can_IsValidId(id)) {
         result = ECU_ERR_FRAME_ID;
-    } else if (dlc > 8u) {
+    } else if ((!Can_IsWireLength(id, dlc)) ||
+               (((id & CAN_ID_FD_FLAG) != 0u) && (fd_tx_bitrate == 0u))) {
         result = ECU_ERR_FRAME_DLC;
     } else if ((can_initialized == 0u) || (can_controller_mode != CAN_STARTED)) {
         result = ECU_ERR_CONTROLLER;
@@ -631,7 +640,7 @@ static CAN_CODE EcuStatus Can_ReceiveHost(uint32 id, uint8 dlc, const uint8 data
     return result;
 }
 
-CAN_CODE EcuStatus Can_InternalInject(uint32 id, uint8 dlc, const uint8 data[8], uint64 now_ms)
+CAN_CODE EcuStatus Can_InternalInject(uint32 id, uint8 dlc, const uint8 *data, uint64 now_ms)
 {
     (void)now_ms; /* CanIf_RxIndication carries no reception time. */
     return Can_ReceiveHost(id, dlc, data, 0u);
@@ -658,7 +667,7 @@ static CAN_CODE EcuStatus Can_DeliverRx(void)
     if ((can_initialized != 0u) && (rx_processing == 0u) && (rx_pending != 0u)) {
         uint32 id = rx_id;
         uint8 length = rx_length;
-        uint8 payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};
+        uint8 payload[CAN_FD_MAX_LENGTH] = {0u};
         const uint64 lifetime = driver_lifetime;
         const Can_HwType mailbox = {id, CAN_RX_HOH, CAN_CANIF_CONTROLLER_ID};
         PduInfoType info = {payload, NULL_PTR, length};
@@ -708,12 +717,12 @@ CAN_CODE void Can_MainFunction_Read(void) { Can_ReadRx(); }
 #define CAN_START_SEC_CODE
 #include "Can_MemMap.h"
 static CAN_CODE void Can_CancelHostTransmit(void) { host_tx_cancelled_through = host_tx_sequence; }
-static CAN_CODE EcuStatus Can_AdmitTransmit(const Can_PduType *pdu)
+static CAN_CODE EcuStatus Can_AdmitTransmit(const Can_PduType *pdu, const uint8 *data)
 {
     EcuStatus result = ECU_ERR_CAN_BUSY;
     if (host_tx_sequence != UINT64_MAX) {
         ++host_tx_sequence;
-        result = Can_StoreTransmit(pdu);
+        result = Can_StoreTransmit(pdu, data);
     }
     return result;
 }
@@ -757,9 +766,9 @@ static CAN_CODE void Can_CancelHostTransmit(void)
 {
     /* This configuration has no queued host token to cancel. */
 }
-static CAN_CODE EcuStatus Can_AdmitTransmit(const Can_PduType *pdu)
+static CAN_CODE EcuStatus Can_AdmitTransmit(const Can_PduType *pdu, const uint8 *data)
 {
-    return Can_StoreTransmit(pdu);
+    return Can_StoreTransmit(pdu, data);
 }
 CAN_CODE uint64 Can_InternalHostTransmitToken(void) { return UINT64_C(0); }
 CAN_CODE Std_ReturnType Can_InternalHostCompleteTransmit(PduIdType handle, uint64 token)

@@ -780,6 +780,79 @@ pub(crate) fn mixed_can_sources() -> Vec<InputSource> {
     sources
 }
 
+/// A single FD controller with a standard FD receive route and an extended FD
+/// transmit route. The diagnostic transport still uses Classical CAN.
+pub(crate) fn fd_can_sources() -> Vec<InputSource> {
+    let mut sources = single_component_sources();
+    let definition = "/AUTOSAR/EcucDefs/Can/CanConfigSet/CanController/CanControllerBaudrateConfig/CanControllerFdBaudrateConfig";
+    let parameters = [
+        ("FLOAT", "CanControllerFdBaudRate", "2000"),
+        ("BOOLEAN", "CanControllerTxBitRateSwitch", "true"),
+        ("INTEGER", "CanControllerPropSeg", "1"),
+        ("INTEGER", "CanControllerSeg1", "5"),
+        ("INTEGER", "CanControllerSeg2", "2"),
+        ("INTEGER", "CanControllerSyncJumpWidth", "1"),
+    ].map(|(kind, name, value)| format!(
+        r#"<ECUC-NUMERICAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-{kind}-PARAM-DEF">{definition}/{name}</DEFINITION-REF><VALUE>{value}</VALUE></ECUC-NUMERICAL-PARAM-VALUE>"#
+    )).join("");
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", "Baudrate"),
+        |xml| {
+            xml.replace("</PARAMETER-VALUES>", &format!(
+            r#"</PARAMETER-VALUES><SUB-CONTAINERS><ECUC-CONTAINER-VALUE><SHORT-NAME>Fd</SHORT-NAME><DEFINITION-REF DEST="ECUC-PARAM-CONF-CONTAINER-DEF">{definition}</DEFINITION-REF><PARAMETER-VALUES>{parameters}</PARAMETER-VALUES></ECUC-CONTAINER-VALUE></SUB-CONTAINERS>"#
+        ))
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "Transmit")
+                && node.children().any(|child| {
+                    child.text() == Some("/AUTOSAR/EcucDefs/Can/CanConfigSet/CanHardwareObject")
+                })
+        },
+        |xml| {
+            xml.replace("<PARAMETER-VALUES>", r#"<PARAMETER-VALUES><ECUC-NUMERICAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-INTEGER-PARAM-DEF">/AUTOSAR/EcucDefs/Can/CanConfigSet/CanHardwareObject/CanFdPaddingValue</DEFINITION-REF><VALUE>165</VALUE></ECUC-NUMERICAL-PARAM-VALUE>"#)
+        },
+    );
+    parameter(&mut sources, "Transmit", "CanIdType", "MIXED");
+    parameter(
+        &mut sources,
+        "RxValue",
+        "CanIfRxPduCanIdType",
+        "STANDARD_FD_CAN",
+    );
+    parameter(
+        &mut sources,
+        "TxValue",
+        "CanIfTxPduCanIdType",
+        "EXTENDED_FD_CAN",
+    );
+    for owner in ["RxValueTrigger", "TxValueTrigger"] {
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| named(node, "CAN-FRAME-TRIGGERING", owner),
+            |xml| {
+                let updated =
+                    xml.replace("<CAN-FD-FRAME-SUPPORT>false", "<CAN-FD-FRAME-SUPPORT>true");
+                if owner == "TxValueTrigger" {
+                    updated.replace(
+                        "<CAN-ADDRESSING-MODE>STANDARD",
+                        "<CAN-ADDRESSING-MODE>EXTENDED",
+                    )
+                } else {
+                    updated
+                }
+            },
+        );
+    }
+    sources
+}
+
 /// Seals the single-component project with the reference echo application:
 /// the composition fixture's `Ingress` without its removed local `Value` port.
 /// Returns the project directory and its sealed closure.

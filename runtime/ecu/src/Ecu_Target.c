@@ -427,7 +427,7 @@ void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType p
         }
     }
 }
-EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t data[8])
+EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t *data)
 {
     static uint64_t
         next_output_ticket;       /**< Owner-only monotonic output identity; initially zero. */
@@ -436,7 +436,7 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, con
     if (Ecu_TargetIsOwner() == 0) {
         return ECU_ERR_IO;
     }
-    boolean writable = (dlc <= 8u) && (data != NULL) && Can_IsClassicalId(id) &&
+    boolean writable = Can_IsWireLength(id, dlc) && (data != NULL) && Can_IsValidId(id) &&
                        (next_output_ticket != UINT64_MAX);
     if (writable) {
         writable = load(&slot->state) == 0;

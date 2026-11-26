@@ -25,7 +25,7 @@ typedef char codes_are_standard[((CAN_BUSY == 2u) && (CAN_E_DATALOST == 1u)) ? 1
 static unsigned frames;
 static uint32 frame_id;
 static uint8 frame_length;
-static uint8 frame_data[8];
+static uint8 frame_data[64];
 static unsigned modes;
 static uint8 mode_controller;
 static Can_ControllerStateType last_mode;
@@ -36,7 +36,7 @@ static PduIdType confirmed;
 static unsigned receptions;
 static Can_HwType mailbox;
 static uint8 received_length;
-static uint8 received[8];
+static uint8 received[64];
 static unsigned lost;
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
 static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8])
@@ -44,7 +44,7 @@ static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8])
     uint8 i;
     frame_id = id;
     frame_length = length;
-    for (i = 0u; i < 8u; ++i) {
+    for (i = 0u; i < length; ++i) {
         frame_data[i] = data[i];
     }
     ++frames;
@@ -88,7 +88,7 @@ static Std_ReturnType report_runtime(uint16 module, uint8 instance, uint8 api, u
     ++lost;
     return E_OK;
 }
-static const Can_ConfigType can = {sink};
+static const Can_ConfigType can = {.sink = sink};
 static Can_ControllerStateType mode_of(void)
 {
     Can_ControllerStateType state = CAN_CS_UNINIT;
@@ -101,6 +101,77 @@ static void polled_mode(Can_ControllerStateType expected)
     Can_MainFunction_Mode();
     assert(modes == before + 1u && mode_controller == 5u && last_mode == expected);
 }
+static void verify_fd_wire_length(void)
+{
+    static const Can_ConfigType fd = {
+        .sink = sink,
+        .nominal_bitrate = 500000u,
+        .data_bitrate = 2000000u,
+        .brs = TRUE,
+        .fd_padding = 0xa5u,
+    };
+    static const uint8 logical[] = {8u, 9u, 12u, 13u, 32u, 33u, 48u, 49u, 64u};
+    static const uint8 wire[] = {8u, 12u, 12u, 16u, 32u, 48u, 48u, 64u, 64u};
+    static const uint8 dlcs[] = {8u, 9u, 10u, 15u};
+    static const uint8 decoded[] = {8u, 12u, 16u, 64u};
+    uint8 data[65];
+    Can_PduType pdu = {25u, 9u, 0x40000123u, data};
+    unsigned before_frames = frames;
+    unsigned before_confirmations = confirmations;
+    for (uint8 i = 0u; i < sizeof(data); ++i) {
+        data[i] = i + 1u;
+    }
+    assert(Can_SetControllerMode(3u, CAN_CS_STARTED) == E_OK);
+    Can_MainFunction_Mode();
+    assert(Can_Write(1u, &pdu) == E_NOT_OK);
+    assert(Can_HostFlush() == ECU_OK);
+    Can_MainFunction_Write();
+    assert(frames == before_frames && confirmations == before_confirmations);
+    assert(Can_SetControllerMode(3u, CAN_CS_STOPPED) == E_OK);
+    Can_MainFunction_Mode();
+    Can_DeInit();
+
+    Can_Init(&fd);
+    assert(Can_SetControllerMode(3u, CAN_CS_STARTED) == E_OK);
+    Can_MainFunction_Mode();
+    /* Verifies: SWS_Can_00502, ECUC_Can_00485 */
+    for (unsigned i = 0u; i < sizeof(logical); ++i) {
+        pdu.length = logical[i];
+        assert(Can_Write(1u, &pdu) == E_OK);
+        assert(Can_HostFlush() == ECU_OK);
+        assert(frame_id == 0x40000123u && frame_length == wire[i]);
+        for (uint8 j = 0u; j < frame_length; ++j) {
+            assert(frame_data[j] == ((j < logical[i]) ? data[j] : 0xa5u));
+        }
+        Can_MainFunction_Write();
+        assert(confirmed == pdu.swPduHandle);
+    }
+    before_frames += sizeof(logical);
+    before_confirmations += sizeof(logical);
+    pdu.length = 65u;
+    assert(Can_Write(1u, &pdu) == E_NOT_OK);
+    pdu.id = 0x123u;
+    pdu.length = 9u;
+    assert(Can_Write(1u, &pdu) == E_NOT_OK);
+    assert(Can_HostFlush() == ECU_OK);
+    Can_MainFunction_Write();
+    assert(frames == before_frames && confirmations == before_confirmations);
+    for (unsigned i = 0u; i < sizeof(dlcs); ++i) {
+        assert(Can_FdDlcToLength(dlcs[i]) == decoded[i]);
+        assert(Can_FdLengthToDlc(decoded[i]) == dlcs[i]);
+        assert(Can_Inject(0x40000321u, decoded[i], data, 0u) == ECU_OK);
+        Can_MainFunction_Read();
+        assert(mailbox.CanId == 0x40000321u && received_length == decoded[i]);
+        for (uint8 j = 0u; j < received_length; ++j) {
+            assert(received[j] == data[j]);
+        }
+    }
+    assert(Can_Inject(0x40000321u, 9u, data, 0u) == ECU_ERR_FRAME_DLC);
+    assert(Can_SetControllerMode(3u, CAN_CS_STOPPED) == E_OK);
+    Can_MainFunction_Mode();
+    Can_DeInit();
+}
+
 int main(void)
 {
     /* R24-11 BSWGeneral Appendix A.2 and the module API tables, independent of runtime. */
@@ -129,7 +200,7 @@ int main(void)
                                       Can_MainFunction_Mode};
     static const Det_ErrorHookType callouts[] = {report_runtime};
     static const Det_ConfigType det = {NULL_PTR, 0u, callouts, 1u};
-    static const Can_ConfigType no_sink = {NULL_PTR};
+    static const Can_ConfigType no_sink = {0};
     uint8 bytes[8] = {1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u};
     const uint8 incoming[8] = {9u, 10u, 11u, 12u, 13u, 14u, 15u, 16u};
     Can_PduType pdu = {18u, 8u, 0x123u, bytes};
@@ -306,5 +377,6 @@ int main(void)
     assert(get_mode(3u, &state) == E_NOT_OK && set_mode(3u, CAN_CS_STARTED) == E_NOT_OK);
     init(&can);
     assert(mode_of() == CAN_CS_STOPPED);
+    verify_fd_wire_length();
     return 0;
 }

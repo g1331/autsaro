@@ -5,7 +5,8 @@
 
 static Ecu_HostBatch batch;
 
-static StatusType line(const char *text) {
+static StatusType line(const char *text)
+{
     Ecu_BatchCommand command = ECU_BATCH_RX;
     StatusType status = Ecu_HostBatchParse(&batch, text, strlen(text), &command);
     if (status != E_OK) {
@@ -67,15 +68,26 @@ static void verify_v2_identity(void)
     assert(line("RX 0 EXTENDED 0 536870911 1 af") == E_OK);
     assert(batch.frames[0].id == 0x7ffu && batch.frames[0].dlc == 0u);
     assert(batch.frames[1].id == 0x9fffffffu && batch.frames[1].data[0] == 0xafu);
+    static const char wire[] = "RX 0 EXTENDED 1 536870911 64 "
+                               "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+                               "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f";
+    assert(line(wire) == E_OK);
+    assert(batch.frames[2].id == 0xdfffffffu && batch.frames[2].dlc == 64u);
+    for (uint8_t byte = 0u; byte < 64u; ++byte) {
+        assert(batch.frames[2].data[byte] == byte);
+    }
     assert(line("COMMIT") == E_OK);
     assert(Ecu_HostBatchComplete(&batch) == E_OK);
 }
 
-int main(void) {
+int main(void)
+{
     verify_v2_identity();
     unsigned index;
     static const char *const malformed[] = {
         "RX",
+        "RX 800 4 78563412",
+        "RX 0 STANDARD 1 800 9 000000000000000000",
         "RX 0 STANDARD 0 bad 1 aa",
         "RX 0 STANDARD 0 1 bad AA",
         "RX 0 STANDARD 0 800 9 000000000000000000",

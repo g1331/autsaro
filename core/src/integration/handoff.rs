@@ -92,17 +92,19 @@ pub(super) fn verification_files(
         json!({
             "module": "CanIf", "direction": direction, "handle": handle, "channel": 0,
             "format": if id & super::can_id::EXTENDED != 0 { "EXTENDED" } else { "STANDARD" },
-            "fdPolicy": if accepts_fd { "CLASSICAL_OR_FD" } else { "CLASSICAL" },
+            "fdPolicy": if id & super::can_id::FD != 0 { "FD" }
+                else if accepts_fd { "CLASSICAL_OR_FD" } else { "CLASSICAL" },
             "id": id & super::can_id::EXTENDED_MAX, "logicalLength": length, "wireLength": length,
         })
     };
     let inputs = json!({
         "format": "autosar-ecu-test-inputs-v2", "periodMs": shape.period_ms,
+        "canFd": communication.can.data_bitrate.is_some(),
         "channels": {"0": communication.can.physical_channel},
         "endpoints": {
             "receive": endpoint("RX", shape.rx.can_if_handle, shape.rx.encoded_id(), shape.rx.accepts_fd, 4),
             "transmit": endpoint("TX", shape.tx.can_if_handle, shape.tx.encoded_id(), false, 4),
-            "request": endpoint("RX", transport.request_can_if_handle, transport.encoded_request_id(), transport.request_accepts_fd, 8),
+            "request": endpoint("RX", transport.request_can_if_handle, transport.encoded_request_id(), false, 8),
             "response": endpoint("TX", transport.response_can_if_handle, transport.encoded_response_id(), false, 8),
         },
         "did": shape.diagnostic.did, "initialReceiveValue": shape.read.initial_value,

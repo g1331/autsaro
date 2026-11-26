@@ -361,6 +361,30 @@ def _r11_baseline_plan(plan: dict) -> dict:
     return result
 
 
+def _can_fd_baseline_plan(plan: dict) -> dict:
+    """Project the previous Classical-only configuration into the FD-capable plan."""
+    runtime = plan["communicationRuntime"]
+    can = runtime["can"]
+    records = {record["path"]: record for record in plan["configuration"]}
+    controller = records[can["controller"]]
+    default_rate, = controller["references"][controller["definition"] + "/CanControllerDefaultBaudrate"]
+    baud = records[default_rate]
+    nominal, = baud["parameters"][baud["definition"] + "/CanControllerBaudRate"]
+    bitrate = int(float(nominal)) * 1000
+    composition = plan["composition"]
+    return {
+        **plan,
+        "communicationRuntime": {**runtime, "can": {
+            **can, "nominalBitrate": bitrate, "dataBitrate": None, "brs": False, "fdPadding": 0,
+        }},
+        "signals": [{**signal, "fd": False} for signal in plan["signals"]],
+        "composition": {**composition, "networkEndpoints": [
+            {**endpoint, "transport": {**endpoint["transport"], "fd": False}}
+            for endpoint in composition["networkEndpoints"]
+        ]},
+    }
+
+
 def compare(
     current: dict, project: Path, output: Path, baseline: Path, *,
     source_tree: bool = False, renames: dict[str, str] | None = None,
@@ -434,6 +458,10 @@ def compare(
         if r11_transition:
             # Match the target across the protocol migration after checking each source seal.
             previous_target.update(format="autosar-build-target-v4", hostBatchProtocol="HostBatchV2")
+        can_fd_transition = (source_tree and current_target.get("canFrameProfile") == "classical-and-fd"
+                             and "canFrameProfile" not in previous_target)
+        if can_fd_transition:
+            previous_target["canFrameProfile"] = "classical-and-fd"
         if source_tree:
             match current_target.get("nativeDelivery"), previous_target.get("nativeDelivery"):
                 case {"format": "autosar-workbench-handoff-v5" as version}, (
@@ -459,6 +487,8 @@ def compare(
         previous_plan = mapped(_configuration(old_root, source_tree=source_tree))
         if r11_transition:
             previous_plan = _r11_baseline_plan(previous_plan)
+        if can_fd_transition:
+            previous_plan = _can_fd_baseline_plan(previous_plan)
         output_plan = _configuration(output / "project", source_tree=source_tree)
         if (normalized(plan) != normalized(previous_plan)
                 or normalized(plan) != normalized(output_plan)):

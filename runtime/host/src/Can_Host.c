@@ -11,7 +11,7 @@ CAN_CODE Std_ReturnType Can_HostCompleteTransmit(PduIdType handle, uint64_t toke
     return Can_InternalHostCompleteTransmit(handle, token);
 }
 
-CAN_CODE EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms)
+CAN_CODE EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t *data, uint64_t now_ms)
 {
     return Can_InternalInject(id, dlc, data, now_ms);
 }

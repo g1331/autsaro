@@ -726,7 +726,13 @@ pub(super) fn files(
         &mut config,
         "Can",
         "static const Can_ConfigType ecu_can_driver",
-        &values("NULL_PTR"),
+        &values(&format!(
+            "NULL_PTR, {}u, {}u, {}, {}u",
+            can.nominal_bitrate,
+            can.data_bitrate.unwrap_or(0),
+            if can.brs { "TRUE" } else { "FALSE" },
+            can.fd_padding,
+        )),
     );
     let routing_headers = r#"#include "Com_Cfg.h"
 #include "CanIf_Cfg.h"
@@ -894,13 +900,8 @@ pub(super) fn files(
         let ls_rx_source = name("LSduR", "LSduRPathSourcePdu", &rx_route.source);
         let ls_tx_source = name("LSduR", "LSduRPathSourcePdu", &tx_route.source);
         receive.push(row(&format!(
-            "{}u, {can_rx}, 8u, {}",
+            "{}u, {can_rx}, 8u, FALSE",
             tp.encoded_request_id(),
-            if tp.request_accepts_fd {
-                "TRUE"
-            } else {
-                "FALSE"
-            }
         )));
         transmit.push(row(&format!("{}u, {can_tx}, 8u", tp.encoded_response_id())));
         ls_rx.push(row(&format!(
@@ -1470,19 +1471,37 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
     config.push_str(
         r#"RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc)
 {
-    if ((!Can_IsClassicalId(id)) || (dlc > 8u)) {
+    if ((!Can_IsValidId(id)) || (!Can_IsWireLength(id, dlc))) {
+        return 0;
+    }
+    if (((id & CAN_ID_FD_FLAG) != 0u) && (ecu_can_driver.data_bitrate == 0u)) {
         return 0;
     }
 "#,
     );
     for signal in &description.signals {
+        let id = signal.encoded_id();
+        let condition = if signal.receive && signal.accepts_fd {
+            format!("(id & ~CAN_ID_FD_FLAG) == {id}u")
+        } else {
+            format!("id == {id}u")
+        };
         config.push_str(&format!(
-            r#"    if (id == {}u) {{
+            r#"    if ({condition}) {{
         return {};
     }}
 "#,
-            signal.encoded_id(),
-            if signal.receive { "dlc == 4u" } else { "0" }
+            if signal.receive {
+                if signal.accepts_fd {
+                    "((id & CAN_ID_FD_FLAG) != 0u) || (dlc == 4u)"
+                } else if signal.fd {
+                    "1"
+                } else {
+                    "dlc == 4u"
+                }
+            } else {
+                "0"
+            }
         ));
     }
     if let Some(tp) = transport {

@@ -1,4 +1,4 @@
-/** @file R24-11 Can Driver services for one polled Classical CAN controller on the host. */
+/** @file R24-11 Can Driver services for one polled CAN controller on the host. */
 #ifndef CAN_H
 #define CAN_H
 #include "Can_Version.h"
@@ -128,8 +128,8 @@ CAN_CODE static inline Std_ReturnType Can_CheckWakeup(uint8 Controller)
 }
 /** Copy one L-PDU into the transmit object without waiting for output (SWS_Can_00212).
  * @param[in] Hth Configured hardware transmit handle.
- * @param[in] PduInfo Caller-owned L-SDU of 0 to 8 bytes; the CAN FD bit of the identifier is
- * ignored because the controller has no FD configuration (SWS_Can_00486).
+ * @param[in] PduInfo Caller-owned L-SDU of up to 8 Classical or 64 FD bytes. Without valid FD
+ * configuration the FD bit is ignored (SWS_Can_00486).
  * @return E_OK when copied; CAN_BUSY while the transmit object holds an earlier request;
  * E_NOT_OK for an invalid handle, pointer, identifier, length or controller state.
  * Preconditions: driver initialized and controller STARTED; otherwise E_NOT_OK.

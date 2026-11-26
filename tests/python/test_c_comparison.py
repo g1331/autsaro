@@ -312,6 +312,46 @@ class CComparisonTests(unittest.TestCase):
                         compare(current, project, output, baseline, source_tree=True)
                     record["extended"] = False
 
+    def test_classical_baseline_compares_with_fd_capable_tools(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.runtime_fixture(Path(temporary))
+            old_root = baseline / "project"
+            metadata = json.loads((old_root / "meta/integration.json").read_text())
+            metadata["plan"].update(
+                communicationRuntime={"can": {"controller": "/Can/Controller"}},
+                signals=[{"canId": 801, "acceptsFd": True}],
+                composition={"networkEndpoints": [{"transport": {"canId": 801, "acceptsFd": True}}]},
+                configuration=[
+                    {"path": "/Can/Controller", "definition": "/Defs/Controller",
+                     "references": {"/Defs/Controller/CanControllerDefaultBaudrate": ["/Can/Controller/Rate"]}},
+                    {"path": "/Can/Controller/Rate", "definition": "/Defs/Rate",
+                     "parameters": {"/Defs/Rate/CanControllerBaudRate": ["500"]}},
+                ],
+            )
+            self.seal(old_root, metadata)
+            previous = deepcopy(current)
+            previous["sourceSealSha256"] = digest(old_root / "meta/files.sha256")
+            self.write(baseline, previous)
+            metadata["plan"]["communicationRuntime"]["can"].update(
+                nominalBitrate=500_000, dataBitrate=None, brs=False, fdPadding=0,
+            )
+            metadata["plan"]["signals"][0]["fd"] = False
+            metadata["plan"]["composition"]["networkEndpoints"][0]["transport"]["fd"] = False
+            for root in (project, output / "project"):
+                target = root / "target.json"
+                target.write_text(json.dumps({**json.loads(target.read_text()),
+                                              "canFrameProfile": "classical-and-fd"}))
+                self.seal(root, metadata)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            self.assertFalse(compare(current, project, output, baseline, source_tree=True)["new"])
+
+            metadata["plan"]["communicationRuntime"]["can"]["dataBitrate"] = 2_000_000
+            for root in (project, output / "project"):
+                self.seal(root, metadata)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            with self.assertRaisesRegex(ValueError, "Sample generation configuration differs"):
+                compare(current, project, output, baseline, source_tree=True)
+
     def test_sealed_runtime_source_changes_reach_diagnostic_comparison(self):
         with tempfile.TemporaryDirectory() as temporary:
             current, project, output, baseline = self.runtime_fixture(Path(temporary))

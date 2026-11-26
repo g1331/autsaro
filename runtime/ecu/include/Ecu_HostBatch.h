@@ -15,10 +15,10 @@
 #define ECU_BATCH_MAX_SPAN      UINT64_C(1000) /**< Maximum batch time advance, ms. */
 #define ECU_BATCH_LINE_CAPACITY 160u           /**< Maximum command length in bytes. */
 
-/** One copied Classical CAN input staged before automotive admission. */
+/** One copied CAN input staged before automotive admission. */
 typedef struct {
-    uint32_t id;      /**< Encoded Classical CAN identifier on channel 0. */
-    uint8_t dlc;      /**< Payload length in bytes, 0..8. */
+    uint32_t id;      /**< Encoded CAN identifier on channel 0. */
+    uint8_t dlc;      /**< Payload length in bytes, 0..64. */
     uint8_t data[64]; /**< Copied payload; bytes beyond dlc are ignored. */
 } Ecu_BatchFrame;
 

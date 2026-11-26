@@ -2,7 +2,7 @@
 #include "Ecu_Execution.h"
 #include "Ecu_Target.h"
 EcuStatus Ecu_ExecutionTransmit(
-    Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t data[8])
+    Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t *data)
 {
     (void)sink;
     return Ecu_TargetEnqueueTransmit(handle, id, dlc, data);

@@ -1,4 +1,4 @@
-/** @file Standard CanIf for one Classical CAN controller and immutable routes. */
+/** @file Standard CanIf for one CAN controller and immutable routes. */
 #include "CanIf.h"
 #include "Can.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -64,6 +64,13 @@ static uint32 mode_writes CANIF_VAR_CLEARED;      /**< PDU-mode generation; Init
 #endif
 #define CANIF_START_SEC_CODE
 #include "CanIf_MemMap.h"
+static CANIF_CODE boolean CanIf_Matches(const CanIf_RxPduConfigType *route, Can_IdType id)
+{
+    /* SWS_CANIF_00877: for a dual policy ignore only the FD bit. */
+    return (route->can_id == id) ||
+           (route->accepts_fd && (route->can_id == (id & ~CAN_ID_FD_FLAG)));
+}
+
 static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config)
 {
     boolean valid = (config != NULL_PTR) && (config->receive_count <= 32u) &&
@@ -76,17 +83,24 @@ static CANIF_CODE boolean CanIf_Valid(const CanIf_ConfigType *config)
         for (i = 0u; i < config->receive_count; ++i) {
             uint16 j;
             const CanIf_RxPduConfigType *route = &config->receive[i];
-            valid = valid && Can_IsClassicalId(route->can_id) && (route->minimum_length <= 8u);
+            boolean fd_only = (route->can_id & CAN_ID_FD_FLAG) != 0u;
+            valid =
+                valid && Can_IsValidId(route->can_id) && ((!fd_only) || (!route->accepts_fd)) &&
+                (route->minimum_length <=
+                 ((fd_only || route->accepts_fd) ? CAN_FD_MAX_LENGTH : CAN_CLASSICAL_MAX_LENGTH));
             for (j = 0u; j < i; ++j) {
-                valid = valid && (route->can_id != config->receive[j].can_id) &&
+                valid = valid && (!CanIf_Matches(route, config->receive[j].can_id)) &&
+                        (!CanIf_Matches(&config->receive[j], route->can_id)) &&
                         (route->pdu != config->receive[j].pdu);
             }
         }
         for (i = 0u; i < config->transmit_count; ++i) {
             uint16 j;
             const CanIf_TxPduConfigType *route = &config->transmit[i];
-            valid = valid && Can_IsClassicalId(route->can_id) && (route->maximum_length != 0u) &&
-                    (route->maximum_length <= 8u);
+            uint8 maximum = ((route->can_id & CAN_ID_FD_FLAG) != 0u) ? CAN_FD_MAX_LENGTH
+                                                                     : CAN_CLASSICAL_MAX_LENGTH;
+            valid = valid && Can_IsValidId(route->can_id) && (route->maximum_length != 0u) &&
+                    (route->maximum_length <= maximum);
             for (j = 0u; j < i; ++j) {
                 valid = valid && (route->pdu != config->transmit[j].pdu);
             }
@@ -340,7 +354,9 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
                     errors[0] = CANIF_E_STOPPED;
                 } else if (pdu_mode != CANIF_ONLINE) {
                     /* TX_OFFLINE rejects without CANIF_E_STOPPED (SWS_CANIF_00382, 00489). */
-                } else if (PduInfoPtr->SduLength > 8u) {
+                } else if ((PduInfoPtr->SduLength > CAN_FD_MAX_LENGTH) ||
+                           (((route->can_id & CAN_ID_FD_FLAG) == 0u) &&
+                            (PduInfoPtr->SduLength > CAN_CLASSICAL_MAX_LENGTH))) {
                     errors[0] = CANIF_E_DATA_LENGTH_MISMATCH;
                     errors[1] = CANIF_E_TXPDU_LENGTH_EXCEEDED;
                 } else if (PduInfoPtr->SduLength > route->maximum_length) {
@@ -502,11 +518,9 @@ CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType 
         uint16 i;
         for (i = 0u; i < canif_configuration->receive_count; ++i) {
             const CanIf_RxPduConfigType *route = &canif_configuration->receive[i];
-            /* SWS_CANIF_00877: compare width and number, then apply the Rx FD policy. */
-            if ((route->can_id == (Mailbox->CanId & ~CAN_ID_FD_FLAG)) &&
-                (route->accepts_fd || ((Mailbox->CanId & CAN_ID_FD_FLAG) == 0u))) {
+            if (CanIf_Matches(route, Mailbox->CanId)) {
                 if ((PduInfoPtr->SduLength < route->minimum_length) ||
-                    (PduInfoPtr->SduLength > 8u)) {
+                    (!Can_IsWireLength(Mailbox->CanId, PduInfoPtr->SduLength))) {
                     invalid_length = 1u;
                 } else {
                     id = route->pdu;
