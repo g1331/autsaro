@@ -24,23 +24,25 @@ enum { RX_NSDU = 4u, TX_NSDU = 6u, RX_NPDU = 2u, TX_NPDU = 3u, UPPER_RX = 21u, U
 enum { SETTLE = 6000u, FREE_LIMIT = 4096u };
 
 /* Restored before each input, so that an input runs alone as it does when replayed. */
-static const CanTp_ConfigType defaults = {RX_NSDU,
-                                          TX_NSDU,
-                                          RX_NPDU,
-                                          TX_NPDU,
-                                          256u,
-                                          2u,
-                                          2u,
-                                          2u,
-                                          2u,
-                                          2u,
-                                          2u,
-                                          1u,
-                                          0u,
-                                          0xccu,
-                                          UPPER_RX,
-                                          UPPER_TX};
-static CanTp_ConfigType config;
+static const CanTp_ConnectionConfigType defaults = {RX_NSDU,
+                                                    TX_NSDU,
+                                                    RX_NPDU,
+                                                    TX_NPDU,
+                                                    256u,
+                                                    2u,
+                                                    2u,
+                                                    2u,
+                                                    2u,
+                                                    2u,
+                                                    2u,
+                                                    1u,
+                                                    0u,
+                                                    0xccu,
+                                                    UPPER_RX,
+                                                    UPPER_TX,
+                                                    8u,
+                                                    8u};
+static CanTp_ConnectionConfigType config;
 static const uint8 *input;
 static size_t input_size;
 static size_t input_at;
@@ -277,7 +279,7 @@ static void configure(void)
 }
 static void restart(void)
 {
-    CanTp_Init(&config);
+    CanTp_Init(&(const CanTp_ConfigType){&config, 1u});
     running = TRUE;
     overflow_owed = FALSE;
     /* All connections are lost without notification; a frame in flight stays until its

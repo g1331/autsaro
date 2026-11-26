@@ -57,19 +57,21 @@ typedef struct {
 typedef Std_ReturnType (*Dcm_ReadDidType)(uint8 *data);
 /** Generated connection-specific SchM publisher; no authentication service is selected. */
 typedef void (*Ecu_DcmAuthenticationModeType)(uint8 state);
-/** Implementation-defined configuration (SWS_Dcm_00982), emitted as immutable dcm_config.
- * One physical UDS-on-CAN connection, sessions 1/3, services 0x10/0x22/0x3E and no
- * asynchronous/paged processing. The optional application DID contains four opaque
- * bytes. F186 reads the active session; OBD availability DIDs report the configured
- * data DID without calling the application. Timers count Dcm_MainFunction calls;
- * generated profiles run it every millisecond. P2* is advertised for the selected
- * sessions; synchronous ReadData never returns pending. No response is retried after
- * a lower-layer refusal or error confirmation (SWS_Dcm_00118).
- */
+/** One physical connection of the Dcm UDS protocol. */
 typedef struct {
     PduIdType receive;         /**< Dcm Rx ID (DcmDslProtocolRxPduId). */
     PduIdType transmit;        /**< Dcm confirmation ID (DcmDslTxConfirmationPduId). */
     NetworkHandleType channel; /**< ComM channel (DcmDslProtocolComMChannelRef). */
+    PduIdType router_transmit; /**< PduR transmit ID, distinct from Dcm's confirmation ID. */
+} Dcm_ConnectionConfigType;
+
+/** Timing, service and physical connection table for the selected UDS protocol.
+ * The main function runs every millisecond in generated profiles. P2* is advertised
+ * for the selected sessions. A lower-layer refusal or failed confirmation ends the response.
+ */
+typedef struct {
+    const Dcm_ConnectionConfigType *connections; /**< Immutable physical connections. */
+    uint32 connection_count;                     /**< Number of configured connections. */
     uint16 did;           /**< Data DID; excludes F186/OBD availability (DcmDspDidIdentifier). */
     Dcm_ReadDidType read; /**< Synchronous read adapter; NULL selects only internal F186. */
     uint16 p2_ticks;      /**< Positive FullCom wait, in main periods (P2ServerMax). */
@@ -77,7 +79,6 @@ typedef struct {
     uint32 p2_star_ms;    /**< Advertised P2*, in ms (DcmDspSessionP2StarServerMax). */
     uint32 s3_ticks;      /**< Positive idle session timeout, in main periods (S3Server). */
     uint16 buffer_length; /**< Rx/Tx capacity, 8..256 bytes, representable by PduLengthType. */
-    PduIdType router_transmit; /**< PduR transmit ID, distinct from Dcm's confirmation ID. */
     Ecu_DcmAuthenticationModeType authentication_mode; /**< Non-NULL mode publisher; state 0. */
     uint16 max_did_to_read; /**< DcmDspMaxDidToRead; 0 means absent, with no count limit. */
 } Dcm_ConfigType;

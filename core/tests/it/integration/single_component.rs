@@ -61,6 +61,39 @@ fn diagnostic_global_pdu_reference_selects_the_extract_trigger() {
     }
 }
 
+/// Verifies: SWS_CanTp_00354, SWS_CanTp_00248
+#[test]
+fn cantp_fd_configuration_checks_wire_length_and_physical_route_identity() {
+    use crate::support::multichannel::multichannel_diagnostic_sources;
+
+    let inputs = multichannel_diagnostic_sources();
+    let validation = normal_validation(&inputs);
+    assert!(
+        validation.diagnostics.is_empty(),
+        "{:?}",
+        validation.diagnostics
+    );
+
+    let mut bad_length = inputs.clone();
+    parameter(&mut bad_length, "DiagResponse1Pdu", "PduLength", "65");
+    rejected_at(
+        &bad_length,
+        "LENGTH_CONFLICT",
+        "ecuc.arxml",
+        "/Configuration/EcuC/Config/Pdus/DiagResponse1Pdu",
+    );
+
+    let mut duplicate = inputs;
+    parameter(&mut duplicate, "Frame1", "CanTpRxNPduId", "0");
+    parameter(&mut duplicate, "FlowControl1", "CanTpRxFcNPduId", "0");
+    rejected_at(
+        &duplicate,
+        "DIAGNOSTIC_IDENTIFIER",
+        "ecuc.arxml",
+        "/Configuration/Dcm/Config/Dsl/Protocols/UdsOnCan/Connection1/Physical1",
+    );
+}
+
 /// Verifies: ECUC_Can_00473, ECUC_Can_00475, ECUC_Can_00481, ECUC_Can_00485
 #[test]
 fn fd_configuration_requires_the_selected_controller_and_preserves_brs_and_padding() {
@@ -3092,7 +3125,7 @@ fn cantp_features_outside_the_selection_are_refused_at_their_source() {
         // Rejects: ECUC_CanTp_00283
         ("General", "CanTpVersionInfoApi", "true", disabled),
         // Rejects: ECUC_CanTp_00298
-        ("General", "CanTpPaddingByte", "255", unsupported),
+        ("General", "CanTpPaddingByte", "256", unsupported),
         // Rejects: ECUC_CanTp_00281
         (
             "DiagRequest",
@@ -3176,7 +3209,7 @@ fn cantp_timer_shorter_than_two_periods_is_refused() {
 
 /// The selected channel carries one connection per direction; a second N-SDU is refused.
 #[test]
-fn second_cantp_connection_is_refused() {
+fn duplicate_cantp_nsdu_reference_is_refused() {
     // Rejects: ECUC_CanTp_00137, ECUC_CanTp_00138
     for (name, definition) in [
         ("DiagRequest", "/CanTpRxNSdu"),

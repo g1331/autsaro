@@ -4,13 +4,15 @@
 
 ### Breaking
 
+- CanTp supports FD segmentation, transport-layer padding and independent connections on configured CAN buses. Regenerate ECU packages and rebuild direct consumers of `CanTp_ConfigType` and `Dcm_ConfigType` with their connection tables. Existing diagnostic services use the connection that admitted the request (#487)
+
 - Regenerate ECU packages for configured CAN controller and HOH tables, channel-scoped CanIf routes and confirmations, and ComM/BswM/Dcm channel bindings. Update direct initializers of `Can_ConfigType`, `CanIf_ConfigType` and its route types for the controller, HOH and PDU-to-frame mapping. HostBatchV2 uses the configured driver channel in frame and mode records, and the probe reports the channel with each output. PduR and LSduR use the generated route counts (#486)
 
 - ComM, BswM and the host BusSM use immutable channel tables. ComM also stores each user's channel relations. Regenerate ECU packages and update direct initializers of `ComM_ConfigType`, `BswM_ConfigType` and `Ecu_HostBusSM_ConfigType` before rebuilding consumers (#464)
 
 - COM now packs and unpacks signed and unsigned fixed-width signals in Intel or Motorola order. Regenerate and rebuild COM and CanIf configurations for separate signal and PDU tables and byte-aligned PDU-to-frame mappings. (#665)
 
-- Host CAN supports standard and extended FD frames, explicit receive policies and driver padding through 64 wire bytes. Regenerate ECU packages from ARXML for the FD-capable HostBatchV2 tools. Rebuild native consumers and update private `Can_ConfigType` initializers for bitrates, BRS and HTH padding. Rebuild host output consumers for the probe’s FD timing fields. CanTp continues to use Classical CAN (#485)
+- Host CAN supports standard and extended FD frames, explicit receive policies and driver padding through 64 wire bytes. Regenerate ECU packages from ARXML for the FD-capable HostBatchV2 tools. Rebuild native consumers and update private `Can_ConfigType` initializers for bitrates, BRS and HTH padding. Rebuild host output consumers for the probe’s FD timing fields. (#485)
 
 - CanIf now accepts standard and extended Classical CAN on one controller and filters by frame format and numeric ID. Regenerate ECU packages from ARXML for the HostBatchV2 handshake, typed CAN records, and updated delivery metadata. Update private CanIf Rx route initializers to supply the FD acceptance policy (#117)
 - Workbench project manifests now use format 2 and native delivery uses `autosar-workbench-handoff-v5`. Recreate older projects from their original ARXML and regenerate packages. Layered projects retain base, project and variant source members alongside active and inactive application snapshots (#490)

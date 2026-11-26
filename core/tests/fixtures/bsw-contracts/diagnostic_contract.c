@@ -120,10 +120,11 @@ static const Ecu_HostBusSM_ConfigType cdd = {bus_channels, 1u};
 static const BswM_ConfigType bswm = {user_channels, 1u, &Ecu_HostBusSM_ConfirmMode, NULL_PTR};
 static uint8 authentication_mode = 255u;
 static void publish_authentication(uint8 state) { authentication_mode = state; }
+static const Dcm_ConnectionConfigType dcm_connection[] = {{17u, 18u, 7u, 81u}};
 static const Dcm_ConfigType dcm = {
-    17u, 18u, 7u, 0x1234u, read_did, 50u, 50u, 5000u, 20u, 256u, 81u, publish_authentication, 0u};
-static const CanTp_ConfigType tp = {
-    11u, 12u, 31u, 41u, 256u, 5u, 5u, 5u, 5u, 5u, 5u, 1u, 2u, 0u, 71u, 72u};
+    dcm_connection, 1u, 0x1234u, read_did, 50u, 50u, 5000u, 20u, 256u, publish_authentication, 0u};
+static const CanTp_ConnectionConfigType tp = {
+    11u, 12u, 31u, 41u, 256u, 5u, 5u, 5u, 5u, 5u, 5u, 1u, 2u, 0u, 71u, 72u, 8u, 8u};
 static void receive(const uint8 bytes[8])
 {
     assert(Can_Inject(0x700u, 8u, bytes, 0u) == ECU_OK);
@@ -152,7 +153,7 @@ static void start(void)
     Dcm_Init(&dcm);
     assert(authentication_mode == 0u);
     assert(SCHM_E_OK == 0u && SCHM_E_LIMIT == 130u);
-    CanTp_Init(&tp);
+    CanTp_Init(&(const CanTp_ConfigType){&tp, 1u});
     ComM_Init(&comm);
     ComM_CommunicationAllowed(7u, TRUE);
     assert(ComM_RequestComMode(43u, COMM_FULL_COMMUNICATION) == E_OK);
@@ -232,7 +233,7 @@ int main(void)
     assert(count == 4u && reads == 4u);
     CanTp_Shutdown();
     Dcm_Init(&dcm);
-    CanTp_Init(&tp);
+    CanTp_Init(&(const CanTp_ConfigType){&tp, 1u});
     Dcm_ComM_FullComModeEntered(7u);
     request_read();
     tick();
@@ -393,7 +394,7 @@ int main(void)
         Dcm_Init(&dcm);
         assert(authentication_mode == 0u);
         assert(SCHM_E_OK == 0u && SCHM_E_LIMIT == 130u);
-        CanTp_Init(&tp);
+        CanTp_Init(&(const CanTp_ConfigType){&tp, 1u});
         Dcm_ComM_FullComModeEntered(7u);
     }
     /* Wrong SN and N_Cr abort accepted receives, making the Dcm buffer reusable. */
@@ -434,7 +435,7 @@ int main(void)
     assert(SCHM_E_OK == 0u && SCHM_E_LIMIT == 130u);
     flush();
     assert(transmit(12u, &info) == E_NOT_OK);
-    CanTp_Init(&tp);
+    CanTp_Init(&(const CanTp_ConfigType){&tp, 1u});
     Dcm_ComM_FullComModeEntered(7u);
     request_read();
     Dcm_MainFunction();
@@ -537,7 +538,7 @@ int main(void)
         assert(SCHM_E_OK == 0u && SCHM_E_LIMIT == 130u);
     }
     /* Real driver BUSY refuses the SF immediately, releasing Dcm without a retry. */
-    CanTp_Init(&tp);
+    CanTp_Init(&(const CanTp_ConfigType){&tp, 1u});
     Dcm_ComM_FullComModeEntered(7u);
     {
         uint8 payload[8] = {0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u};

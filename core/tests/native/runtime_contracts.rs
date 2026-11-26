@@ -977,6 +977,19 @@ fn cantp_standard_consumer_executes_full_duplex_transport_outside_its_area() {
     );
 }
 
+#[test]
+fn cantp_fd_wire_lengths_and_connection_ownership() {
+    let scratch = Scratch::new();
+    let executable = strict_consumer(
+        &scratch.0,
+        "CanTp",
+        "cantp_fd.c",
+        &["-DCANTP_CONNECTION_CAPACITY=3u"],
+    );
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+}
+
 /// CanTp leaves CANTP_STATE before PduR and LSduR, and discards overtaken results (ADR 0018).
 #[test]
 fn cantp_events_complete_once_while_another_context_waits_outside_the_area() {
@@ -1103,7 +1116,8 @@ void ComM_DCM_InactiveDiagnostic(NetworkHandleType channel) { (void)channel; }
 Std_ReturnType PduR_DcmTransmit(PduIdType id, const PduInfoType *info) { (void)id; (void)info; assert(0); return E_NOT_OK; }
 static void authentication(uint8 value) { assert(value == 0u); }
 int main(void) {
-    const Dcm_ConfigType config = {17u, 19u, 7u, 0u, NULL_PTR, 4u, 50u, 5000u, 5u, 64u, 41u, authentication, 0u};
+    const Dcm_ConnectionConfigType connections[] = {{17u, 19u, 7u, 41u}};
+    const Dcm_ConfigType config = {connections, 1u, 0u, NULL_PTR, 4u, 50u, 5000u, 5u, 64u, authentication, 0u};
     uint8 bytes[2] = {0x10u, 0x83u};
     PduInfoType info = {bytes, NULL_PTR, 2u};
     PduLengthType available;
