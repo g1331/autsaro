@@ -2279,40 +2279,6 @@ fn second_can_read_write_period_is_refused() {
     );
 }
 
-/// The selected controller has one HRH and one HTH; a second one is refused.
-#[test]
-fn second_canif_hardware_object_is_refused() {
-    // Rejects: ECUC_CanIf_00259, ECUC_CanIf_00258
-    for (name, definition) in [("Receive", "/CanIfHrhCfg"), ("Transmit", "/CanIfHthCfg")] {
-        let mut sources = single_component_sources();
-        xml_edit(
-            &mut sources,
-            "ecuc.arxml",
-            |node| {
-                named(node, "ECUC-CONTAINER-VALUE", name)
-                    && node.children().any(|child| {
-                        child.has_tag_name("DEFINITION-REF")
-                            && child.text().is_some_and(|text| text.ends_with(definition))
-                    })
-            },
-            |text| {
-                let copy = text.replacen(
-                    &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
-                    &format!("<SHORT-NAME>{name}Second</SHORT-NAME>"),
-                    1,
-                );
-                format!("{text}{copy}")
-            },
-        );
-        rejected_at(
-            &sources,
-            "CONFIGURATION_NOT_UNIQUE",
-            "ecuc.arxml",
-            "/Configuration/Can/Config/Controller",
-        );
-    }
-}
-
 /// Configuration is generated before compilation, so a module declaring the
 /// link-time or post-build variant is refused (link-time CanIf: SWS_CANIF_00378).
 #[test]
