@@ -572,6 +572,14 @@ pub(crate) fn gateway_sources(count: usize) -> Vec<InputSource> {
                             .replace("<IDENTIFIER>801<", &format!("<IDENTIFIER>{id}<"))
                             .replace("<FRAME-LENGTH>4<", &format!("<FRAME-LENGTH>{length}<"))
                             .replace("<LENGTH>4<", &format!("<LENGTH>{length}<"));
+                        if kind == "CAN-FRAME" && channel == 0 {
+                            xml = xml
+                                .replace(
+                                    "MOST-SIGNIFICANT-BYTE-LAST",
+                                    "MOST-SIGNIFICANT-BYTE-FIRST",
+                                )
+                                .replace("<START-POSITION>0<", "<START-POSITION>7<");
+                        }
                         let signal_members = match kind {
                             "I-SIGNAL-I-PDU" => Some("I-SIGNAL-TO-PDU-MAPPINGS"),
                             "PDU-TRIGGERING" => Some("I-SIGNAL-TRIGGERINGS"),

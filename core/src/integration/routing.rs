@@ -399,6 +399,15 @@ fn gateway_can_if(
     let [mapping] = mappings.as_slice() else {
         return Err(unsupported(graph, frame));
     };
+    let (start, big_endian) = super::signals::mapping_position(graph, *mapping)?;
+    if start != if big_endian { 7 } else { 0 } {
+        return Err(super::signals::field(
+            graph,
+            *mapping,
+            "LENGTH_CONFLICT",
+            "START-POSITION",
+        ));
+    }
     let mapped = graph.target(*mapping, "PDU-REF").ok_or_else(invalid)?;
     let channel = super::signals::check_trigger(graph, *trigger, mapped, None, receive)?;
     let trigger_id = can_id::trigger_id(graph, *trigger)
@@ -408,11 +417,10 @@ fn gateway_can_if(
         .and_then(|length| length.parse::<u8>().ok())
         .filter(|length| *length != 0 && can_id::wire_length(trigger_id, *length))
         .ok_or_else(invalid)?;
-    if graph.text(*mapping, "START-POSITION") != Some("0")
-        || graph
-            .text(mapped, "LENGTH")
-            .and_then(|length| length.parse::<u8>().ok())
-            != Some(length)
+    if graph
+        .text(mapped, "LENGTH")
+        .and_then(|length| length.parse::<u8>().ok())
+        != Some(length)
         || graph
             .text(frame, "FRAME-LENGTH")
             .and_then(|length| length.parse::<u8>().ok())
