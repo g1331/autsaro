@@ -85,7 +85,7 @@ D4.6为Advisory（主文印刷28–29／PDF36–37；AMD2.23–25及适用性表
 
 本机边界仍真实保留基本数值类型：例如Linux BOOL为int、syscall结果为long、pthread错误结果为int，备用信号栈存储使用long double取得原生对齐。这里不能仅因ABI宽度已知就宣布D4.6全部满足；原文对标准库／项目控制外接口的衔接给出取舍理由，当前保留原生签名和错误表示，避免把long double的存储大小误命名为浮点有效位数。汽车配置与数值数据继续使用既有宽度类型；本判断不扩大到整个SDK或所有数值声明。
 
-D4.8同为Advisory（主文印刷30–31／PDF38–39），TC1澄清只有某类型在TU中的所有指针均不解引用时才触发隐藏要求。Linux HANDLE在Os_HostLinux.h仅指向不完整Os_HostHandleType，完整定义只在Os_HostLinux.c；Os_HostServices的创建／等待／关闭消费者只传递该指针，不取得字段或sizeof，符合这处封装目的。CONTEXT与公开配置对象则有实际完整对象存储／字段消费者，不能凭单个参数未解引用就批量判为应隐藏；其他结构／TU组合仍须按实际完整集合判断。
+D4.8同为Advisory（主文印刷30–31／PDF38–39），TC1澄清只有某类型在TU中的所有指针均不解引用时才触发隐藏要求。Linux `HANDLE` 在 `Os_HostLinuxTypes.h` 中指向不完整的 `struct Os_HostHandle`，完整定义只在 `Os_HostLinux.c`；Os_HostServices的创建／等待／关闭消费者只传递该指针，不取得字段或sizeof，符合这处封装目的。CONTEXT与公开配置对象则有实际完整对象存储／字段消费者，不能凭单个参数未解引用就批量判为应隐藏；其他结构／TU组合仍须按实际完整集合判断。
 
 
 ## 接口宏的实际词法角色

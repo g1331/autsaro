@@ -43,7 +43,7 @@ typedef enum {
     OS_HOST_PROCESS
 } Os_HostKindType;
 
-struct Os_HostHandleType {
+struct Os_HostHandle {
     volatile int32_t reserved;
     Os_HostKindType kind;
     int fd;
@@ -78,9 +78,8 @@ struct Os_HostHandleType {
 
 #define OS_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Os_MemMap.h"
-OS_MEMMAP static struct Os_HostHandleType
-    host_handles[OS_HOST_HANDLES]; /**< Atomically reserved slots, per-handle
-                   synchronization; no Init reset. */
+OS_MEMMAP static struct Os_HostHandle host_handles[OS_HOST_HANDLES]; /**< Atomically reserved slots,
+                                                     per-handle synchronization; no Init reset. */
 #define OS_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "Os_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -91,7 +90,7 @@ OS_MEMMAP static struct Os_HostHandleType
 #endif
 #define OS_START_SEC_VAR_INIT_UNSPECIFIED
 #include "Os_MemMap.h"
-OS_MEMMAP static struct Os_HostHandleType process_handle = {
+OS_MEMMAP static struct Os_HostHandle process_handle = {
     .reserved = 1,
     .kind = OS_HOST_PROCESS}; /**< C-initialized immutable process pseudo-handle; no Init writes. */
 #define OS_STOP_SEC_VAR_INIT_UNSPECIFIED
