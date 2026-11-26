@@ -27,6 +27,8 @@ def _read(path: Path) -> dict:
 MATRIX_TARGETS = ("linux-x64-controlled-v1", "windows-x64-controlled-v1")
 MATRIX_SAMPLES = ("standard-ecu", "user-application", "component-pipeline", "no-diagnostic")
 SEMANTIC_VERSION = 4
+TARGET_PROGRAM = "target"
+ANALYSIS_PROGRAMS = frozenset({TARGET_PROGRAM, "host-batch", "probe"})
 
 
 def raw_identity(summary: dict) -> str:
@@ -92,8 +94,11 @@ def annotate_scope(summary: dict, headers: set[str] | None = None) -> None:
 
 def platform_location(name: str) -> bool:
     """ADR 0030 rule 1: platform selection owns the complete directory."""
-    return name.startswith(("os/src/host/", "kernel/portable/MSVC-MingW/",
-                            "kernel/portable/ThirdParty/GCC/Posix/"))
+    return name.startswith(("os/src/host/", "kernel/portable/"))
+
+
+def target_unit(name: str) -> bool:
+    return not platform_location(name) and not name.startswith("integration/")
 
 
 def target_headers(scopes: list[dict]) -> set[str]:
@@ -102,7 +107,7 @@ def target_headers(scopes: list[dict]) -> set[str]:
     for scope in scopes:
         dependencies = scope.get("projectTranslationUnits", {})
         for unit in scope["translationUnits"]:
-            if platform_location(unit) or unit.startswith("integration/"):
+            if not target_unit(unit):
                 continue
             headers.update(dependencies.get(unit, []))
     return headers
@@ -117,8 +122,7 @@ def location_scope(scope: dict, location: dict, *, headers: set[str] | None = No
         if name.endswith(".c"):
             return "host-integration"
         dependencies = scope.get("projectTranslationUnits")
-        units = [unit for unit in scope["translationUnits"]
-                 if not platform_location(unit) and not unit.startswith("integration/")]
+        units = [unit for unit in scope["translationUnits"] if target_unit(unit)]
         if not isinstance(dependencies, dict) or any(unit not in dependencies for unit in units):
             raise ValueError("MISRA scope requires complete GCC project dependency receipts")
         if name not in (target_headers([scope]) if headers is None else headers):

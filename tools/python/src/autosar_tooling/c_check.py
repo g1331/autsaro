@@ -315,7 +315,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         if provenance_error is not None:
             raise provenance_error
         sources.extend("kernel/" + name for name in kernel_sources)
-        sources.extend(target_entry(names, target, mode) for mode in ("host-batch", "probe"))
+        for mode in ("host-batch", "probe"):
+            target_entry(names, target, mode)
     elif target.get("profile") != "host":  # plain sealed C project, used by analyzer fixtures; deliveries are always "ecu"
         raise ValueError("Unknown sealed C profile")
     if len(sources) != len(set(sources)) or any(not (root / name).is_file() for name in sources):
@@ -325,6 +326,9 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     # skeletons repeat the application definitions and belong to no program.
     supplemental = [name for name in names if name.endswith(".c") and name not in sources
                     and not name.startswith(("kernel/", "generated/templates/"))]
+    if target["profile"] == "ecu":
+        sources = [name for name in sources if c_comparison.target_unit(name)]
+        supplemental = [name for name in supplemental if c_comparison.target_unit(name)]
     sources.extend(supplemental)
     if any(not (root / name).is_dir() for name in includes):
         raise ValueError("Declared project include directory is missing")
@@ -339,8 +343,8 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
                     "__GNUC__", "__GNUC_MINOR__", "__GNUC_PATCHLEVEL__", "__x86_64__",
                     "_WIN32", "_WIN64", "__MINGW32__", "__MINGW64__", "_UCRT",
                     "__linux__", "__unix__", "__LP64__", "__STDC_VERSION__", "__STDC__"}]
-    owned_text = "\n".join((root / name).read_text(encoding="utf-8") for name in names
-                            if name.endswith((".c", ".h")))
+    owned_text = "\n".join((root / name).read_text(encoding="utf-8")
+                            for name in [*sources, *(name for name in names if name.endswith(".h"))])
     identifiers = set(re.findall(r"\b[A-Za-z_]\w*\b", owned_text))
     owned_macros = set(re.findall(r"^\s*#\s*define\s+(\w+)", owned_text, re.MULTILINE))
     model = None
@@ -464,7 +468,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     packages = c_sdk.msys_headers(Path(compiler)) if target_id.startswith("windows") else c_sdk.debian_headers()
     sdk_headers = [c_sdk.header_identity(Path(path), root, target_id, machine.strip(), packages)
                    for path in sorted({path for paths in sdk_units.values() for path in paths})]
-    scope = {"target": target_id, "profile": target["profile"], "entries": target.get("entries"),
+    scope = {"target": target_id, "profile": target["profile"], "entries": {c_comparison.TARGET_PROGRAM: None},
                                    "compilerFlags": flags, "compilerWorkers": compiler_workers, "includePaths": target["includePaths"],
                                    "systemIncludePaths": system_includes, "diagnosticCompiler": {"path": compiler, "version": compiler_version, "sha256": digest(Path(compiler))},
                                    "compilerDiscoveredDefines": per_unit_macros,
@@ -801,7 +805,7 @@ def recheck_semantic_inputs(summary: dict, project: Path, tool: tuple[Path, Path
     refuse_links(project)
     project = project.resolve(strict=True)
     names = [row["name"] for row in summary["programs"]]
-    if any(name not in {"target", "host-batch", "probe"} for name in names):
+    if any(name not in c_comparison.ANALYSIS_PROGRAMS for name in names):
         raise ValueError("Unsupported analysis program directory")
     directories = (project.parent,) if len(names) == 1 else tuple(project.parent / name for name in names)
     scope["cppcheckFilesDirectory"] = identity.get("filesDirectory", "")
@@ -830,50 +834,19 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         root, sources, database, scope = prepare(project, target_id, output)
         summary["scope"] = scope
         scope["cppcheckFilesDirectory"] = identity.get("filesDirectory", "")
-        entries = scope.get("entries") or {}
-        # build.py selects exactly one ECU main for each native executable.
-        # Keep cross-TU checking inside that same link boundary.
-        programs = entries if scope.get("profile") == "ecu" and entries and all(name in sources for name in entries.values()) else {"target": None}
-        summary["programs"] = []
-        summary["diagnostics"] = []
-        seen = {}
-        all_passed = True
-        jobs = []
-        for program, entry in programs.items():
-            units = [name for name in sources if entry is None or name not in entries.values() or name == entry]
-            directory = output if len(programs) == 1 else output / program
-            directory.mkdir(exist_ok=True, mode=0o700)
-            commands = [row for row in database if Path(row["file"]).resolve() in {(root / name).resolve() for name in units}]
-            jobs.append((program, entry, units, commands, directory))
-        directories = tuple(directory for _, _, _, _, directory in jobs)
+        directories = (output,)
         summary["semanticIdentity"] = semantic_identity(executable, scope, directories)
-        # Each program keeps its own CTU, build directory and receipts, so the
-        # single-threaded analyzer runs concurrently; results merge in declared order.
-        with ThreadPoolExecutor(max_workers=min(len(jobs), int(os.environ.get("CARGO_BUILD_JOBS", str(len(jobs)))))) as executor:
-            results = [executor.submit(analyze_program, executable, addons, root, units, commands, scope, target_id,
-                                       directory, **({"rename_units": rename_units} if rename_units else {}))
-                       for _, _, units, commands, directory in jobs]
-        combined_inputs = {}
-        for (program, entry, units, _, _), result in zip(jobs, results):
-            code, passed, diagnostics, command, inputs = result.result()
-            for unit, actual in inputs.items():
-                combined = combined_inputs.setdefault(unit, {"project": set(), "sdk": set(), "unbound": set()})
-                for kind, names in actual.items():
-                    combined[kind].update(names)
-            summary["programs"].append({"name": program, "entry": entry, "translationUnits": units,
-                                        "exitCode": code, "passed": passed, "command": command})
-            all_passed = all_passed and passed
-            for row in diagnostics:
-                key = json.dumps(row, sort_keys=True)
-                if key not in seen:
-                    row["programs"] = []
-                    seen[key] = row
-                    summary["diagnostics"].append(row)
-                seen[key]["programs"].append(program)
+        code, passed, diagnostics, command, inputs = analyze_program(
+            executable, addons, root, sources, database, scope, target_id, output,
+            **({"rename_units": rename_units} if rename_units else {}))
+        program = c_comparison.TARGET_PROGRAM
+        summary["programs"] = [{"name": program, "entry": None, "translationUnits": sources,
+                                "exitCode": code, "passed": passed, "command": command}]
         scope["cppcheckInputs"] = {unit: {kind: sorted(names) for kind, names in actual.items()}
-                                  for unit, actual in combined_inputs.items()}
-        diagnostics = summary["diagnostics"]
+                                  for unit, actual in inputs.items()}
+        summary["diagnostics"] = diagnostics
         for diagnostic in diagnostics:
+            diagnostic["programs"] = [program]
             diagnostic["complianceScope"] = [
                 c_comparison.location_scope(scope, location)
                 for location in diagnostic["locations"]]
@@ -886,7 +859,7 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
             raise ValueError("Source seal changed during analysis")
         if semantic_identity(executable, scope, directories) != summary["semanticIdentity"]:
             raise ValueError("Semantic inputs changed during analysis")
-        summary["passed"] = all_passed
+        summary["passed"] = passed
         if scope.get("profile") == "ecu" and sdk_revision is None and "projectTranslationUnits" in scope:
             started = time.monotonic()
             try:

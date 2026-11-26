@@ -585,7 +585,7 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
         candidate = next(classified)
         name = location["file"]
         if (name.startswith("kernel/")
-                or not set(diagnostic["programs"]) <= {"host-batch", "probe"}):
+                or not set(diagnostic["programs"]) <= c_comparison.ANALYSIS_PROGRAMS):
             continue
         if name not in sources:
             original = origins.get(name, name if name in generated_sources else "")
@@ -948,7 +948,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
                     raise ValueError(f"SDK integration unrecorded use: {location}:{symbol}")
     result = {}
     for index, position, diagnostic, location in _positions(summary["diagnostics"]):
-        if location is None or not set(diagnostic["programs"]) <= {"host-batch", "probe"}:
+        if location is None or not set(diagnostic["programs"]) <= c_comparison.ANALYSIS_PROGRAMS:
             continue
         if not diagnostic["id"].startswith("misra-c2012-"):
             continue
@@ -1089,7 +1089,7 @@ def _freertos_positions(
         line, column = int(location["line"]), int(location.get("column", 0))
         if (not 1 <= line <= len(lines) or column < 0
                 or column > len(lines[line - 1].rstrip("\r\n"))
-                or not set(diagnostic["programs"]) <= {"host-batch", "probe"}):
+                or not set(diagnostic["programs"]) <= c_comparison.ANALYSIS_PROGRAMS):
             continue
         candidate = {**diagnostic, "locations": [location],
                      "patched": line in patched.get(name, ()), "adopted": False}

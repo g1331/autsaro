@@ -8,6 +8,7 @@ import json
 import re
 from pathlib import Path
 
+from autosar_tooling.c_comparison import ANALYSIS_PROGRAMS
 from autosar_tooling.c_standard import code_words, is_comment, lex
 from autosar_tooling.config import ROOT
 
@@ -192,7 +193,7 @@ def analyze(diagnostics: list[dict], project: Path, target: str) -> dict:
             if target not in TARGETS:
                 occurrence["reason"] = "target_outside_record"
                 continue
-            if not programs or not set(programs) <= {"host-batch", "probe"}:
+            if not programs or not set(programs) <= ANALYSIS_PROGRAMS:
                 occurrence["reason"] = "program_outside_record"
                 continue
             if location is None:

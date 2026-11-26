@@ -14,7 +14,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
-from autosar_tooling import c_fingerprint
+from autosar_tooling import c_comparison, c_fingerprint
 
 # GitHub truncates displayed results above this limit even when upload succeeds.
 SARIF_RESULTS_PER_RUN = 5000
@@ -240,8 +240,8 @@ def fingerprint_comparison(path: Path, current_bytes: bytes, current: dict,
 
 
 def cppcheck_category(prefix: str, program: str) -> str:
-    # HostBatch keeps the pre-split category so its next run updates those alerts.
-    return prefix if program == "host-batch" else f"{prefix}-{program}"
+    # Reuse the primary category so the target scan updates previous alerts.
+    return prefix if program in {"host-batch", c_comparison.TARGET_PROGRAM} else f"{prefix}-{program}"
 
 
 def cppcheck(
@@ -317,12 +317,19 @@ def cppcheck(
         target = data.get("scope", {}).get("target", "unknown-target")
         prefix = f"cppcheck-{target}-{path.parent.name}"
         if categories is not None and data["error"] is None:
-            categories.update(cppcheck_category(prefix, row["name"]) for row in data.get("programs", []))
+            programs = {row["name"] for row in data.get("programs", [])}
+            if programs == {c_comparison.TARGET_PROGRAM} and data["scope"].get("profile") == "ecu":
+                # Publish the retired probe category empty to clear its alerts.
+                programs.add("probe")
+            categories.update(cppcheck_category(prefix, program) for program in programs)
         for index, diagnostic in enumerate(data.get("diagnostics", [])):
             if diagnostic["id"] == "checkersReport":
                 continue
             for position, place in enumerate(diagnostic["locations"]):
                 if not place.get("line") or int(place["line"]) < 1:
+                    continue
+                scopes = diagnostic.get("complianceScope")
+                if scopes is not None and scopes[position] in {"host-platform", "host-integration"}:
                     continue
                 name, line = location(
                     place["file"], int(place["line"]), project, repository, origins

@@ -170,9 +170,9 @@ class RetentionTests(unittest.TestCase):
         output = self.project / "analysis"
         root = output / "project"
         self.project = root
-        units = ["common.c", "batch.c", "probe.c"]
+        units = ["common.c"]
         database = [{"file": str(root / name)} for name in units]
-        scope = {"profile": "ecu", "entries": {"host-batch": "batch.c", "probe": "probe.c"},
+        scope = {"profile": "ecu", "entries": {"target": None},
                  "cppcheckLibraries": {}}
 
         def prepare(*args):
@@ -199,9 +199,9 @@ class RetentionTests(unittest.TestCase):
         summary = json.loads((output / "summary.json").read_text())
         self.assertFalse(summary["passed"])
         self.assertFalse(summary["coverage"]["completeCompliance"])
-        self.assertEqual([p["exitCode"] for p in summary["programs"]], [1, 1])
+        self.assertEqual([p["exitCode"] for p in summary["programs"]], [1])
         self.assertEqual([d["id"] for d in summary["diagnostics"]], ["misra-c2012-2.5", "unknown"])
-        self.assertEqual(summary["diagnostics"][0]["programs"], ["host-batch", "probe"])
+        self.assertEqual(summary["diagnostics"][0]["programs"], ["target"])
         if expected_error:
             self.assertIn(expected_error, summary["error"])
             self.assertIn("records.md:1", summary["error"])
@@ -210,7 +210,7 @@ class RetentionTests(unittest.TestCase):
         self.assertIsNone(summary["error"])
         self.assertEqual([r["status"] for r in summary["generatedRetention"]["occurrences"]],
                          ["record_matched", "unmatched"])
-        self.assertIn('id="unknown"', (output / "probe/diagnostics.xml").read_text())
+        self.assertIn('id="unknown"', (output / "diagnostics.xml").read_text())
 
 
 if __name__ == "__main__":
