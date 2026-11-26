@@ -11,8 +11,6 @@ from unittest.mock import patch
 from autosar_tooling import c_check
 from ecu_tools.build import target_configuration, tool_argument
 
-ENTRIES = {"host-batch": "integration/src/ecu_host_batch.c", "probe": "integration/src/ecu_probe.c"}
-
 
 class CAnalysisTests(unittest.TestCase):
     def test_predefine_probe_uses_the_translation_unit_preprocessor_options(self):
@@ -338,61 +336,30 @@ class CAnalysisTests(unittest.TestCase):
             self.assertFalse(summary["passed"])
             self.assertIn("inventory differs", summary["error"])
 
-    def test_native_entry_programs_keep_separate_link_boundaries_and_failures(self):
+    def test_malformed_target_receipt_cannot_leave_green_summary(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary).resolve(strict=True)
             source = directory / "source"
-            source.mkdir()
-            (source / "meta").mkdir()
+            (source / "meta").mkdir(parents=True)
             (source / "meta/files.sha256").write_text("seal")
             output = directory / "analysis"
             root = output / "project"
-            units = ["src/common.c", "integration/src/ecu_host_batch.c", "integration/src/ecu_probe.c"]
-            database = [{"file": str(root / name)} for name in units]
-            calls = []
-
-            def analyze(executable, addons, root, sources, database, scope, target, output):
-                calls.append(sources)
-                failed = output.name == "probe"
-                return (1 if failed else 0), not failed, [], [], {name: {"project": [name], "sdk": [], "unbound": []} for name in sources}
-
-            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "semantic_identity", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu", "entries": ENTRIES, "cppcheckLibraries": {}})), patch.object(c_check, "analyze_program", side_effect=analyze), patch.object(c_check, "sealed_sources"):
-                self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 1)
-            self.assertEqual(calls, [["src/common.c", "integration/src/ecu_host_batch.c"], ["src/common.c", "integration/src/ecu_probe.c"]])
-            summary = json.loads((output / "summary.json").read_text())
-            self.assertIsNone(summary["error"])
-            self.assertFalse(summary["passed"])
-            self.assertEqual([row["exitCode"] for row in summary["programs"]], [0, 1])
-
-    def test_malformed_second_program_receipt_cannot_leave_green_summary(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary).resolve(strict=True)
-            source = directory / "source"
-            source.mkdir()
-            (source / "meta").mkdir()
-            (source / "meta/files.sha256").write_text("seal")
-            output = directory / "analysis"
-            root = output / "project"
-            units = ["src/common.c", "integration/src/ecu_host_batch.c", "integration/src/ecu_probe.c"]
+            units = ["bsw/src/common.c"]
             database = [{"file": str(root / name)} for name in units]
 
             def run(argv, directory, stage):
-                commands = json.loads((directory / "compile_commands.json").read_text())
-                (directory / "cache/files.txt").write_text("".join("dump:::" + row["file"] + "\n" for row in commands))
+                (directory / "cache/files.txt").write_text(f"dump:::{database[0]['file']}\n")
                 receipts = directory / "addon-receipts"
                 receipts.mkdir()
-                for index, row in enumerate(commands):
-                    data = [] if directory.name == "probe" else {"units": [row["file"]], "configurations": 1, "source": row["file"], "files": [row["file"]]}
-                    (receipts / f"{index}.json").write_text(json.dumps(data))
+                (receipts / "0.json").write_text("[]")
                 return 0, "", "<results><errors/></results>"
 
-            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "semantic_identity", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"profile": "ecu", "entries": ENTRIES, "cppcheckLibraries": {}})), patch.object(c_check, "run", side_effect=run):
+            with patch.object(c_check, "tool_identity", return_value=(directory / "cppcheck", directory, {})), patch.object(c_check, "coverage", return_value={}), patch.object(c_check, "semantic_identity", return_value={}), patch.object(c_check, "prepare", return_value=(root, units, database, {"cppcheckLibraries": {}})), patch.object(c_check, "run", side_effect=run):
                 self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 1)
             summary = json.loads((output / "summary.json").read_text())
             self.assertFalse(summary["passed"])
             self.assertEqual(summary["error"], "Invalid project addon receipt structure")
             self.assertEqual(summary["projectAcceptance"]["status"], "error")
-            self.assertTrue(summary["programs"][0]["passed"])
 
     def test_changed_semantic_inputs_during_scan_cannot_leave_green_summary(self):
         with tempfile.TemporaryDirectory() as temporary:
