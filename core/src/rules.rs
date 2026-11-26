@@ -203,7 +203,7 @@ fn native_grammar() -> &'static NativeGrammar {
     &GRAMMAR
 }
 
-fn check_source(path: &Path, text: &str) -> Result<(), crate::LocalizedText> {
+pub(crate) fn check_source(path: &Path, text: &str) -> Result<(), crate::LocalizedText> {
     if path
         .components()
         .any(|component| matches!(component, Component::ParentDir))

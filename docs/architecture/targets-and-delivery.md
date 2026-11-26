@@ -24,7 +24,7 @@
 
 封存工程按[生成工程布局](mainline.md#生成工程布局已实施38)的所有权目录包含生成源码、受信 runtime 资产、固定内核与补丁、应用快照、所有权台账、`target.json` 构建清单与同源的 `CMakeLists.txt`、`meta/files.list`／`meta/files.sha256` 和 stdlib-only 离线工具。CMake 是供 IDE／CI 使用的标准构建入口，与 `ecu-tool build` 编译同一组源文件；固定工具链身份、目标段检查和 `verify` 只由 `ecu-tool` 承担。接收者只需受支持的 CPython、匹配的 GCC／binutils 与 Git，不依赖 checkout、Rust、Node 或 uv；包内工具以 `-I -S` 运行，只从自身 `tools/` 导入。入口 `tools/ecu-tool.py build|verify` 的用法见 [runtime/README.md](../../runtime/README.md)。
 
-当前交接格式为 `autosar-workbench-handoff-v4`（内置规则、多应用输入、按所有权分目录）。旧 `autosar-workbench-handoff-v3`、`autosar-workbench-handoff-v2`、`autosar-host-handoff-v1` 与 `autosar-ecu-handoff-v1` 在导入时拒绝，其 ARXML 源文件可导入新工程。
+当前交接格式为 `autosar-workbench-handoff-v5`。它封存工程清单 v2、原始配置成员和启用及未启用的应用源码。旧 `autosar-workbench-handoff-v4`、`autosar-workbench-handoff-v3`、`autosar-workbench-handoff-v2`、`autosar-host-handoff-v1` 与 `autosar-ecu-handoff-v1` 在导入时拒绝，其 ARXML 源文件可导入新工程。
 
 只有持久化、交付或协议格式带版本。格式的结构或取值域变化时版本加一，版本号不回收；旧版本按身份明确拒绝，不迁移。模板 ID、生成方 ID 和消息键等内部标识不带版本。
 

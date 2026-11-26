@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Workbench project manifests now use format 2 and native delivery uses `autosar-workbench-handoff-v5`. Recreate older projects from their original ARXML and regenerate packages. Layered projects retain base, project and variant source members alongside active and inactive application snapshots (#490)
+
 - Single-instance RTE handles now expand to pointers to shared const CDS objects. Regenerate all component headers, sources and BSW memory descriptions and rebuild consumers; the independent Rte_Inst_* pointer symbols are removed, and Rte_Instance_* CDS objects have external linkage (#195)
 
 - ComM service inputs now require per-user UR_/UM_ ports, the standard user-request interface and alphabetic ComMMode declarations. ComM_ConfigType appends immutable user/channel notification mappings; regenerate plans and contracts, update positional initializers and rebuild consumers (#195)

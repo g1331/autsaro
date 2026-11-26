@@ -44,6 +44,7 @@ struct ToolIdentity {
 pub(crate) fn add<'a>(
     files: &mut BTreeMap<String, PreparedFile<'a>>,
     metadata: &HandoffMetadata,
+    catalog: &crate::definitions::DefinitionCatalog,
 ) -> Result<(), crate::LocalizedText> {
     let inventory: ToolInventory = serde_json::from_slice(INVENTORY)
         .map_err(|error| crate::LocalizedText::from(error.to_string()))?;
@@ -71,7 +72,7 @@ pub(crate) fn add<'a>(
     }
     insert_file(files, HELPER_PATH.into(), Cow::Borrowed(HELPER))?;
     insert_file(files, INVENTORY_PATH.into(), Cow::Borrowed(INVENTORY))?;
-    let mut policy = super::ownership::ledger(files, metadata)?
+    let mut policy = super::ownership::ledger(files, metadata, catalog)?
         .files
         .into_iter()
         .map(|entry| {
