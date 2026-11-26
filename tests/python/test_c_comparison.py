@@ -312,6 +312,48 @@ class CComparisonTests(unittest.TestCase):
                         compare(current, project, output, baseline, source_tree=True)
                     record["extended"] = False
 
+    def test_com_layout_source_gate_keeps_legacy_uint32_configuration_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.runtime_fixture(Path(temporary))
+            old_root = baseline / "project"
+            metadata = json.loads((old_root / "meta/integration.json").read_text())
+            legacy = {"startBit": 0, "bitLength": 32, "dlc": 4, "frame": "/Extract/Frame"}
+            metadata["plan"].update(
+                signals=[legacy],
+                composition={"networkEndpoints": [{"transport": legacy}]},
+            )
+            self.seal(old_root, metadata)
+            previous = deepcopy(current)
+            previous["sourceSealSha256"] = digest(old_root / "meta/files.sha256")
+            self.write(baseline, previous)
+
+            signal = {**legacy, "bigEndian": False, "nativeType": "uint32", "initialValue": 0,
+                      "frameStartBit": 0, "frameMapping": "/Extract/Frame/Mapping",
+                      "frameBigEndian": False, "frameOffset": 0, "pduLength": 4, "unusedByte": 0}
+            transport = signal.copy()
+            metadata["plan"].update(
+                signals=[signal],
+                composition={"networkEndpoints": [{"transport": transport}]},
+            )
+
+            def compare_plans(*, source_tree=True):
+                for root in (project, output / "project"):
+                    self.seal(root, metadata)
+                current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+                return compare(current, project, output, baseline, source_tree=source_tree)
+
+            self.assertFalse(compare_plans()["new"])
+            with self.assertRaisesRegex(ValueError, "Sample generation configuration differs"):
+                compare_plans(source_tree=False)
+            for record, field, value in ((signal, "initialValue", 1),
+                                         (transport, "frameBigEndian", True)):
+                with self.subTest(field=field):
+                    original = record[field]
+                    record[field] = value
+                    with self.assertRaisesRegex(ValueError, "Sample generation configuration differs"):
+                        compare_plans()
+                    record[field] = original
+
     def test_source_gate_compares_only_the_exact_bswm_callout_transition(self):
         with tempfile.TemporaryDirectory() as temporary:
             current, project, output, baseline = self.runtime_fixture(Path(temporary))

@@ -115,7 +115,7 @@ static COM_CODE uint32 Com_Extend(const Com_SignalConfigType *signal, uint32 raw
 static COM_CODE uint16 Com_Bit(const Com_SignalConfigType *signal, uint8 ordinal)
 {
     uint16 bit = signal->start_bit;
-    if (signal->big_endian == TRUE) {
+    if (signal->big_endian) {
         bit ^= COM_BYTE_LAST_BIT;
         bit += (uint16)ordinal;
         bit ^= COM_BYTE_LAST_BIT;
@@ -128,7 +128,7 @@ static COM_CODE uint16 Com_Bit(const Com_SignalConfigType *signal, uint8 ordinal
 static COM_CODE uint8 Com_Shift(const Com_SignalConfigType *signal, uint8 ordinal)
 {
     uint8 shift = ordinal;
-    if (signal->big_endian == TRUE) {
+    if (signal->big_endian) {
         shift = signal->bit_length;
         --shift;
         shift -= ordinal;
@@ -247,13 +247,13 @@ static COM_CODE boolean Com_LoadSignal(const Com_SignalConfigType *signal,
     if (Com_IsSigned(signal->type) == TRUE) {
         const uint32 positive = mask >> 1u;
         const sint32 maximum = (sint32)positive;
-        valid = ((signed_value >= (-maximum - 1)) && (signed_value <= maximum)) ? TRUE : FALSE;
+        valid = (signed_value >= (-maximum - 1)) && (signed_value <= maximum);
         const uint32 converted = (uint32)signed_value;
         unsigned_value = converted;
     } else {
-        valid = (unsigned_value <= mask) ? TRUE : FALSE;
+        valid = (unsigned_value <= mask);
     }
-    if (valid == TRUE) {
+    if (valid) {
         *raw = unsigned_value;
     }
     return valid;
@@ -315,7 +315,7 @@ static COM_CODE void Com_RestartRx(boolean initialize)
     uint16 index;
     for (index = 0u; index < com_configuration->pdu_count; ++index) {
         const Com_PduConfigType *pdu = &com_configuration->pdus[index];
-        if (pdu->receive == TRUE) {
+        if (pdu->receive) {
             if (initialize == TRUE) {
                 const uint16 end = pdu->first_signal + pdu->signal_count;
                 uint16 row;
@@ -402,9 +402,9 @@ static COM_CODE void Com_Publish(void)
         }
     }
 }
-static COM_CODE boolean Com_ValidSignals(const Com_ConfigType *config, uint16 pdu_index)
+static COM_CODE Std_ReturnType Com_ValidateSignals(const Com_ConfigType *config, uint16 pdu_index)
 {
-    boolean valid = TRUE;
+    Std_ReturnType status = E_OK;
     const Com_PduConfigType *pdu = &config->pdus[pdu_index];
     const uint16 end = pdu->first_signal + pdu->signal_count;
     const uint16 bits = (uint16)pdu->length * COM_BITS_PER_BYTE;
@@ -418,87 +418,87 @@ static COM_CODE boolean Com_ValidSignals(const Com_ConfigType *config, uint16 pd
         } else if ((signal->type == COM_UINT16) || (signal->type == COM_SINT16)) {
             limit = 2u * COM_BITS_PER_BYTE;
         } else if ((signal->type != COM_UINT32) && (signal->type != COM_SINT32)) {
-            valid = FALSE;
+            status = E_NOT_OK;
         } else {
             /* UINT32 and SINT32 use the default width above. */
         }
         if ((signal->bit_length == 0u) || (signal->bit_length > limit) ||
             (signal->start_bit >= bits)) {
-            valid = FALSE;
+            status = E_NOT_OK;
         } else {
             const uint8 last = signal->bit_length - 1u;
             if ((Com_Bit(signal, last) >= bits) ||
                 (signal->initial_value > Com_Mask(signal->bit_length))) {
-                valid = FALSE;
+                status = E_NOT_OK;
             }
         }
         for (previous = 0u; previous < row; ++previous) {
             if (signal->signal_id == config->signals[previous].signal_id) {
-                valid = FALSE;
+                status = E_NOT_OK;
             }
         }
-        if (pdu->receive == TRUE) {
+        if (pdu->receive) {
             uint16 other;
             for (other = 0u; other <= pdu_index; ++other) {
                 const Com_PduConfigType *candidate = &config->pdus[other];
                 const uint16 candidate_end =
                     (other == pdu_index) ? row
                                          : (candidate->first_signal + candidate->signal_count);
-                if (candidate->receive == TRUE) {
+                if (candidate->receive) {
                     for (previous = candidate->first_signal; previous < candidate_end; ++previous) {
                         if (signal->callback_handle == config->signals[previous].callback_handle) {
-                            valid = FALSE;
+                            status = E_NOT_OK;
                         }
                     }
                 }
             }
         }
     }
-    return valid;
+    return status;
 }
-static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config)
+static COM_CODE Std_ReturnType Com_ValidateConfig(const Com_ConfigType *config)
 {
-    boolean valid = FALSE;
+    Std_ReturnType status = E_NOT_OK;
     if ((config != NULL_PTR) && (config->pdus != NULL_PTR) && (config->signals != NULL_PTR) &&
         (config->pdu_count > 0u) && (config->pdu_count <= COM_PDU_CAPACITY) &&
         (config->signal_count > 0u) && (config->signal_count <= COM_SIGNAL_CAPACITY)) {
         uint16 next_signal = 0u;
         uint16 index;
-        valid = TRUE;
-        for (index = 0u; (index < config->pdu_count) && (valid == TRUE); ++index) {
+        status = E_OK;
+        for (index = 0u; (index < config->pdu_count) && (status == E_OK); ++index) {
             uint16 previous;
             const Com_PduConfigType *pdu = &config->pdus[index];
             if ((pdu->length == 0u) || (pdu->length > COM_PAYLOAD_CAPACITY) ||
                 (pdu->first_signal != next_signal) || (pdu->signal_count == 0u) ||
                 (pdu->signal_count > (config->signal_count - next_signal)) ||
-                (((pdu->receive == TRUE) && ((config->receive_notification == NULL_PTR) ||
-                                             (config->timeout_notification == NULL_PTR))) ||
-                 ((pdu->receive == FALSE) &&
+                (((pdu->receive) && ((config->receive_notification == NULL_PTR) ||
+                                     (config->timeout_notification == NULL_PTR))) ||
+                 ((!pdu->receive) &&
                   ((config->transmit == NULL_PTR) || (config->tx_rejection == NULL_PTR))))) {
-                valid = FALSE;
+                status = E_NOT_OK;
             } else {
-                valid = Com_ValidSignals(config, index);
+                status = Com_ValidateSignals(config, index);
                 next_signal += pdu->signal_count;
             }
             for (previous = 0u; previous < index; ++previous) {
                 if ((pdu->receive == config->pdus[previous].receive) &&
                     (pdu->pdu == config->pdus[previous].pdu)) {
-                    valid = FALSE;
+                    status = E_NOT_OK;
                 }
             }
         }
         if (next_signal != config->signal_count) {
-            valid = FALSE;
+            status = E_NOT_OK;
         }
     }
-    return valid;
+    return status;
 }
 COM_CODE void Com_Init(const Com_ConfigType *config)
 {
-    const boolean valid = Com_ValidConfig(config);
+    const Std_ReturnType status = Com_ValidateConfig(config);
     SchM_Enter_Com_COM_STATE();
     Com_Reset();
-    if (valid == TRUE) {
+    if (status == E_OK) {
         com_configuration = config;
         uint16 index;
         for (index = 0u; index < config->pdu_count; ++index) {
@@ -538,7 +538,7 @@ COM_CODE uint8 Com_SendSignal(Com_SignalIdType SignalId, const void *SignalDataP
         const uint16 index = Com_FindSignal(SignalId);
         result = E_NOT_OK;
         if ((index < COM_SIGNAL_CAPACITY) && (index < com_configuration->signal_count) &&
-            (SignalDataPtr != NULL_PTR) && (signal_receives[index] == FALSE)) {
+            (SignalDataPtr != NULL_PTR) && (!signal_receives[index])) {
             if (Com_LoadSignal(&com_configuration->signals[index],
                                SignalDataPtr,
                                &signal_values[index]) == TRUE) {
@@ -557,7 +557,7 @@ COM_CODE uint8 Com_ReceiveSignal(Com_SignalIdType SignalId, void *SignalDataPtr)
         const uint16 index = Com_FindSignal(SignalId);
         result = E_NOT_OK;
         if ((index < COM_SIGNAL_CAPACITY) && (index < com_configuration->signal_count) &&
-            (SignalDataPtr != NULL_PTR) && (signal_receives[index] == TRUE)) {
+            (SignalDataPtr != NULL_PTR) && (signal_receives[index])) {
             Com_StoreSignal(
                 &com_configuration->signals[index], signal_values[index], SignalDataPtr);
             result = (receive_started == TRUE) ? E_OK : COM_SERVICE_NOT_AVAILABLE;
@@ -627,8 +627,7 @@ COM_CODE void Com_RxIndication(PduIdType RxPduId, const PduInfoType *PduInfoPtr)
     if ((com_configuration != NULL_PTR) && (receive_started == TRUE) && (PduInfoPtr != NULL_PTR) &&
         ((PduInfoPtr->SduDataPtr != NULL_PTR) || (PduInfoPtr->SduLength == 0u))) {
         const uint16 index = Com_FindPdu(RxPduId, TRUE);
-        if ((index < com_configuration->pdu_count) &&
-            (com_configuration->pdus[index].receive == TRUE)) {
+        if ((index < com_configuration->pdu_count) && (com_configuration->pdus[index].receive)) {
             const Com_PduConfigType *pdu = &com_configuration->pdus[index];
             const uint16 end = pdu->first_signal + pdu->signal_count;
             uint16 row;
@@ -652,8 +651,7 @@ COM_CODE void Com_SwitchIpduTxMode(PduIdType PduId, boolean Mode)
     SchM_Enter_Com_COM_STATE();
     if (com_configuration != NULL_PTR) {
         const uint16 index = Com_FindPdu(PduId, FALSE);
-        if ((index < com_configuration->pdu_count) &&
-            (com_configuration->pdus[index].receive == FALSE)) {
+        if ((index < com_configuration->pdu_count) && (!com_configuration->pdus[index].receive)) {
             /* PERIODIC at the Tx main period: the next call after a switch to TRUE sends. */
             tx_mode_false[index] = (Mode == TRUE) ? FALSE : TRUE;
         }
@@ -667,8 +665,7 @@ COM_CODE Std_ReturnType Com_TriggerTransmit(PduIdType TxPduId, PduInfoType *PduI
     if ((com_configuration != NULL_PTR) && (PduInfoPtr != NULL_PTR) &&
         (PduInfoPtr->SduDataPtr != NULL_PTR)) {
         const uint16 index = Com_FindPdu(TxPduId, FALSE);
-        if ((index < com_configuration->pdu_count) &&
-            (com_configuration->pdus[index].receive == FALSE) &&
+        if ((index < com_configuration->pdu_count) && (!com_configuration->pdus[index].receive) &&
             (PduInfoPtr->SduLength >= com_configuration->pdus[index].length)) {
             Com_Pack(index, PduInfoPtr->SduDataPtr);
             PduInfoPtr->SduLength = com_configuration->pdus[index].length;
@@ -689,8 +686,7 @@ COM_CODE Std_ReturnType Com_TriggerIPDUSend(PduIdType PduId)
     SchM_Enter_Com_COM_STATE();
     if (com_configuration != NULL_PTR) {
         const uint16 index = Com_FindPdu(PduId, FALSE);
-        if ((index < com_configuration->pdu_count) &&
-            (com_configuration->pdus[index].receive == FALSE)) {
+        if ((index < com_configuration->pdu_count) && (!com_configuration->pdus[index].receive)) {
             transmit = com_configuration->transmit;
             observer = com_configuration->tx_rejection;
             Com_Pack(index, bytes);
@@ -722,7 +718,7 @@ COM_CODE void Ecu_ComMainFunctionRx(void)
         uint16 index;
         for (index = 0u; index < com_configuration->pdu_count; ++index) {
             const Com_PduConfigType *pdu = &com_configuration->pdus[index];
-            if ((pdu->receive == TRUE) && (com_ticks[index] != 0u)) {
+            if ((pdu->receive) && (com_ticks[index] != 0u)) {
                 if (com_rx_reloaded[index] == FALSE) {
                     --com_ticks[index];
                     if (com_ticks[index] == 0u) {
@@ -759,8 +755,7 @@ COM_CODE void Ecu_ComMainFunctionTx(void)
         SchM_Enter_Com_COM_STATE();
         more = ((index < COM_PDU_CAPACITY) && (com_configuration != NULL_PTR) &&
                 (index < com_configuration->pdu_count));
-        if ((more == TRUE) && (com_configuration->pdus[index].receive == FALSE) &&
-            (tx_mode_false[index] == FALSE)) {
+        if (more && !com_configuration->pdus[index].receive && !tx_mode_false[index]) {
             id = com_configuration->pdus[index].pdu;
             transmit = com_configuration->transmit;
             observer = com_configuration->tx_rejection;
