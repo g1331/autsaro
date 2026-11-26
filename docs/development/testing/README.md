@@ -104,6 +104,8 @@ UI 与 desktop 在路径选择后运行。Windows 缓存 dev 依赖，每轮重�
 
 Cargo 按镜像、工具链、锁文件和编译／交付输入字节缓存增量状态，按前缀恢复。Cppcheck 精确键含固定源码、架构、workflow 及 Python 依赖锁，CMake 经 uv 锁定。Windows GCC 下载包精确键含镜像、架构及安装 action；命中仍验 SHA256／签名、安装并核对头。两者无前缀恢复。分析每次执行；宏来源路径只在单次预处理内复用，随 GCC 文件标记切换，源码与 SDK 环境照常重查。
 
+Linux 和 Windows 的 Cppcheck 准备作业在构建或恢复缓存后核对源码提交、程序版本和三个 MISRA addon 摘要。作业日志和工具工件中的 `provenance.json` 记录 runner 镜像和实际 `binarySha256`，两项均用于追溯。
+
 只用 GitHub 托管 runner，共享预算 20 作业；实验约四并发，用后删除临时分支和 workflow。推送前核对范围并取消过时运行。文档中描述的自动入口须有实际运行记录，不能只凭 workflow 文件存在。只报告实际触发的矩阵与运行平台，不自动添加 `full-ci`，不把 Linux 本地原生通过写成全平台通过。优化先实测重复工作和排队，保留覆盖与失败条件。
 
 ## 代理独立审查与本地复核

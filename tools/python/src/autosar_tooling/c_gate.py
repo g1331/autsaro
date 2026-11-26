@@ -502,7 +502,7 @@ def release_ready() -> None:
     from autosar_tooling import c_disposition
 
     for target in TARGETS:
-        binaries = c_disposition.WINDOWS_ANALYZERS.values() if target == c_disposition.WINDOWS else [None]
+        binaries = c_disposition.WINDOWS_DISPOSITION_BINARIES if target == c_disposition.WINDOWS else [None]
         for binary in binaries:
             for sample in SAMPLES:
                 c_disposition.load(ROOT, target, sample, binary)

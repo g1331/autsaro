@@ -780,28 +780,32 @@ jobs:
           shutil.copy2(binaries[0], bundle / binaries[0].name)
           for name in ('addons', 'cfg'):
               shutil.copytree(Path('build/cppcheck-source') / name, bundle / name)
-      - name: Verify Windows analyzer against the assessed image pool
-        if: runner.os == 'Windows'
+      - name: Verify and record analyzer provenance
         shell: python
         run: |
-          import os
+          import json, os, subprocess, tempfile
           from pathlib import Path
-          from autosar_tooling.c_disposition import verify_windows_analyzer
-          image = os.environ['ImageVersion']
-          binary = verify_windows_analyzer(Path('build/c-analysis-tools/cppcheck.exe'), image)
-          print(f'Windows prepare image={image}; cppcheck.exe SHA-256={binary}')
-      - name: Select analyzer
-        shell: python
-        run: |
-          import os
-          from pathlib import Path
+          from autosar_tooling.c_check import CPPCHECK_REVISION, tool_identity
+          revision = subprocess.check_output(
+              ['git', '-C', 'build/cppcheck-source', 'rev-parse', 'HEAD'], text=True).strip()
+          if revision != CPPCHECK_REVISION:
+              raise ValueError(f'Cppcheck source revision differs: {revision}')
           bundle = Path('build/c-analysis-tools').resolve(strict=True)
           executable = bundle / ('cppcheck.exe' if os.name == 'nt' else 'cppcheck')
           if os.name != 'nt':
               executable.chmod(0o755)
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
-              output.write('CPPCHECK=' + str(executable) + '\n')
-              output.write('CPPCHECK_ADDON_DIR=' + str(bundle / 'addons') + '\n')
+          os.environ['CPPCHECK'] = str(executable)
+          os.environ['CPPCHECK_ADDON_DIR'] = str(bundle / 'addons')
+          with tempfile.TemporaryDirectory() as directory:
+              _, _, tool = tool_identity(Path(directory).resolve())
+          del tool['filesDirectory']
+          provenance = json.dumps({
+              'sourceRevision': revision,
+              'runner': {key: os.environ.get(key) for key in ('ImageOS', 'ImageVersion')},
+              'tool': tool,
+          }, indent=2)
+          (bundle / 'provenance.json').write_text(provenance + '\n', encoding='utf-8')
+          print(provenance)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: c-analysis-tools-${{ matrix.target }}
