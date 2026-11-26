@@ -32,6 +32,7 @@ pub(crate) fn unsigned_integer(raw: &str) -> Option<u32> {
 pub struct DefinitionCatalog {
     entries: Arc<BTreeMap<String, DefinitionDescriptor>>,
     targets: Arc<BTreeMap<String, Vec<String>>>,
+    published_information: BTreeSet<String>,
     owners: BTreeMap<String, String>,
     extensions: BTreeMap<String, ExtensionDefinitionIdentity>,
     missing: BTreeSet<String>,
@@ -48,6 +49,7 @@ impl DefinitionCatalog {
         let mut catalog = Self {
             entries: Arc::new(BTreeMap::new()),
             targets: Arc::new(BTreeMap::new()),
+            published_information: BTreeSet::new(),
             owners: BTreeMap::new(),
             extensions: BTreeMap::new(),
             missing: BTreeSet::new(),
@@ -56,6 +58,14 @@ impl DefinitionCatalog {
         standard::populate(&mut catalog)?;
         catalog.check_metadata()?;
         Ok(catalog)
+    }
+
+    pub(crate) fn has_missing_extensions(&self) -> bool {
+        !self.missing.is_empty()
+    }
+
+    pub(crate) fn is_published_information(&self, definition_id: &str) -> bool {
+        self.published_information.contains(definition_id)
     }
 
     pub fn get(&self, definition_id: &str) -> Option<&DefinitionDescriptor> {
@@ -142,6 +152,10 @@ impl DefinitionCatalog {
         hash.update(
             serde_json::to_vec(&self.accepted_extensions()).expect("identity serialization"),
         );
+        hash.update(
+            serde_json::to_vec(&self.published_information)
+                .expect("configuration class serialization"),
+        );
         hex::encode(hash.finalize())
     }
 
@@ -149,8 +163,12 @@ impl DefinitionCatalog {
     /// filesystem locations and explicit project extension acceptance.
     pub fn builtin_metadata_sha256() -> Result<String, crate::message::LocalizedText> {
         let catalog = Self::builtin()?;
-        let bytes = serde_json::to_vec(&(catalog.entries.as_ref(), catalog.targets.as_ref()))
-            .map_err(|error| error.to_string())?;
+        let bytes = serde_json::to_vec(&(
+            catalog.entries.as_ref(),
+            catalog.targets.as_ref(),
+            &catalog.published_information,
+        ))
+        .map_err(|error| error.to_string())?;
         Ok(digest(&bytes))
     }
 
@@ -187,6 +205,7 @@ impl DefinitionCatalog {
             .collect();
         for id in ids {
             self.entries_mut().remove(&id);
+            self.published_information.remove(&id);
             self.targets_mut().remove(&id);
             self.owners.remove(&id);
         }

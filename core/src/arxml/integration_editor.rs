@@ -43,7 +43,7 @@ impl Workspace {
         })?;
         // The saved-source check above seals this same in-memory snapshot.
         // integration_plan would immediately read every source a second time.
-        crate::integration::build_plan_native(&self.integration_source_snapshot()?, &self.catalog)
+        self.build_workspace_plan(&self.integration_source_snapshot()?, &self.catalog)
     }
 
     pub fn inspect_integration(&self) -> IntegrationInspection {
@@ -61,6 +61,15 @@ impl Workspace {
         &mut self,
         changes: IntegrationEdit,
     ) -> Result<IntegrationInspection, Vec<PlanDiagnostic>> {
+        if self
+            .project_manifest()
+            .is_some_and(|manifest| manifest.layers.is_some())
+        {
+            return Err(failure(
+                "LAYER_EDIT_REQUIRED",
+                "Use layer operations to edit a layered project.",
+            ));
+        }
         let plan = self.integration_plan()?;
         let fields = editor::fields(&plan, &changes)?;
         self.edit_integration_fields(&fields)

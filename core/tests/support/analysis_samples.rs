@@ -59,32 +59,8 @@ pub(crate) fn generate(output: &Path, scratch: &super::workspace::Scratch) {
     let plan = super::mainline::build(&sources).unwrap();
     let applications = pipeline_applications(&plan);
     let live = scratch.0.join("author");
-    fs::create_dir(&live).unwrap();
-    for source in &sources {
-        fs::write(live.join(source.logical_path()), source.bytes()).unwrap();
-    }
-    let manifest = autosar_config_core::arxml::ProjectManifest {
-        format_version: 1,
-        declared_release: "R24-11".into(),
-        profile_hint: "singlecore-ecu-v1".into(),
-        inputs: sources
-            .iter()
-            .map(|source| autosar_config_core::arxml::ProjectInput {
-                path: source.logical_path().into(),
-                role_hint: "standard".into(),
-            })
-            .collect(),
-        application_inputs: Vec::new(),
-        accepted_extension_definitions: Vec::new(),
-    };
+    let mut workspace = super::mainline::live_pipeline_workspace(&live, &sources);
     let manifest_path = live.join("workbench-project.json");
-    fs::write(
-        &manifest_path,
-        serde_json::to_vec_pretty(&manifest).unwrap(),
-    )
-    .unwrap();
-    let mut workspace =
-        Workspace::open_project_manifest(&manifest_path, &scratch.0.join("cache")).unwrap();
     let preview = workspace.preview_application_initialization().unwrap();
     workspace
         .initialize_application_previewed(&preview)

@@ -188,6 +188,8 @@ fn verify_generated_output(dir: &Path, names: &[String]) -> Result<(), crate::Lo
     Ok(())
 }
 
+/// Verify the sealed byte closure. The caller either verifies ownership with
+/// its accepted catalog or compares this closure to a trusted preparation.
 pub(crate) fn verify_build_input(output: &Path) -> Result<Vec<String>, crate::LocalizedText> {
     if output.join(RETIRED_FILE_LIST).is_file() {
         return Err(
@@ -217,7 +219,6 @@ pub(crate) fn verify_build_input(output: &Path) -> Result<Vec<String>, crate::Lo
             error,
         ])
     })?;
-    super::delivery::ownership::verify_directory(output, &names)?;
     Ok(names)
 }
 

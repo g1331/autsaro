@@ -112,6 +112,12 @@ pub struct ValidatedIntegrationPlan {
 }
 
 impl ValidatedIntegrationPlan {
+    pub(crate) fn bind_application_identity(&mut self, identity: String) {
+        self.description
+            .validation_dependencies
+            .insert("project.application.sha256".into(), identity);
+    }
+
     pub fn description(&self) -> &PlanDescription {
         &self.description
     }

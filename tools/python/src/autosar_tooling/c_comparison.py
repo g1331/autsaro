@@ -401,8 +401,17 @@ def compare(
                     require_kernel_identity(path / "kernel", value["kernelSha256"])
                     value["kernelSha256"] = sorted(value["kernelSha256"])
             return value
-        if normalized(target_configuration(project, current["scope"])) != normalized(
-                mapped(target_configuration(old_root, previous["scope"]))):
+        current_target = target_configuration(project, current["scope"])
+        previous_target = mapped(target_configuration(old_root, previous["scope"]))
+        if source_tree:
+            match current_target.get("nativeDelivery"), previous_target.get("nativeDelivery"):
+                case {"format": "autosar-workbench-handoff-v5" as version}, (
+                    {"format": "autosar-workbench-handoff-v4"} as previous_delivery
+                ):
+                    # v5 can carry inactive applications. The rest of the handoff
+                    # still has to match, including its input snapshots and slots.
+                    previous_delivery["format"] = version
+        if normalized(current_target) != normalized(previous_target):
             raise ValueError("Target/sample configuration differs")
         scope_fields = ("target", "profile", "entries", "compilerFlags", "includePaths",
                         "translationUnits", "supplemental")
