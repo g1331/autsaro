@@ -20,6 +20,8 @@ from autosar_tooling import (
     c_baseline,
     c_check,
     c_comparison,
+    c_disposition,
+    c_fingerprint,
     c_gate,
     c_preprocessor,
     c_rename,
@@ -59,11 +61,13 @@ class ActualCAnalysisTests(unittest.TestCase):
         (project / "meta/files.sha256").write_text("".join(f"{hashlib.sha256((project / name).read_bytes()).hexdigest()}  {name}\n" for name in [*sorted(files), "meta/files.list"]), encoding="utf-8")
         return project
 
-    def gate_project(self, root: Path, source: str, debug: bool) -> Path:
+    def gate_project(self, root: Path, source: str, debug: bool, *,
+                     extra_files: dict[str, str] | None = None) -> Path:
         root.mkdir()
         kernel = "/* Include-only kernel fixture. */\n"
         producer = "core/src/prepared.rs"
         project = self.project(root, source, extra_files={
+            **(extra_files or {}),
             "kernel/kernel.h": kernel,
             "meta/integration.json": json.dumps({
                 "originalBswSources": {},
@@ -104,7 +108,7 @@ class ActualCAnalysisTests(unittest.TestCase):
     def gate_scope(self, directory: Path, side: str, summary: dict, sample: str) -> None:
         for target in c_gate.TARGETS:
             for other_sample in c_gate.SAMPLES:
-                path = directory / f"c-analysis-scope-{side}-{target}-{other_sample}" / other_sample
+                path = directory / f"c-analysis-scope-{side}-{target}-{other_sample}-0" / other_sample
                 path.mkdir(parents=True, exist_ok=True)
                 if target == summary["scope"]["target"] and other_sample == sample:
                     receipt = c_comparison.scope_receipt(summary, sample)
@@ -196,6 +200,75 @@ int main(int argc, char **argv)
                                 self.assertEqual(result["status"], "blocked")
                                 self.assertEqual(len(result["unacceptedNew"]), 1)
                                 self.assertIn("file missing", result["identifierEvidenceError"])
+
+    def test_pr_gate_reports_shared_header_fingerprint_drift_and_blocks_new_misra(self):
+        source = """#include "shared.h"
+static unsigned int storage;
+static void Probe(unsigned int seed)
+{
+    signed int value = (signed int)seed;
+    storage = seed + value;
+}
+int main(void)
+{
+    Probe(SEED);
+    return (int)storage;
+}
+"""
+        target = c_gate.TARGETS[1 if platform.system() == "Windows" else 0]
+        sample = "no-diagnostic"
+        with (tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()),
+              patch.dict(os.environ, {"ImageOS": "test", "ImageVersion": "test"})):
+            os.environ.pop("GITHUB_REPOSITORY", None)
+            root = Path(temporary).resolve()
+            scopes = root / "scopes"
+
+            def analyze(side, name, code, seed):
+                job = "c-analysis-baseline" if side == "baseline" else "c-analysis-results"
+                output = root / "build" / job / sample
+                project = self.gate_project(root / name, code, False,
+                                            extra_files={"shared.h": f"#define SEED {seed}U\n"})
+                self.assertEqual(c_baseline.analyze(side, target, sample, project, output, fingerprints=True), 1)
+                summary = c_gate.read(output / "summary.json")
+                self.gate_scope(scopes, side, summary, sample)
+                receipt = scopes / f"c-analysis-scope-{side}-{target}-{sample}-0" / sample
+                shutil.copy2(output / "analysis-producer.sha256", receipt)
+                return output, summary
+
+            baseline, previous = analyze("baseline", "original", source, 1)
+            fingerprints = c_gate.read(baseline / c_fingerprint.RECEIPT)["occurrences"]
+            registered = {
+                row["fingerprint"]: "a" * 64 for row in fingerprints
+                if row["fingerprint"] and previous["diagnostics"][row["diagnostic"]]["id"] == "misra-c2012-10.4"
+            }
+            self.assertTrue(registered)
+            with (patch.object(c_gate, "ROOT", root), patch.object(c_gate, "git", c_baseline.git),
+                  patch.object(c_disposition, "load", return_value=registered)):
+                current, raw = analyze("current", "shared-header", source, 2)
+                c_gate.scan(target, sample, scopes, mode="pr")
+                gate = c_gate.read(current / "gate.json")
+                self.assertEqual(gate["status"], "passed")
+                self.assertEqual(gate["inScopeNew"], [])
+                report = gate["diagnosticFingerprints"]
+                self.assertEqual(report["status"], "blocked")
+                self.assertEqual(report["staleDispositions"], sorted(registered))
+                self.assertTrue(report["unacceptedNew"])
+                summary = c_gate.read(current / "summary.json")
+                self.assertEqual(summary["projectAcceptance"]["status"], "blocked")
+                self.assertEqual(summary["projectAcceptance"]["fingerprintDispositions"]["stale"], sorted(registered))
+                for field in ("passed", "coverage", "diagnostics"):
+                    self.assertEqual(summary[field], raw[field])
+                shutil.move(current, root / "drift-result")
+
+                changed = source.replace("    Probe(SEED);", "    Probe(SEED);\n    storage = SEED + (signed int)storage;")
+                current, _raw = analyze("current", "new-diagnostic", changed, 2)
+                with self.assertRaisesRegex(ValueError, "New in-scope source diagnostics"):
+                    c_gate.scan(target, sample, scopes, mode="pr")
+                gate = c_gate.read(current / "gate.json")
+                self.assertEqual(gate["status"], "blocked")
+                self.assertIn({"rule": "misra-c2012-10.4", "file": "bsw/src/main.c", "program": "target",
+                               "source": "    storage = SEED + (signed int)storage;", "count": 1},
+                              gate["inScopeNew"])
 
     def analyze(self, source: str, name: str = "bsw/src/main.c", *, cli: bool = False) -> dict:
         with tempfile.TemporaryDirectory() as temporary:

@@ -37,15 +37,13 @@ PR 工作流的 `head_sha` 标识 PR 分支，实际检出可能是测试合并�
 checkout 日志核对实际提交及父提交，按该树导出目标换行副本；本地分支缺少其中的目标
 分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
 
-PR 双树门按 [ADR 0033](../../adr/0033-c-diagnostic-fingerprints.md) 核对范围内指纹。
-逐位置验证原技术和批准记录，再消费 `docs/standards/c-dispositions/` 中的登记。
-Windows 按分析器 SHA-256 选择登记。
-每个键是一份处置依据摘要，值是该依据覆盖的诊断指纹。修复诊断时删去失效指纹。
-`fingerprintDispositions.candidates` 给出待复核的指纹及依据摘要。新增绑定沿用
-[ADR 0025](../../adr/0025-misra-layered-scope.md) 的批准流程。
-master、手动分析及发行构建走严格模式，核验并保留双方完整输入清单。门先绑定双侧各八份
-`scope-input.json`，重算范围并集、MR12／SDK 和验收身份。整体 blocked 留作报告，执行
-error 阻断。范围外位置和原始分析状态照常记录。
+日常 PR 门按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 阻断分析失败、不完整、不可比及范围内新增原始诊断（`gate.json.inScopeNew`）。
+指纹漂移、缺处置、过期登记及验收 blocked 由合规线消费，验收执行 error 阻断。
+报告见 `gate.json.diagnosticFingerprints` 与 `summary.json.projectAcceptance`。
+
+按 [ADR 0033](../../adr/0033-c-diagnostic-fingerprints.md) 逐位置验证处置及 `docs/standards/c-dispositions/` 的指纹。Windows 按分析器 SHA-256 选登记。
+按 [ADR 0025](../../adr/0025-misra-layered-scope.md) 复核 `fingerprintDispositions.candidates`，修复后删去失效指纹。
+主线、手动分析和发版仍严格核对处置与双树输入。门用双侧各八份 `scope-input.json` 重算范围、MR12／SDK 和验收身份。
 
 基准固定为测试提交第一父提交，保留其生成器与 runtime，使用 PR 的 harness、夹具、资源与锁文件。prepare 与双侧生成并行。基准原件与 SDK 原件记录取第一父提交并绑定身份，继续核对实际 SDK；评估仍用当前输入。拆分源按目标选择的同名 host provider 回接，允许对应平台 include 目录迁移。双树的 SDK 比较身份绑定 include 搜索序列、搜索目录可达的全部 provider 文件及实际打开的头／宏，见 [SDK 比较身份](sdk-comparison-identity.md)。头／宏使用集合可变，共有头字节与宏值仍比较；旧版（语义身份 2）工件拒绝，须重扫。双侧 raw 回执均拒绝验收 error；基准失败或不可比均拒绝。
 
