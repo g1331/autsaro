@@ -835,9 +835,11 @@ fn com_integer_plan_keeps_two_levels_and_locates_invalid_fields() {
         "{issues:?}"
     );
 
-    let mapping = |node| named(node, "DATA-TYPE-MAPPING-SET", "ApplicationTypes");
+    fn mapping_set(node: roxmltree::Node<'_, '_>) -> bool {
+        named(node, "DATA-TYPE-MAPPING-SET", "ApplicationTypes")
+    }
     let mut ambiguous = sources.clone();
-    xml_edit(&mut ambiguous, "types.arxml", mapping, |block| {
+    xml_edit(&mut ambiguous, "types.arxml", mapping_set, |block| {
         let start = block.find("<DATA-TYPE-MAP>").unwrap();
         let end = block.find("</DATA-TYPE-MAP>").unwrap() + "</DATA-TYPE-MAP>".len();
         format!("{}{}{}", &block[..end], &block[start..end], &block[end..])
@@ -853,7 +855,7 @@ fn com_integer_plan_keeps_two_levels_and_locates_invalid_fields() {
     );
 
     let mut missing = sources.clone();
-    xml_edit(&mut missing, "types.arxml", mapping, |block| {
+    xml_edit(&mut missing, "types.arxml", mapping_set, |block| {
         let start = block.find("<DATA-TYPE-MAPS>").unwrap();
         let end = block.find("</DATA-TYPE-MAPS>").unwrap() + "</DATA-TYPE-MAPS>".len();
         format!("{}{}", &block[..start], &block[end..])
