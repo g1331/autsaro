@@ -64,13 +64,13 @@ fn comm_services_execute_real_user_calls_and_mode_publications() {
     let mut changed = original.clone();
     assert_eq!(
         changed[2]
-            .matches("ComM_NotifyUsers(config, mode);")
+            .matches("users[i].notify(users[i].mode);")
             .count(),
         1
     );
     changed[2] = changed[2].replace(
-        "ComM_NotifyUsers(config, mode);",
-        "if (mode > COMM_FULL_COMMUNICATION) { ComM_NotifyUsers(config, mode); }",
+        "users[i].notify(users[i].mode);",
+        "if (users[i].mode > COMM_FULL_COMMUNICATION) { users[i].notify(users[i].mode); }",
     );
     mutations.push(("missing-user-notifications".into(), changed, false));
     let mut changed = original.clone();
@@ -82,13 +82,13 @@ fn comm_services_execute_real_user_calls_and_mode_publications() {
     let mut changed = original.clone();
     assert_eq!(
         changed[2]
-            .matches("valid = ComM_ValidUserModes(config);")
+            .matches("valid = valid && ComM_ValidUsers(config);")
             .count(),
         1
     );
     changed[2] = changed[2].replace(
-        "valid = ComM_ValidUserModes(config);",
-        "valid = ComM_ValidUserModes(config) || TRUE;",
+        "valid = valid && ComM_ValidUsers(config);",
+        "valid = valid && (ComM_ValidUsers(config) || TRUE);",
     );
     mutations.push(("ignored-user-mapping-validation".into(), changed, false));
     let mut changed = original.clone();
@@ -97,16 +97,14 @@ fn comm_services_execute_real_user_calls_and_mode_publications() {
     changed[1] = changed[1].replace(callback, "SchM_Switch_ComM_UM_HostUser(");
     mutations.push(("wrong-user-publisher".into(), changed, false));
     let mut changed = original.clone();
-    assert_eq!(
-        changed[2]
-            .matches("comm_published = COMM_NO_COMMUNICATION;")
-            .count(),
-        1
-    );
-    changed[2] = changed[2].replace(
-        "comm_published = COMM_NO_COMMUNICATION;",
-        "comm_published = COMM_SILENT_COMMUNICATION;",
-    );
+    for published in ["state->published", "comm_user_published[i]"] {
+        let marker = format!("{published} = COMM_NO_COMMUNICATION;");
+        assert_eq!(changed[2].matches(&marker).count(), 1);
+        changed[2] = changed[2].replace(
+            &marker,
+            &format!("{published} = COMM_SILENT_COMMUNICATION;"),
+        );
+    }
     mutations.push(("default-no-notification".into(), changed, false));
     mutations.push(("split-instance-identity".into(), original.clone(), false));
     for (label, sources, success) in mutations {
