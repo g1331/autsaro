@@ -312,6 +312,62 @@ class CComparisonTests(unittest.TestCase):
                         compare(current, project, output, baseline, source_tree=True)
                     record["extended"] = False
 
+    def test_source_gate_compares_only_the_exact_bswm_callout_transition(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.runtime_fixture(Path(temporary))
+            before = baseline / "project"
+            metadata = json.loads((before / "meta/integration.json").read_text())
+            mode_runtime = {
+                "channelHandle": 7,
+                "rules": [{"mode": index, "callout": f"Ecu_HostBusSM_ApplyMode(7u, {mode})"}
+                          for index, mode in enumerate(
+                              ("COMM_NO_COMMUNICATION", "COMM_SILENT_COMMUNICATION",
+                               "COMM_FULL_COMMUNICATION"))],
+            }
+            metadata["plan"]["modeRuntime"] = mode_runtime
+            old_source = "".join(f"<VALUE>{rule['callout']}</VALUE>\n"
+                                 for rule in mode_runtime["rules"])
+            def configure(root, source):
+                path = root / "inputs/ecuc.arxml"
+                path.parent.mkdir(exist_ok=True)
+                path.write_bytes(source.encode())
+                metadata["plan"]["sources"] = [{"logicalPath": "ecuc.arxml", "rawSha256": digest(path)}]
+                metadata["plan"]["configuration"] = [
+                    {"parameters": {c_comparison.BSWM_CALLOUT_PARAMETER: [rule["callout"]]}}
+                    for rule in mode_runtime["rules"]
+                ]
+                target_path = root / "target.json"
+                target = json.loads(target_path.read_text())
+                target["nativeDelivery"] = {"inputSnapshots": [
+                    {"logicalPath": "ecuc.arxml", "packagePath": "inputs/ecuc.arxml", "sha256": digest(path)},
+                ]}
+                target_path.write_text(json.dumps(target))
+                self.seal(root, metadata)
+            configure(before, old_source)
+            previous = deepcopy(current)
+            previous["sourceSealSha256"] = digest(before / "meta/files.sha256")
+            self.write(baseline, previous)
+            for rule in mode_runtime["rules"]:
+                rule["callout"] = rule["callout"].replace("ApplyMode", "ConfirmMode")
+            new_source = old_source.replace("ApplyMode", "ConfirmMode")
+            for root in (project, output / "project"):
+                configure(root, new_source)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            self.assertFalse(compare(current, project, output, baseline, source_tree=True)["new"])
+            with self.assertRaisesRegex(ValueError, "Target/sample configuration differs"):
+                compare(current, project, output, baseline)
+            for root in (project, output / "project"):
+                configure(root, new_source + "<EXTRA/>\n")
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            with self.assertRaisesRegex(ValueError, "differs outside the BswM callouts"):
+                compare(current, project, output, baseline, source_tree=True)
+            mode_runtime["rules"][1]["callout"] = "Ecu_HostBusSM_ConfirmMode(7u, COMM_FULL_COMMUNICATION)"
+            for root in (project, output / "project"):
+                configure(root, new_source)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            with self.assertRaisesRegex(ValueError, "configuration differs"):
+                compare(current, project, output, baseline, source_tree=True)
+
     def test_classical_baseline_compares_with_fd_capable_tools(self):
         with tempfile.TemporaryDirectory() as temporary:
             current, project, output, baseline = self.runtime_fixture(Path(temporary))

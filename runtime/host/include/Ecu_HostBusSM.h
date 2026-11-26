@@ -71,18 +71,47 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_RequestComMode(NetworkHandleType
  */
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleType Channel,
                                                                   ComM_ModeType *ComMode);
-/** Actual BswM user-callout action; controls directions, never COM groups.
+/** Apply the requested CAN directions for a BusSM operation.
  * @param[in] Channel Configured channel.
  * @param[in] ComMode NO, SILENT or FULL.
  * @return E_OK when CanIf applied the PDU mode, or for NO on a stopped controller;
  * E_NOT_OK otherwise, including SILENT/FULL on a stopped controller.
  * Preconditions: initialized; otherwise E_NOT_OK.
- * Context: BswM action; not inside an exclusive area.
+ * Context: task or callback; not inside an exclusive area.
  * Reentrancy: reentrant.
  * Ownership: None.
  */
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Channel,
                                                           ComM_ModeType ComMode);
+/** Confirm the actual mode of a ComM indication without changing CAN directions.
+ * @param[in] Channel Indicated channel.
+ * @param[in] ComMode Indicated NO, SILENT or FULL mode.
+ * @return E_OK if the actual mode can be read and matches the indication; E_NOT_OK otherwise.
+ * Preconditions: initialized; otherwise E_NOT_OK.
+ * Context: BswM user callout; not inside an exclusive area.
+ * Reentrancy: reentrant.
+ * Ownership: None.
+ */
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ConfirmMode(NetworkHandleType Channel,
+                                                            ComM_ModeType ComMode);
+/** Schedule a fresh observation after BswM cannot apply its direction action.
+ * @par Return
+ * None.
+ * Preconditions: initialized; otherwise no action.
+ * Context: BswM failure callout; not inside an exclusive area.
+ * Reentrancy: reentrant.
+ * Ownership: None.
+ */
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_QueueModePublication(void);
+/** Publish a queued actual mode to ComM, once per observation if readable.
+ * @par Return
+ * None.
+ * Preconditions: None.
+ * Context: ECU cycle or BusSM completion; not inside an exclusive area.
+ * Reentrancy: reentrant; the active publisher handles new observations.
+ * Ownership: None.
+ */
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_PublishPendingMode(void);
 /** CanIf controller mode indication (CanIfDispatchUserCtrlModeIndicationName): applies
  * the requested directions on STARTED and indicates the completed mode to ComM.
  * @param[in] ControllerId Configured controller; others are ignored.

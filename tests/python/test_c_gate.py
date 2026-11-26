@@ -650,6 +650,32 @@ class SourceGateTests(unittest.TestCase):
                     self.assertEqual(environment["CARGO_TARGET_DIR"], str(baseline / "target"))
                     self.assertEqual(environment["AUTOSAR_C_ANALYSIS_SAMPLES"], str(output))
 
+    def test_baseline_staging_keeps_only_the_exact_legacy_bswm_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            current, baseline = root / "current", root / "baseline"
+            names = ("core/resources/templates/standard-ecu/ecuc.arxml",
+                     "core/tests/fixtures/component-pipeline/arxml/ecuc.arxml")
+            old = "".join(f"<VALUE>Ecu_HostBusSM_ApplyMode(0u, {mode})</VALUE>\n"
+                          for mode in ("COMM_NO_COMMUNICATION", "COMM_SILENT_COMMUNICATION",
+                                       "COMM_FULL_COMMUNICATION"))
+            new = old.replace("ApplyMode", "ConfirmMode")
+            for name in names:
+                for side, source in ((current, new), (baseline, old.replace("\n", "\r\n"))):
+                    path = side / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(source.encode())
+            with patch.object(c_gate, "ROOT", current), patch.object(c_gate, "git", return_value="parent"), \
+                    patch.object(c_gate.subprocess, "check_output", return_value="parent"):
+                c_gate.stage(baseline)
+                for name in names:
+                    self.assertEqual((baseline / name).read_bytes(), old.replace("\n", "\r\n").encode())
+                # A configuration change beyond these exact values is not projected onto the parent.
+                (current / names[0]).write_bytes((new + "<EXTRA/>\n").encode())
+                c_gate.stage(baseline)
+                for name in names:
+                    self.assertEqual((baseline / name).read_bytes(), (current / name).read_bytes())
+
     def test_aggregate_refuses_missing_duplicate_changed_or_wrong_run_receipts(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

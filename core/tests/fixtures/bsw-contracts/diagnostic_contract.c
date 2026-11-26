@@ -120,7 +120,7 @@ static const ComM_ConfigType comm = {7u,
                                      NULL_PTR,
                                      0u};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 0u};
-static const BswM_ConfigType bswm = {7u, Ecu_HostBusSM_ApplyMode};
+static const BswM_ConfigType bswm = {7u, &Ecu_HostBusSM_ApplyMode, NULL_PTR};
 static uint8 authentication_mode = 255u;
 static void publish_authentication(uint8 state) { authentication_mode = state; }
 static const Dcm_ConfigType dcm = {

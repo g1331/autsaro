@@ -124,11 +124,11 @@ static const ComM_ConfigType comm = {7u,
                                      NULL_PTR,
                                      0u};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 9u};
-static const BswM_ConfigType bswm = {7u, action};
+static const BswM_ConfigType bswm = {7u, action, NULL_PTR};
 
 static void reject_bswm_configurations(void)
 {
-    const BswM_ConfigType missing_action = {7u, NULL_PTR};
+    const BswM_ConfigType missing_action = {7u, NULL_PTR, NULL_PTR};
     BswM_Init(NULL_PTR);
     BswM_ComM_CurrentMode(7u, COMM_FULL_COMMUNICATION);
     assert(actions == 0u);

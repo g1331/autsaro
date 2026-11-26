@@ -1198,7 +1198,7 @@ pub(super) fn files(
         "BswM",
         "static const BswM_ConfigType bswm_config",
         &values(&format!(
-            "{}, &Ecu_BswMAction",
+            "{}, &Ecu_BswMAction, &Ecu_HostBusSM_QueueModePublication",
             name("ComM", "ComMChannel", &mode.channel)
         )),
     );
@@ -1231,16 +1231,13 @@ pub(super) fn files(
         &values("NULL_PTR, 0u, det_runtime_callouts, 1u"),
     );
     config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
-    // ECUC_BswM_00843: parameters are fixed by the configured complete call.
-    config.push_str(
+    // The validated callout text contains the complete preconfigured arguments.
+    config.push_str(&format!(
         r#"static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,
                                                   ComM_ModeType requested)
-{
-    Std_ReturnType result = E_OK;
-"#,
-    );
-    config.push_str(&format!(
-        r#"    if (channel != {}) {{
+{{
+    Std_ReturnType result;
+    if (channel != {}) {{
         return E_NOT_OK;
     }}
     switch (requested) {{
@@ -1248,18 +1245,9 @@ pub(super) fn files(
         name("ComM", "ComMChannel", &mode.channel)
     ));
     for rule in &mode.rules {
-        let requested = [
-            "COMM_NO_COMMUNICATION",
-            "COMM_SILENT_COMMUNICATION",
-            "COMM_FULL_COMMUNICATION",
-        ][usize::from(rule.mode)];
-        let channel = name("ComM", "ComMChannel", &mode.channel);
         config.push_str(&format!(
-            r#"        case {}u:
-            (void)Ecu_HostBusSM_ApplyMode({channel}, {requested});
-            break;
-"#,
-            rule.mode
+            "        case {}u:\n            result = {};\n            break;\n",
+            rule.mode, rule.callout
         ));
     }
     config.push_str(
@@ -1380,6 +1368,7 @@ pub(super) fn files(
     if ((Ecu_TargetIsOwner() == 0) || (Ecu_SchMTimingActive() == FALSE)) {
         return E_NOT_OK;
     }
+    Ecu_HostBusSM_PublishPendingMode();
 "#,
         );
         let mut active_mask = None;

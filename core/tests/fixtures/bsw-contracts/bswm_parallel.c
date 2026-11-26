@@ -53,7 +53,7 @@ static Std_ReturnType action(NetworkHandleType Network, ComM_ModeType Mode)
     --action_depth;
     return E_OK;
 }
-static const BswM_ConfigType configuration = {7u, action};
+static const BswM_ConfigType configuration = {7u, action, NULL_PTR};
 
 void __real_SchM_Exit_BswM_BSWM_STATE(void);
 void __wrap_SchM_Exit_BswM_BSWM_STATE(void)
