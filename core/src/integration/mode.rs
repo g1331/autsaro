@@ -228,6 +228,7 @@ pub(super) fn inspect(
         return Err(fail(graph, initial, "MODE_INITIAL_VALUE"));
     }
     let mut rules = Vec::new();
+    let mut legacy_callouts = Vec::new();
     let mut modes = BTreeSet::new();
     let mut conditions = BTreeSet::new();
     let mut expressions = BTreeSet::new();
@@ -291,7 +292,19 @@ pub(super) fn inspect(
             "COMM_SILENT_COMMUNICATION",
             "COMM_FULL_COMMUNICATION",
         ][usize::from(mode)];
-        if text != format!("Ecu_HostBusSM_ApplyMode({channel_handle}u, {mode_name})") {
+        let expected = format!("Ecu_HostBusSM_ConfirmMode({channel_handle}u, {mode_name})");
+        if text == format!("Ecu_HostBusSM_ApplyMode({channel_handle}u, {mode_name})") {
+            legacy_callouts.push(graph.diagnostic(
+                callout,
+                DiagnosticCategory::Input,
+                "MODE_LEGACY_CALLOUT",
+                crate::product_message!("backend.integration.mode.legacy_callout"),
+                crate::product_message!(
+                    "backend.integration.mode.replace_callout",
+                    "callout" => expected
+                ),
+            ));
+        } else if text != expected {
             return Err(fail(graph, callout, "MODE_STATIC_CALLOUT"));
         }
         if !modes.insert(mode)
@@ -319,6 +332,9 @@ pub(super) fn inspect(
         || containers(graph, "BswMAction").len() != actions.len()
     {
         return Err(fail(graph, config, "MODE_RULE"));
+    }
+    if !legacy_callouts.is_empty() {
+        return Err(legacy_callouts);
     }
     rules.sort_by_key(|rule| rule.mode);
     let mut dcm_connections = Vec::new();

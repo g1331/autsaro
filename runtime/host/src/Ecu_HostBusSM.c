@@ -165,6 +165,13 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Chan
     }
     return result;
 }
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ConfirmMode(NetworkHandleType Channel,
+                                                            ComM_ModeType ComMode)
+{
+    ComM_ModeType actual = COMM_NO_COMMUNICATION;
+    const Std_ReturnType observed = Ecu_HostBusSM_GetCurrentComMode(Channel, &actual);
+    return ((observed == E_OK) && (actual == ComMode)) ? E_OK : E_NOT_OK;
+}
 /* Register a controller transition, then ask CanIf. A refusal restores whether an older
  * transition is pending, unless a newer registration or a completion came meanwhile;
  * the refused mode stays requested, and ComM requests it again. */

@@ -27,6 +27,22 @@ def _read(path: Path) -> dict:
 MATRIX_TARGETS = ("linux-x64-controlled-v1", "windows-x64-controlled-v1")
 MATRIX_SAMPLES = ("standard-ecu", "user-application", "component-pipeline", "no-diagnostic")
 SEMANTIC_VERSION = 4
+BSWM_MODES = ("COMM_NO_COMMUNICATION", "COMM_SILENT_COMMUNICATION", "COMM_FULL_COMMUNICATION")
+BSWM_CALLOUT_PARAMETER = (
+    "/AUTOSAR/EcucDefs/BswM/BswMConfig/BswMModeControl/BswMAction/"
+    "BswMAvailableActions/BswMUserCallout/BswMUserCalloutFunction"
+)
+
+
+def upgraded_bswm_callouts(source: bytes, handle: int) -> bytes | None:
+    """Recognize only one complete set of the three legacy callout values."""
+    for mode in BSWM_MODES:
+        old = f"<VALUE>Ecu_HostBusSM_ApplyMode({handle}u, {mode})</VALUE>".encode()
+        new = f"<VALUE>Ecu_HostBusSM_ConfirmMode({handle}u, {mode})</VALUE>".encode()
+        if source.count(old) != 1 or new in source:
+            return None
+        source = source.replace(old, new)
+    return source
 
 
 def raw_identity(summary: dict) -> str:
@@ -363,6 +379,72 @@ def _r11_baseline_plan(plan: dict) -> dict:
     return result
 
 
+def _bswm_baseline_plan(previous: dict, current: dict) -> dict:
+    """Compare only the exact three-callout transition in the source gate."""
+    old = previous.get("modeRuntime")
+    new = current.get("modeRuntime")
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return previous
+    handle = old.get("channelHandle")
+    rules = old.get("rules")
+    if (type(handle) is not int or not 0 <= handle <= 255 or not isinstance(rules, list)
+            or len(rules) != len(BSWM_MODES)):
+        return previous
+    updated = []
+    replacements = {}
+    for index, (rule, mode) in enumerate(zip(rules, BSWM_MODES, strict=True)):
+        args = f"({handle}u, {mode})"
+        if (not isinstance(rule, dict) or type(rule.get("mode")) is not int
+                or rule["mode"] != index or rule.get("callout") != "Ecu_HostBusSM_ApplyMode" + args):
+            return previous
+        replacement = "Ecu_HostBusSM_ConfirmMode" + args
+        replacements[rule["callout"]] = replacement
+        updated.append({**rule, "callout": replacement})
+    upgraded = {**old, "rules": updated}
+    if upgraded != new:
+        return previous
+    configuration = []
+    for entry in previous["configuration"]:
+        parameters = entry.get("parameters", {})
+        values = parameters.get(BSWM_CALLOUT_PARAMETER)
+        if values is not None:
+            if len(values) != 1 or values[0] not in replacements:
+                return previous
+            parameters = {**parameters, BSWM_CALLOUT_PARAMETER: [replacements.pop(values[0])]}
+            entry = {**entry, "parameters": parameters}
+        configuration.append(entry)
+    if replacements or configuration != current["configuration"]:
+        return previous
+    return {**previous, "modeRuntime": upgraded, "configuration": configuration}
+
+
+def _bswm_input_digests(old_root: Path, project: Path, handle: int) -> tuple[str, str]:
+    relative = "inputs/ecuc.arxml"
+    contents = []
+    hashes = []
+    for root in (old_root, project):
+        path = root / relative
+        refuse_links(path, root)
+        source = path.read_bytes()
+        fingerprint = hashlib.sha256(source).hexdigest()
+        records = (root / FILE_HASHES).read_text(encoding="utf-8").splitlines()
+        if records.count(f"{fingerprint}  {relative}") != 1:
+            raise ValueError("BswM callout transition input is not sealed")
+        contents.append(source)
+        hashes.append(fingerprint)
+    if upgraded_bswm_callouts(contents[0], handle) != contents[1]:
+        raise ValueError("Sample generation configuration differs outside the BswM callouts")
+    return hashes[0], hashes[1]
+
+
+def _translated_ecuc_digest(rows: list[dict], name: str, digests: tuple[str, str]) -> list[dict]:
+    matches = [row for row in rows if row.get("logicalPath") == "ecuc.arxml"]
+    if (len(matches) != 1 or matches[0].get(name) != digests[0]
+            or (name == "sha256" and matches[0].get("packagePath") != "inputs/ecuc.arxml")):
+        raise ValueError("BswM callout transition input identity differs")
+    return [{**row, name: digests[1]} if row is matches[0] else row for row in rows]
+
+
 def compare(
     current: dict, project: Path, output: Path, baseline: Path, *,
     source_tree: bool = False, renames: dict[str, str] | None = None,
@@ -430,6 +512,18 @@ def compare(
             return value
         current_target = target_configuration(project, current["scope"])
         previous_target = mapped(target_configuration(old_root, previous["scope"]))
+        plan = _configuration(project, source_tree=source_tree)
+        previous_plan = mapped(_configuration(old_root, source_tree=source_tree))
+        if source_tree and plan.get("modeRuntime") != previous_plan.get("modeRuntime"):
+            upgraded = _bswm_baseline_plan(previous_plan, plan)
+            if upgraded is not previous_plan:
+                digests = _bswm_input_digests(old_root, project, upgraded["modeRuntime"]["channelHandle"])
+                previous_plan = {**upgraded, "sources":
+                                 _translated_ecuc_digest(upgraded["sources"], "rawSha256", digests)}
+                delivery = previous_target.get("nativeDelivery")
+                if delivery is not None:
+                    previous_target["nativeDelivery"] = {**delivery, "inputSnapshots":
+                        _translated_ecuc_digest(delivery["inputSnapshots"], "sha256", digests)}
         r11_transition = source_tree and (previous_target.get("format"), current_target.get("format")) == (
             "autosar-build-target-v3", "autosar-build-target-v4",
         )
@@ -457,8 +551,6 @@ def compare(
         for root in (project, old_root):
             if not (root / "meta/integration.json").is_file():
                 raise ValueError("Sample generation identity unavailable")
-        plan = _configuration(project, source_tree=source_tree)
-        previous_plan = mapped(_configuration(old_root, source_tree=source_tree))
         if r11_transition:
             previous_plan = _r11_baseline_plan(previous_plan)
         output_plan = _configuration(output / "project", source_tree=source_tree)

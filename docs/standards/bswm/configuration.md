@@ -11,7 +11,7 @@
 | 仲裁容器、模式请求端口与 ComM 指示源 | 已核对（内置 ECUC metadata 与 mode.rs 校验：BswMArbitration 恰一个，BswMModeRequestPort 恰一个且 BSWM_IMMEDIATE，来源仅 BswMComMIndication 且引用 ComM 通道，初值 COMM_NO_COMMUNICATION）：ECUC_BswM_00801、00805、00822、00856、00880、00883、00928、00932 |
 | 模式条件与逻辑表达式 | 已核对（内置 ECUC metadata 与 mode.rs 校验：每条规则一个 BSWM_EQUALS 的 BswMModeCondition，BswMBswMode 取 COMM 三种模式，表达式为 BSWM_AND 或省略）：ECUC_BswM_00807、00808、00814–00816、00820、00821、00866、00869 |
 | 规则 | 已核对（内置 ECUC metadata 与 mode.rs 校验：恰三条规则、BSWM_FALSE、无 false 列表、不嵌套执行、true 列表唯一）：ECUC_BswM_00806、00817–00819、00888、00935 |
-| 模式控制、动作与动作列表 | 已核对（内置 ECUC metadata 与 mode.rs 校验：BswMModeControl 恰一个，动作只能是 BswMUserCallout，调用文本须为固定的 Ecu_HostBusSM_ApplyMode，动作列表 BSWM_CONDITION、Priority 0 或省略、单个 Index 0 且 AbortOnFail false、引用 BswMAction）：ECUC_BswM_00802、00809、00810、00823–00826、00834、00843、00894、00902、01076 |
+| 模式控制、动作与动作列表 | 已核对（内置 ECUC metadata 与 mode.rs 校验：BswMModeControl 恰一个，动作只能是 BswMUserCallout，调用文本须为固定的 Ecu_HostBusSM_ConfirmMode，动作列表 BSWM_CONDITION、Priority 0 或省略、单个 Index 0 且 AbortOnFail false、引用 BswMAction）：ECUC_BswM_00802、00809、00810、00823–00826、00834、00843、00894、00902、01076 |
 | BswMConfig | 已核对（内置 ECUC metadata 与 mode.rs 校验：BswMConfig 只含 BswMArbitration 与 BswMModeControl，不含分区引用与数据类型映射）：ECUC_BswM_00895 |
 | CanSM 输入 | 不适用（配置：ECUC_BswM_00938）：ECUC_BswM_00857、00870 |
 | Dcm 输入 | 不适用（配置：ECUC_BswM_00940）：ECUC_BswM_00863、00925、00969 |
@@ -38,3 +38,5 @@
 | 运行时错误 Id | 不适用（配置：ECUC_BswM_01050）：ECUC_BswM_01050 |
 | 未由 BswMUserCallout 承担的动作 | 不适用（配置：ECUC_BswM_00826）：ECUC_BswM_00145、00803、00828–00831、00840、00841、00849–00855、00896–00901、00906、00907、00909、00912、00913、00918、00952、00958–00960、00970–00972、00998、01000–01002、01021、01023、01024、01036、01059–01062、01073、01074、01080、01089、01090、01094–01096 |
 | BswM 主函数周期 | 不适用（配置：ECUC_BswM_00813）：ECUC_BswM_00813 |
+
+#647 的[源码门](../../development/testing/generated-c.md)让两侧生成器各自使用所支持的三个调用值。两个样本源文件只有这三处固定值发生变化时，基准才保留首父的旧绑定。比较前核对两侧 ECUC 封存字节、调用值及其余配置，保留各自的原始分析回执。

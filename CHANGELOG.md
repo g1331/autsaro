@@ -82,7 +82,7 @@
 
 ### Fixed
 
-- Generated BswM actions reject stale mode indications without overwriting CAN directions and schedule publication of the actual communication mode. Regenerate and rebuild ECU projects with the updated BswM configuration layout (#660)
+- Generated BswM actions confirm the actual mode and reject stale indications without overwriting CAN directions. Update the three legacy `BswMUserCalloutFunction` values from `Ecu_HostBusSM_ApplyMode` to `Ecu_HostBusSM_ConfirmMode` as directed by validation, then regenerate and rebuild the ECU project (#660)
 
 - C analysis rejects unexpected include search changes from project flags and evaluated resource existence probes, and reports SDK link permission and I/O failures (#620)
 

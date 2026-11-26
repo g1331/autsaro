@@ -1230,25 +1230,34 @@ pub(super) fn files(
         &values("NULL_PTR, 0u, det_runtime_callouts, 1u"),
     );
     config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
-    // These three configured actions share one actual-mode input. The BusSM
-    // has already applied the directions before notifying ComM.
+    // The validated callout text contains the complete preconfigured arguments.
     config.push_str(&format!(
         r#"static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,
                                                   ComM_ModeType requested)
 {{
-    Std_ReturnType result = E_NOT_OK;
-    if ((channel == {}) && (requested <= COMM_FULL_COMMUNICATION)) {{
-        ComM_ModeType actual = COMM_NO_COMMUNICATION;
-        const Std_ReturnType observed = Ecu_HostBusSM_GetCurrentComMode(channel, &actual);
-        if ((observed == E_OK) && (actual == requested)) {{
-            result = E_OK;
-        }}
+    Std_ReturnType result;
+    if (channel != {}) {{
+        return E_NOT_OK;
     }}
-    return result;
-}}
+    switch (requested) {{
 "#,
         name("ComM", "ComMChannel", &mode.channel)
     ));
+    for rule in &mode.rules {
+        config.push_str(&format!(
+            "        case {}u:\n            result = {};\n            break;\n",
+            rule.mode, rule.callout
+        ));
+    }
+    config.push_str(
+        r#"        default:
+            result = E_NOT_OK;
+            break;
+    }
+    return result;
+}
+"#,
+    );
     config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", false));
     let lifecycle = |testing: bool| -> Result<String, Vec<PlanDiagnostic>> {
         let mut config = String::new();
