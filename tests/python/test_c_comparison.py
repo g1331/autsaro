@@ -80,6 +80,33 @@ class CComparisonTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "configuration differs"):
                 compare(summary, project, output, baseline, source_tree=True)
 
+    def test_source_tree_compares_v4_and_v5_handoffs_with_the_same_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.fixture(Path(temporary))
+
+            def write_target(root, version, snapshots):
+                path = root / "target.json"
+                target = json.loads(path.read_bytes())
+                target["nativeDelivery"] = {
+                    "format": f"autosar-workbench-handoff-v{version}",
+                    "inputSnapshots": snapshots,
+                }
+                path.write_text(json.dumps(target))
+
+            inputs = [{"kind": "arxml", "logicalPath": "config.arxml"}]
+            write_target(baseline / "project", 4, inputs)
+            write_target(project, 5, inputs)
+            self.assertFalse(compare(current, project, output, baseline, source_tree=True)["new"])
+            with self.assertRaisesRegex(ValueError, "Target/sample configuration differs"):
+                compare(current, project, output, baseline)
+
+            changed_inputs = [*inputs, {"kind": "inactive-application", "logicalPath": "user.c"}]
+            for version, snapshots in ((5, changed_inputs), (6, inputs)):
+                with self.subTest(version=version, snapshots=snapshots):
+                    write_target(project, version, snapshots)
+                    with self.assertRaisesRegex(ValueError, "Target/sample configuration differs"):
+                        compare(current, project, output, baseline, source_tree=True)
+
     def test_source_tree_checks_each_patched_kernel_before_comparing_its_file_set(self):
         with tempfile.TemporaryDirectory() as temporary:
             current, project, output, baseline = self.fixture(Path(temporary))
