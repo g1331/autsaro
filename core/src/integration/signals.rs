@@ -409,7 +409,7 @@ pub(super) fn inspect_ports(
                 trigger,
                 "CAN_ID_CONFLICT",
                 crate::product_message!(
-                    "backend.integration.communication.can_identifier_or_format_invalid"
+                    "backend.integration.communication.classical_can_identifier_or_format_invalid"
                 ),
             )
         })?;
