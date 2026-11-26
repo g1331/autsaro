@@ -134,13 +134,7 @@ pub(super) fn reference_element(node: Node<'_, '_>) -> bool {
         && (node.tag_name().name().ends_with("-REF") || node.tag_name().name().ends_with("-TREF"))
 }
 
-pub(super) fn replay_migrations(path: &str, history: &[Vec<PathMigration>]) -> String {
-    history.iter().fold(path.to_owned(), |path, revision| {
-        migrated_path(&path, revision).unwrap_or(path)
-    })
-}
-
-fn xml_escape(value: &str) -> String {
+pub(super) fn xml_escape(value: &str) -> String {
     value
         .replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -512,7 +506,7 @@ pub(super) fn resolve(
                 continue;
             }
             if let Some(value) = crate::arxml::xml::literal_text(node) {
-                let mut target = value.trim().to_owned();
+                let target = value.trim().to_owned();
                 if element(node, "ECUC-MODULE-CONFIGURATION-VALUES-REF")
                     && excluded_modules.contains(target.as_str())
                     && let Some(entry) = node.parent_element().filter(|entry| {
@@ -524,30 +518,6 @@ pub(super) fn resolve(
                         value: String::new(),
                     });
                     continue;
-                }
-                let current = if layer[0] == "base" {
-                    target.clone()
-                } else {
-                    replay_migrations(&target, &layers.applied_migrations)
-                };
-                if current != target {
-                    if node.tag_name().namespace() != Some(NS) || node.attribute("DEST").is_none() {
-                        return Err(vec![diagnostic(
-                            "BASE_MIGRATION_REFERENCE_OPAQUE",
-                            &path_of(node),
-                            format!("Cannot qualify {} to {target}.", node.tag_name().name()),
-                        )]);
-                    }
-                    crate::arxml::patch_text(node, xml_escape(&current), &mut patches).map_err(
-                        |message| {
-                            vec![diagnostic(
-                                "BASE_MIGRATION_REFERENCE_OPAQUE",
-                                &path_of(node),
-                                message,
-                            )]
-                        },
-                    )?;
-                    target = current;
                 }
                 inbound.push((
                     path.to_owned(),
@@ -810,26 +780,6 @@ pub(crate) fn resolve_manifest_sources(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn migration(previous: &str, current: &str) -> PathMigration {
-        let object = |path: &str| LayerObject {
-            release: "R24-11".into(),
-            definition_type: "ECUC-CONTAINER-VALUE".into(),
-            path: path.into(),
-            instance_context: Vec::new(),
-        };
-        PathMigration {
-            previous: object(previous),
-            current: object(current),
-        }
-    }
-
-    #[test]
-    fn replay_preserves_nested_moves_across_revisions() {
-        let revisions = vec![vec![migration("/A", "/B")], vec![migration("/B/X", "/B/Y")]];
-        assert_eq!(replay_migrations("/A/X/Child", &revisions), "/B/Y/Child");
-        assert_eq!(replay_migrations("/A/Other", &revisions), "/B/Other");
-    }
 
     #[test]
     fn replacement_looks_up_each_reference_target_independently() {

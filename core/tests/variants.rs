@@ -123,7 +123,6 @@ fn fixture(path: &Path, priority_value: &str) -> Workspace {
         )]),
         selection: selection("platform"),
         conflicts: Vec::new(),
-        applied_migrations: Vec::new(),
     });
     write(path, &manifest);
     open(path)
@@ -606,7 +605,6 @@ fn pipeline_variants(path: &Path) -> Workspace {
             )]),
             selection: selection("complete"),
             conflicts: Vec::new(),
-            applied_migrations: Vec::new(),
         }),
     };
     write(path, &manifest);
@@ -880,12 +878,8 @@ fn an_unselected_member_does_not_block_saving_the_active_variant() {
     workspace.save().unwrap();
     assert!(workspace.saved_integration_plan().is_ok());
     assert_eq!(fs::read_to_string(inactive).unwrap(), before);
-    let unsafe_encoding = before.replacen("UTF-8", "ISO-8859-1", 1);
-    let unsafe_encoding = if unsafe_encoding == before {
-        format!("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>{before}")
-    } else {
-        unsafe_encoding
-    };
+    let unsafe_encoding = before.replacen("encoding='utf-8'", "encoding='ISO-8859-1'", 1);
+    assert_ne!(unsafe_encoding, before);
     fs::write(path.join("reduced/ecuc.arxml"), unsafe_encoding).unwrap();
     let error =
         Workspace::open_project_manifest(&path.join("workbench-project.json"), &path.join("cache"))

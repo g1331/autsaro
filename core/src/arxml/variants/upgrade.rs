@@ -31,7 +31,6 @@ fn base_semantics(
         groups: BTreeMap::new(),
         selection: BTreeMap::new(),
         conflicts: Vec::new(),
-        applied_migrations: Vec::new(),
     };
     resolve(&base_only, sources, catalog).map(|resolution| resolution.semantics)
 }
@@ -83,42 +82,57 @@ fn incoming_refs(
     inbound
 }
 
-fn candidate_reference_is_opaque(
-    sources: &[InputSource],
-    path: &str,
-    history: &[Vec<PathMigration>],
-) -> Result<bool, LocalizedText> {
-    for source in sources {
-        let text = std::str::from_utf8(source.bytes()).map_err(|error| error.to_string())?;
-        let document = Document::parse(text).map_err(|error| error.to_string())?;
-        for node in document.descendants().filter(|node| node.is_element()) {
-            let vendor = node.ancestors().any(|ancestor| {
-                ancestor.is_element()
-                    && (ancestor.tag_name().namespace() != Some(crate::arxml::NS)
-                        || ancestor.has_tag_name((crate::arxml::NS, "SDG")))
-            });
-            let points_to_old = |value: &str| {
-                value.contains(path)
-                    || within(
-                        &super::resolve::replay_migrations(value.trim(), history),
-                        path,
-                    )
-            };
-            if node.attributes().any(|attribute| {
-                (vendor
-                    || attribute.namespace().is_some_and(|namespace| {
-                        namespace != "http://www.w3.org/2001/XMLSchema-instance"
-                    }))
-                    && points_to_old(attribute.value())
-            }) || (vendor
-                || super::resolve::reference_element(node) && node.attribute("DEST").is_none())
-                && crate::arxml::xml::literal_text(node).is_some_and(|value| points_to_old(&value))
+fn migrate_source(
+    text: &str,
+    migrations: &[PathMigration],
+    catalog: &crate::definitions::DefinitionCatalog,
+) -> Result<String, LocalizedText> {
+    use super::resolve::{reference_element, xml_escape};
+    use crate::arxml::{NS, apply_patches, definition, patch_text, xml::literal_text};
+    let document = Document::parse(text).map_err(|error| error.to_string())?;
+    let mut patches = Vec::new();
+    let contains_old_path = |value: &str| {
+        migrations
+            .iter()
+            .any(|migration| value.contains(&migration.previous.path))
+    };
+    let opaque = || {
+        crate::product_message!("backend.arxml.changes.opaque_extension_reference_impact_unknown")
+    };
+    for node in document.descendants().filter(|node| node.is_element()) {
+        let vendor = node.ancestors().any(|ancestor| {
+            ancestor.is_element()
+                && (ancestor.tag_name().namespace() != Some(NS)
+                    || ancestor.has_tag_name((NS, "SDG"))
+                    || definition(ancestor).is_some_and(|id| catalog.get(&id).is_none()))
+        });
+        if node.attributes().any(|attribute| {
+            (vendor
+                || attribute.namespace().is_some_and(|namespace| {
+                    namespace != "http://www.w3.org/2001/XMLSchema-instance"
+                        && namespace != "http://www.w3.org/XML/1998/namespace"
+                }))
+                && contains_old_path(attribute.value())
+        }) {
+            return Err(opaque());
+        }
+        if let Some(value) = literal_text(node) {
+            if (vendor || reference_element(node) && node.attribute("DEST").is_none())
+                && contains_old_path(&value)
             {
-                return Ok(true);
+                return Err(opaque());
+            }
+            if reference_element(node)
+                && !vendor
+                && let Some(path) = migrated_path(value.trim(), migrations)
+            {
+                patch_text(node, xml_escape(&path), &mut patches)?;
             }
         }
     }
-    Ok(false)
+    let mut migrated = text.to_owned();
+    apply_patches(&mut migrated, &mut patches)?;
+    Ok(migrated)
 }
 
 impl Workspace {
@@ -179,27 +193,9 @@ impl Workspace {
         let new_sources = candidate.original_layer_sources()?;
         let new = base_semantics(&base, &new_sources, &self.catalog)
             .map_err(crate::arxml::integration_errors)?;
-        let project = candidate
-            .project
-            .as_mut()
-            .ok_or("Project manifest required.")?;
-        let next = project
-            .manifest
-            .layers
-            .as_mut()
-            .ok_or("Layered project required.")?;
         let mut migration_sources = BTreeSet::new();
         let mut migration_targets = BTreeSet::new();
         for migration in &base.migrations {
-            if candidate_reference_is_opaque(
-                &new_sources,
-                &migration.previous.path,
-                &next.applied_migrations,
-            )? {
-                return Err(crate::product_message!(
-                    "backend.arxml.changes.opaque_extension_reference_impact_unknown"
-                ));
-            }
             let previous = LayerTarget {
                 object: migration.previous.clone(),
                 field: None,
@@ -222,8 +218,26 @@ impl Workspace {
             }
         }
         if !base.migrations.is_empty() {
-            next.applied_migrations.push(base.migrations.clone());
+            let base_files = base
+                .members
+                .iter()
+                .map(|path| root.join(path))
+                .collect::<BTreeSet<_>>();
+            for file in &mut candidate.files {
+                if !base_files.contains(&file.path) {
+                    file.text = migrate_source(&file.text, &base.migrations, &candidate.catalog)?;
+                }
+            }
         }
+        let project = candidate
+            .project
+            .as_mut()
+            .ok_or("Project manifest required.")?;
+        let next = project
+            .manifest
+            .layers
+            .as_mut()
+            .ok_or("Layered project required.")?;
         let layers_base = layers.base.clone();
         let mut conflicts = Vec::new();
         let mut agreements = Vec::new();
@@ -247,6 +261,11 @@ impl Workspace {
                 let mut updated = target.clone();
                 if let Some(path) = migrated_path(&target.object.path, &base.migrations) {
                     updated.object.path = path;
+                }
+                for context in &mut updated.object.instance_context {
+                    if let Some(path) = migrated_path(context, &base.migrations) {
+                        *context = path;
+                    }
                 }
                 if let LayerAction::Set { values, .. } = &mut operation.action {
                     for value in values
@@ -444,5 +463,47 @@ impl Workspace {
         }
         *self = candidate;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rename(previous: &str, current: &str) -> PathMigration {
+        let identity = |path: &str| LayerObject {
+            release: "R24-11".into(),
+            definition_type: "APPLICATION-SW-COMPONENT-TYPE".into(),
+            path: path.into(),
+            instance_context: Vec::new(),
+        };
+        PathMigration {
+            previous: identity(previous),
+            current: identity(current),
+        }
+    }
+
+    #[test]
+    fn qualified_type_reference_is_saved_through_successive_moves() {
+        let catalog = crate::definitions::DefinitionCatalog::builtin().unwrap();
+        let xml = r#"<AUTOSAR xmlns="http://autosar.org/schema/r4.0"><!-- keep /A/X --><TYPE-TREF DEST="APPLICATION-SW-COMPONENT-TYPE">/A/X</TYPE-TREF></AUTOSAR>"#;
+        let first = migrate_source(xml, &[rename("/A", "/B")], &catalog).unwrap();
+        let second = migrate_source(&first, &[rename("/B/X", "/B/Y")], &catalog).unwrap();
+        assert_eq!(
+            second,
+            xml.replace(">/A/X</TYPE-TREF>", ">/B/Y</TYPE-TREF>")
+        );
+    }
+
+    #[test]
+    fn unknown_supplier_definition_blocks_an_unqualified_reference() {
+        let catalog = crate::definitions::DefinitionCatalog::builtin().unwrap();
+        let xml = r#"<AUTOSAR xmlns="http://autosar.org/schema/r4.0"><ECUC-TEXTUAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-STRING-PARAM-DEF">/Vendor/Path</DEFINITION-REF><VALUE>/A/X</VALUE></ECUC-TEXTUAL-PARAM-VALUE></AUTOSAR>"#;
+        let error = migrate_source(xml, &[rename("/A", "/B")], &catalog).unwrap_err();
+        assert!(
+            serde_json::to_string(&error)
+                .unwrap()
+                .contains("opaque_extension_reference_impact_unknown")
+        );
     }
 }

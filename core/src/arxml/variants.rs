@@ -55,8 +55,6 @@ pub struct ProjectLayers {
     pub selection: BTreeMap<String, BTreeSet<String>>,
     #[serde(default)]
     pub conflicts: Vec<UpgradeConflict>,
-    #[serde(default)]
-    pub applied_migrations: Vec<Vec<PathMigration>>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
