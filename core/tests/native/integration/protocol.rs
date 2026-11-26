@@ -182,6 +182,18 @@ fn generated_host_batch_keeps_configured_channels_isolated() {
                 let data = format!("{example:02x}{companion:02x}0000");
                 expected.push((epoch, channel, "STANDARD".to_owned(), TRANSMIT, data));
             }
+            if step % 2 != 0 {
+                script.push_str(&format!("RX {diagnostic} STANDARD 0 {REQUEST} 8 {READ}\n"));
+                let primary = (step * 16) + diagnostic + 1;
+                let companion = diagnostic + 16;
+                expected.push((
+                    epoch,
+                    diagnostic,
+                    "STANDARD".into(),
+                    RESPONSE,
+                    format!("076212340000{companion:02x}{primary:02x}"),
+                ));
+            }
             script.push_str("COMMIT\n");
         }
         script.push_str(&format!(

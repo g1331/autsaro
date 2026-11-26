@@ -339,7 +339,7 @@ COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr)
     if (ComM_Valid(ConfigPtr) == TRUE) {
         SchM_Enter_ComM_COMM_STATE();
         comm_configuration = ConfigPtr;
-        for (uint16 i = 0u; i < ConfigPtr->user_count; ++i) {
+        for (uint16 i = 0u; (i < COMM_USER_CAPACITY) && (i < ConfigPtr->user_count); ++i) {
             comm_requests[i] = COMM_NO_COMMUNICATION;
             if (!comm_publishing) {
                 comm_user_published[i] = COMM_NO_COMMUNICATION;

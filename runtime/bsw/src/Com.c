@@ -446,8 +446,8 @@ COM_CODE void Ecu_ComMainFunctionTx(void)
         Com_TransmitType transmit = NULL_PTR;
         Com_TxRejectionType observer = NULL_PTR;
         SchM_Enter_Com_COM_STATE();
-        more = ((com_configuration != NULL_PTR) && (index < com_configuration->pdu_count)) ? TRUE
-                                                                                           : FALSE;
+        more = (com_configuration != NULL_PTR) && (index < COM_MAX_PDUS) &&
+               (index < com_configuration->pdu_count);
         if ((more == TRUE) && (com_configuration->pdus[index].receive == FALSE) &&
             (tx_mode_false[index] == FALSE)) {
             id = com_configuration->pdus[index].pdu;

@@ -51,7 +51,18 @@ RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events);
  * Ownership: No pointer is retained.
  */
 RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached);
+/** Resolve a HostBatch channel to its configured CanIf controller.
+ * @param[in] channel Generated driver controller identifier.
+ * @param[out] controller CanIf controller written on success.
+ * @return TRUE for a configured channel and nonnull output.
+ * Preconditions: None.
+ * Context: Any context, including inside exclusive areas.
+ * Reentrancy: Reentrant read of immutable configuration.
+ * Ownership: No pointer is retained.
+ */
+RTE_Ecu_CODE boolean Ecu_StackCanIfController(uint8 channel, uint8 *controller);
 /** Validate a host frame against the generated CAN routes.
+ * @param[in] channel Generated driver controller identifier.
  * @param[in] id Encoded CAN identifier.
  * @param[in] dlc Wire payload length, 0..64 bytes.
  * @return Nonzero for allowed Rx shapes or unknown IDs; zero for invalid ranges, Tx IDs or wrong
@@ -65,7 +76,6 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached);
  *
  * Ownership: No pointer is retained.
  */
-RTE_Ecu_CODE boolean Ecu_StackCanIfController(uint8 channel, uint8 *controller);
 RTE_Ecu_CODE int Ecu_StackFrameShape(uint8 channel, uint32 id, uint8 dlc);
 #define RTE_Ecu_STOP_SEC_CODE
 #include "Rte_MemMap.h"
