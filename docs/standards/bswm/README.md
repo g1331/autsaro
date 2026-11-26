@@ -10,7 +10,7 @@
 
 `BswM_ComM_CurrentMode` 在调用者上下文仲裁，只评估使用该输入的规则。BswM 按 [ADR 0018](../../adr/0018-per-module-exclusive-areas-without-cross-module-locking.md) 使用自己的 `BSWM_STATE`，动作列表在区外运行：动作期间到达的输入不递归执行，而是在当前动作之后各仲裁一次，仲裁前取最新指示值（`SWS_BswM_00069`、`00281`）。`BswM_Deinit` 之后的输入不再处理，正在运行的动作照常结束；`BswM_MainFunction` 没有 DEFERRED 输入可处理。
 
-生成的动作将 HostBusSM 的返回值交给 BswM。动作受拒时，BswM 在区外调用生成配置里的失败回调。回调请求 HostBusSM 在后续 ECU 周期重新读取并向 ComM 发布实际模式，避免在动作内再次进入通知链。动作列表和 Det 配置沿用原有设置。
+HostBusSM 在通知 ComM 前已经应用方向。对这组三个固定的后置模式动作，生成器保留源配置中的调用文本和动作列表，并将重复的方向写入生成为实际模式核验。当前模式无法读取或已和指示不一致时，生成动作返回 `E_NOT_OK`。BswM 在区外调用失败回调，请求 HostBusSM 在后续 ECU 周期重新读取并发布实际模式。这样，迟到的 NO 指示也不会把已经恢复到 FULL 的 CAN 方向写回 OFFLINE。失败回调独立于标准 Det 报告配置。
 
 ## 处置与证据
 

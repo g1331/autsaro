@@ -82,7 +82,7 @@
 
 ### Fixed
 
-- Generated BswM actions propagate rejected CAN direction changes and schedule publication of the actual communication mode. Regenerate and rebuild ECU projects with the updated BswM configuration layout (#660)
+- Generated BswM actions reject stale mode indications without overwriting CAN directions and schedule publication of the actual communication mode. Regenerate and rebuild ECU projects with the updated BswM configuration layout (#660)
 
 - C analysis rejects unexpected include search changes from project flags and evaluated resource existence probes, and reports SDK link permission and I/O failures (#620)
 

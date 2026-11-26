@@ -3,6 +3,7 @@
 #include "BswM_ComM.h"
 #include "Can.h"
 #include "Can_Cfg.h"
+#include "Can_Host.h"
 #include "CanIf_Cfg.h"
 #include "ComM_Cfg.h"
 #include "Dcm.h"
@@ -17,8 +18,11 @@
 void __real_BswM_Init(const BswM_ConfigType *ConfigPtr);
 void __wrap_BswM_Init(const BswM_ConfigType *ConfigPtr);
 Std_ReturnType __wrap_Ecu_StackRunCycle(EventMaskType events);
+void __real_ComM_BusSM_ModeIndication(NetworkHandleType channel, ComM_ModeType mode);
+void __wrap_ComM_BusSM_ModeIndication(NetworkHandleType channel, ComM_ModeType mode);
 
 static BswM_ModeActionType generated_action;
+static boolean restart_before_no;
 
 void __wrap_BswM_Init(const BswM_ConfigType *ConfigPtr)
 {
@@ -32,6 +36,16 @@ Std_ReturnType __wrap_Ecu_StackRunCycle(EventMaskType events)
 {
     (void)events;
     return E_OK;
+}
+
+void __wrap_ComM_BusSM_ModeIndication(NetworkHandleType channel, ComM_ModeType mode)
+{
+    if (restart_before_no && (mode == COMM_NO_COMMUNICATION)) {
+        restart_before_no = FALSE;
+        /* Recover after BusSM reads NO and before that observation reaches ComM. */
+        Can_SetMode(CAN_STARTED);
+    }
+    __real_ComM_BusSM_ModeIndication(channel, mode);
 }
 
 static void expect_mode(ComM_ModeType expected, Rte_ModeType_ComMMode published)
@@ -56,6 +70,8 @@ static Os_HostThreadResultType observe(void *argument)
     }
     expect_mode(COMM_FULL_COMMUNICATION, RTE_MODE_ComMMode_COMM_FULL_COMMUNICATION);
     assert(generated_action != NULL_PTR);
+    assert(generated_action(0xffu, COMM_FULL_COMMUNICATION) == E_NOT_OK);
+    assert(generated_action(channel, 0xffu) == E_NOT_OK);
 
     /* The driver has stopped, but its queued indication has not been polled. */
     assert(Can_SetControllerMode(CanConf_CanController_Controller, CAN_CS_STOPPED) == E_OK);
@@ -65,6 +81,7 @@ static Os_HostThreadResultType observe(void *argument)
     expect_mode(COMM_NO_COMMUNICATION, RTE_MODE_ComMMode_COMM_FULL_COMMUNICATION);
     Ecu_HostBusSM_PublishPendingMode();
     expect_mode(COMM_NO_COMMUNICATION, RTE_MODE_ComMMode_COMM_NO_COMMUNICATION);
+    assert(generated_action(channel, COMM_NO_COMMUNICATION) == E_OK);
     assert(Dcm_StartOfReception(0u, NULL_PTR, 1u, &available) == BUFREQ_E_NOT_OK);
     assert(CanIf_Transmit(CanIfConf_CanIfTxPduCfg_TxValue, &tx) == E_NOT_OK);
 
@@ -78,6 +95,12 @@ static Os_HostThreadResultType observe(void *argument)
     assert(Ecu_HostBusSM_RequestComMode(channel, COMM_FULL_COMMUNICATION) == E_OK);
     expect_mode(COMM_FULL_COMMUNICATION, RTE_MODE_ComMMode_COMM_FULL_COMMUNICATION);
     assert(generated_action(channel, COMM_FULL_COMMUNICATION) == E_OK);
+    assert(Can_SetControllerMode(CanConf_CanController_Controller, CAN_CS_STOPPED) == E_OK);
+    BswM_ComM_CurrentMode(channel, COMM_FULL_COMMUNICATION);
+    restart_before_no = TRUE;
+    Ecu_HostBusSM_PublishPendingMode();
+    assert(restart_before_no == FALSE);
+    expect_mode(COMM_FULL_COMMUNICATION, RTE_MODE_ComMMode_COMM_FULL_COMMUNICATION);
     assert(CanIf_Transmit(CanIfConf_CanIfTxPduCfg_TxValue, &tx) == E_OK);
     assert(Dcm_StartOfReception(0u, NULL_PTR, 1u, &available) == BUFREQ_OK);
     Dcm_TpRxIndication(0u, E_NOT_OK);

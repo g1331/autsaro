@@ -17,7 +17,11 @@ fn generated_bswm_action_reconciles_rejected_mode_and_recovers() {
     let kinds = std::env::var_os("AUTOSAR_SANITIZE").unwrap_or_default();
     let mut build =
         tooling::ecu_sanitizer_build_command(&project, &output, "probe", Some(&control), &kinds);
-    build.args(["-Wl,--wrap=BswM_Init", "-Wl,--wrap=Ecu_StackRunCycle"]);
+    build.args([
+        "-Wl,--wrap=BswM_Init",
+        "-Wl,--wrap=Ecu_StackRunCycle",
+        "-Wl,--wrap=ComM_BusSM_ModeIndication",
+    ]);
     let result = tooling::run_public_command(
         &mut build,
         &scratch.0,

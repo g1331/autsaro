@@ -71,13 +71,13 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_RequestComMode(NetworkHandleType
  */
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleType Channel,
                                                                   ComM_ModeType *ComMode);
-/** Actual BswM user-callout action; controls directions, never COM groups.
+/** Apply the requested CAN directions for a BusSM operation.
  * @param[in] Channel Configured channel.
  * @param[in] ComMode NO, SILENT or FULL.
  * @return E_OK when CanIf applied the PDU mode, or for NO on a stopped controller;
  * E_NOT_OK otherwise, including SILENT/FULL on a stopped controller.
  * Preconditions: initialized; otherwise E_NOT_OK.
- * Context: BswM action; not inside an exclusive area.
+ * Context: task or callback; not inside an exclusive area.
  * Reentrancy: reentrant.
  * Ownership: None.
  */
