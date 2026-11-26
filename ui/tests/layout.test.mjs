@@ -3,10 +3,10 @@ import React from 'react';
 import { cleanup, render, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { previewLanguage, translate } from '../src/i18n';
-import { ObjectEditor } from '../src/workbench/ObjectEditor';
-import { IntegrationDelivery } from '../src/IntegrationDelivery';
-import { stageDefaults } from '../src/workbench/useDelivery';
-import { initialState } from '../src/workbench/state';
+import { ObjectEditor } from '../src/features/editing/ObjectEditor';
+import { IntegrationDelivery } from '../src/features/delivery/IntegrationDelivery';
+import { stageDefaults } from '../src/features/delivery/stages';
+import { initialState } from './support/workbench-state.mjs';
 import { withCommands } from './support/commands.mjs';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false, invoke: vi.fn() }));

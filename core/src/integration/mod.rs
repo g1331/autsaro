@@ -236,6 +236,9 @@ impl PlanDiagnostic {
 pub struct InputSource {
     logical_path: String,
     bytes: Vec<u8>,
+    effective_text: Option<String>,
+    excluded: bool,
+    project_identity: Option<String>,
 }
 
 impl InputSource {
@@ -247,6 +250,9 @@ impl InputSource {
         let source = Self {
             logical_path,
             bytes,
+            effective_text: None,
+            excluded: false,
+            project_identity: None,
         };
         let path = Path::new(&source.logical_path);
         if source.logical_path.is_empty()
@@ -301,7 +307,25 @@ impl InputSource {
         hex::encode(Sha256::digest(&self.bytes))
     }
 
+    pub(crate) fn bind_project(
+        &mut self,
+        effective_text: Option<String>,
+        excluded: bool,
+        identity: String,
+    ) {
+        self.effective_text = effective_text;
+        self.excluded = excluded;
+        self.project_identity = Some(identity);
+    }
+
+    pub(crate) fn project_identity(&self) -> Option<&str> {
+        self.project_identity.as_deref()
+    }
+
     fn text(&self) -> Result<&str, Box<PlanDiagnostic>> {
+        if let Some(text) = &self.effective_text {
+            return Ok(text);
+        }
         std::str::from_utf8(&self.bytes).map_err(|error| Box::new(PlanDiagnostic::at_source(self,
             "XML_ENCODING", crate::product_message!("backend.integration.mod.input_not_utf8_xml", "error" => error),
             crate::product_message!("backend.integration.mod.convert_source_to_utf8_arxml"))))
@@ -483,6 +507,7 @@ pub fn inspect_inputs_native(
     sorted.sort_by(|left, right| left.logical_path.cmp(&right.logical_path));
     let files: Vec<_> = sorted
         .iter()
+        .filter(|source| !source.excluded)
         .map(|source| Ok((Path::new(&source.logical_path), source.text()?)))
         .collect::<Result<_, Box<PlanDiagnostic>>>()
         .map_err(|diagnostic| vec![*diagnostic])?;
@@ -544,12 +569,15 @@ pub fn inspect_inputs_native(
         .map(|element| element.text.clone())
         .collect();
     let required_extension_definitions = catalog.required_extensions(&definition_ids);
-    let validation_dependencies = std::collections::BTreeMap::from([
+    let mut validation_dependencies = std::collections::BTreeMap::from([
         ("rules.release".into(), identity.release.clone()),
         ("rules.version".into(), identity.rules_version.clone()),
         ("rules.sha256".into(), identity.sha256.clone()),
         ("definitions.sha256".into(), catalog.fingerprint(&identity)),
     ]);
+    if let Some(identity) = sorted.iter().find_map(InputSource::project_identity) {
+        validation_dependencies.insert("project.sha256".into(), identity.into());
+    }
     Ok(InputInspection {
         sources: sorted,
         identities,

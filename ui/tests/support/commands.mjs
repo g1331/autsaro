@@ -1,4 +1,4 @@
-import { workbenchCommands } from '../../src/workbench/commands';
+import { workbenchCommands } from '../../src/app/commands';
 
 /** A mock controller with the command state `useWorkbench` derives from it. */
 export function withCommands(controller) {

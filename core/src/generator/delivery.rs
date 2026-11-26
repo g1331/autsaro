@@ -12,7 +12,7 @@ pub use reopen::{NativeHandoff, open_handoff, require_current_format};
 use crate::Workspace;
 use crate::arxml::{ProjectInput, ProjectManifest};
 use crate::definitions::DefinitionCatalog;
-use crate::integration::{InputSource, ValidatedIntegrationPlan};
+use crate::integration::ValidatedIntegrationPlan;
 use crate::prepared::PreparedFile;
 use crate::project_model::{ExtensionDefinitionIdentity, RuleSetIdentity};
 use crate::target::BuildTarget;
@@ -60,6 +60,8 @@ pub struct ResourceIdentities {
 pub enum InputKind {
     Arxml,
     Application,
+    #[serde(rename = "inactive-application")]
+    InactiveApplication,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -138,6 +140,7 @@ impl NativeGuard {
 
 pub(crate) struct NativeInputs {
     pub manifest: ProjectManifest,
+    original_manifest: Option<Vec<u8>>,
     pub configuration: Vec<(String, Vec<u8>)>,
     pub application: Vec<(String, Vec<u8>)>,
     pub resources: ResourceIdentities,
@@ -311,10 +314,10 @@ pub(crate) fn consumer_catalog(
     Ok(selected)
 }
 
-fn snapshot_identity(
-    manifest: &ProjectManifest,
-    configuration: &[(String, Vec<u8>)],
-    application: &[(String, Vec<u8>)],
+fn snapshot_identity<'a>(
+    manifest_bytes: &[u8],
+    configuration: &'a [(String, Vec<u8>)],
+    application: impl Iterator<Item = &'a (String, Vec<u8>)>,
     rule: &RuleSetIdentity,
     definitions: &str,
 ) -> Result<String, crate::LocalizedText> {
@@ -322,7 +325,9 @@ fn snapshot_identity(
     hash.update(b"autosar-native-consumer-snapshot-v1\0");
     hash.update(json_bytes(rule)?);
     hash.update(definitions.as_bytes());
-    hash.update(json_bytes(manifest)?);
+    hash.update((manifest_bytes.len() as u64).to_le_bytes());
+    hash.update(manifest_bytes);
+    hash.update(env!("CARGO_PKG_VERSION").as_bytes());
     let mut sources: Vec<_> = configuration.iter().chain(application).collect();
     sources.sort_by(|left, right| left.0.cmp(&right.0));
     for (path, bytes) in sources {
@@ -335,11 +340,27 @@ fn snapshot_identity(
 }
 
 impl NativeInputs {
+    fn manifest_bytes(&self) -> Result<Cow<'_, [u8]>, crate::LocalizedText> {
+        match &self.original_manifest {
+            Some(bytes) => Ok(Cow::Borrowed(bytes)),
+            None => json_bytes(&self.manifest).map(Cow::Owned),
+        }
+    }
+
     pub(crate) fn refresh_snapshot_identity(&mut self) -> Result<(), crate::LocalizedText> {
+        self.refresh_active_snapshot_identity(None)
+    }
+
+    pub(crate) fn refresh_active_snapshot_identity(
+        &mut self,
+        slots: Option<&[ApplicationSlotDescriptor]>,
+    ) -> Result<(), crate::LocalizedText> {
         self.preparation_identity = snapshot_identity(
-            &self.manifest,
+            &self.manifest_bytes()?,
             &self.configuration,
-            &self.application,
+            self.application.iter().filter(|(path, _)| {
+                slots.is_none_or(|slots| slots.iter().any(|slot| slot.source_paths.contains(path)))
+            }),
             &self.resources.rule_set_identity,
             &self.definition_fingerprint,
         )?;
@@ -403,11 +424,16 @@ impl NativeInputs {
             }
         }
         let mut manifest = snapshot.manifest;
-        manifest.accepted_extension_definitions = required.clone();
+        if manifest.layers.is_none() {
+            manifest.accepted_extension_definitions = required.clone();
+        }
+        let original_manifest = manifest.layers.is_some().then_some(snapshot.manifest_bytes);
         let preparation_identity = snapshot_identity(
-            &manifest,
+            original_manifest
+                .as_deref()
+                .unwrap_or(&json_bytes(&manifest)?),
             &configuration,
-            &application,
+            application.iter(),
             &rule_set_identity,
             &definition_fingerprint,
         )?;
@@ -415,6 +441,7 @@ impl NativeInputs {
         Ok(Self {
             revision_source_identity: Some(revision_source_identity.clone()),
             manifest,
+            original_manifest,
             configuration,
             application,
             resources: ResourceIdentities {
@@ -437,6 +464,13 @@ impl NativeInputs {
     }
 
     pub(crate) fn from_plan(plan: &ValidatedIntegrationPlan) -> Result<Self, crate::LocalizedText> {
+        if plan
+            .sources()
+            .iter()
+            .any(|source| source.project_identity().is_some())
+        {
+            return Err("Prepare a layered plan with its original workspace.".into());
+        }
         let description = plan.description();
         let identity = description
             .rule_set_identity
@@ -456,7 +490,8 @@ impl NativeInputs {
             .map(|source| (source.logical_path().to_owned(), source.bytes().to_vec()))
             .collect();
         let manifest = ProjectManifest {
-            format_version: 1,
+            format_version: 2,
+            layers: None,
             declared_release: "R24-11".into(),
             profile_hint: description.profile.clone(),
             inputs: plan
@@ -475,15 +510,16 @@ impl NativeInputs {
             required_extension_definitions: description.required_extension_definitions.clone(),
         };
         let preparation_identity = snapshot_identity(
-            &manifest,
+            &json_bytes(&manifest)?,
             &configuration,
-            &[],
+            std::iter::empty(),
             &resources.rule_set_identity,
             &definition_fingerprint,
         )?;
         Ok(Self {
             revision_source_identity: None,
             manifest,
+            original_manifest: None,
             configuration,
             application: Vec::new(),
             resources: resources.clone(),
@@ -497,15 +533,6 @@ impl NativeInputs {
                 revision_identity: preparation_identity,
             },
         })
-    }
-
-    pub(crate) fn sources(&self) -> Result<Vec<InputSource>, crate::LocalizedText> {
-        self.configuration
-            .iter()
-            .map(|(path, bytes)| {
-                InputSource::new(path, bytes.clone()).map_err(|issue| issue.message)
-            })
-            .collect()
     }
 }
 
@@ -589,10 +616,9 @@ pub(crate) fn populate_inputs<'a>(
     for member in &inputs.manifest.application_inputs {
         let slot = slots
             .iter()
-            .find(|slot| slot.producer_slot == member.producer_slot)
-            .ok_or_else(|| crate::product_message!("backend.delivery.application_slot_missing"))?;
-        if member.producer_slot != slot.producer_slot
-            || slot.source_paths != [member.path.clone()]
+            .find(|slot| slot.producer_slot == member.producer_slot);
+        if (slot.is_none() && inputs.manifest.layers.is_none())
+            || slot.is_some_and(|slot| slot.source_paths != [member.path.clone()])
             || !logical.insert(member.path.to_ascii_lowercase())
         {
             return Err(crate::product_message!(
@@ -612,23 +638,32 @@ pub(crate) fn populate_inputs<'a>(
             .map_err(|_| crate::product_message!("backend.delivery.application_source_not_utf8"))?;
         let sha256 = digest(bytes);
         let contents = Cow::Owned(std::mem::take(bytes));
-        let output = application_package_path(&slot.source_paths[0]).ok_or_else(|| {
-            crate::product_message!("backend.delivery.application_membership_mismatch")
-        })?;
+        let (output, kind, role) = if slot.is_some() {
+            let output = application_package_path(&member.path).ok_or_else(|| {
+                crate::product_message!("backend.delivery.application_membership_mismatch")
+            })?;
+            (output, InputKind::Application, "user-application")
+        } else {
+            (
+                format!("inputs/inactive/{}", member.path),
+                InputKind::InactiveApplication,
+                "inactive-application",
+            )
+        };
         insert_file(files, output.clone(), contents)?;
         snapshots.push(InputSnapshot {
             logical_path: member.path.clone(),
             package_path: output,
-            kind: InputKind::Application,
+            kind,
             sha256,
-            role: "user-application".into(),
+            role: role.into(),
             producer_slot: Some(member.producer_slot.clone()),
         });
     }
     insert_file(
         files,
         PROJECT_PATH.into(),
-        Cow::Owned(json_bytes(&inputs.manifest)?),
+        Cow::Owned(inputs.manifest_bytes()?.into_owned()),
     )?;
     Ok(snapshots)
 }
@@ -731,8 +766,10 @@ mod snapshot_identity_tests {
             required_extension_definitions: Vec::new(),
         };
         NativeInputs {
+            original_manifest: None,
             manifest: ProjectManifest {
-                format_version: 1,
+                format_version: 2,
+                layers: None,
                 declared_release: "R24-11".into(),
                 profile_hint: crate::integration::PROFILE.into(),
                 inputs: Vec::new(),

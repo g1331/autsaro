@@ -4,24 +4,17 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from ecu_tools.build import digest, refuse_links
+from ecu_tools.build import refuse_links
 
 from autosar_tooling import c_fingerprint, c_retention, c_standard
 
 DIRECTORY = "docs/standards/c-dispositions"
 FORMAT = "c-diagnostic-dispositions-v1"
 WINDOWS = "windows-x64-controlled-v1"
-WINDOWS_ANALYZERS = {
-    "20261103.298.1": "ea592e1e4f242fb55cd5530d5496e1ddfaa6e655ebcf24bae9ee5ef6cd4ce4eb",
-    "20261116.315.1": "45b1a25de3df9deefa62e704f21685a6f03803a0bcee86141f3437b38d05bf0b",
-}
-
-
-def verify_windows_analyzer(executable: Path, image: str) -> str:
-    binary = digest(executable)
-    if WINDOWS_ANALYZERS.get(image) != binary:
-        raise ValueError(f"Windows prepare image or analyzer needs assessment: {image}, SHA-256={binary}")
-    return binary
+WINDOWS_DISPOSITION_BINARIES = (
+    "ea592e1e4f242fb55cd5530d5496e1ddfaa6e655ebcf24bae9ee5ef6cd4ce4eb",
+    "45b1a25de3df9deefa62e704f21685a6f03803a0bcee86141f3437b38d05bf0b",
+)
 
 
 def load(root: Path, target: str, sample: str, binary: str | None = None) -> dict[str, str]:
@@ -29,14 +22,19 @@ def load(root: Path, target: str, sample: str, binary: str | None = None) -> dic
         raise ValueError("Unknown diagnostic disposition target or sample")
     directory = root / DIRECTORY / target
     if target == WINDOWS:
-        if binary not in WINDOWS_ANALYZERS.values():
-            raise ValueError("Windows Cppcheck binary is outside the assessed image pool")
+        if binary not in WINDOWS_DISPOSITION_BINARIES:
+            # A new build has no approved fingerprints yet.
+            return {}
         directory /= binary
     path = directory / (sample + ".json")
     refuse_links(path, root)
-    value = json.loads(path.read_text(encoding="utf-8"),
-                       object_pairs_hook=c_standard.unique_assessment_members)
-    if (set(value) != {"format", "target", "sample", "proofs"}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"),
+                           object_pairs_hook=c_standard.unique_assessment_members)
+    except (ValueError, RecursionError) as error:
+        raise ValueError(f"Cannot parse diagnostic disposition registry {path}: {error}") from error
+    if (not isinstance(value, dict)
+            or set(value) != {"format", "target", "sample", "proofs"}
             or (value["format"], value["target"], value["sample"]) != (FORMAT, target, sample)):
         raise ValueError(f"Diagnostic disposition matrix identity differs: {path}")
     bindings = {}

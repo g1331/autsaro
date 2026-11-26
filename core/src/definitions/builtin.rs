@@ -1374,6 +1374,10 @@ fn persistence(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText> 
         U8,
         1,
     )?;
+    // CP R24-11 ECUC_Mcu_00186 fixes this value as Published Information.
+    a.0.published_information.insert(format!(
+        "{ROOT}Mcu/McuPublishedInformation/McuResetReasonConf/McuResetReason"
+    ));
 
     let general = "Dem/DemGeneral";
     a.container(general, 1, Some(1))?;

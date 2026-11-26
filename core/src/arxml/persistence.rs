@@ -485,6 +485,7 @@ impl Workspace {
     }
 
     pub(super) fn ensure_save_allowed(&mut self) -> Result<(), crate::message::LocalizedText> {
+        self.verify_project_base()?;
         self.validate()?;
         self.ensure_no_recovery_backups()?;
         // Target-generation failures do not close safe configuration persistence.

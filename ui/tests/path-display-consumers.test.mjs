@@ -3,12 +3,12 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { composedMessage, localize, message, previewLanguage, translate } from '../src/i18n';
-import { IntegrationDelivery } from '../src/IntegrationDelivery';
-import { CopyText, OwnedLog } from '../src/workbench/Dialog';
-import { PreviewDialogs } from '../src/workbench/PreviewDialogs';
-import { SourceEntry } from '../src/workbench/SourceEntry';
-import { ToolWindows } from '../src/workbench/ToolWindows';
-import { useWorkbench } from '../src/workbench/useWorkbench';
+import { IntegrationDelivery } from '../src/features/delivery/IntegrationDelivery';
+import { CopyText, OwnedLog } from '../src/shared/ui/Dialog';
+import { PreviewDialogs } from '../src/app/PreviewDialogs';
+import { SourceEntry } from '../src/features/project/SourceEntry';
+import { ToolWindows } from '../src/app/ToolWindows';
+import { useWorkbench } from '../src/app/useWorkbench';
 import { withCommands } from './support/commands.mjs';
 
 const native = vi.hoisted(() => ({

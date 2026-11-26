@@ -260,6 +260,7 @@ fn load(path: &Path) -> Result<Loaded, crate::message::LocalizedText> {
     let mut metadata = DefinitionCatalog {
         entries: Arc::new(BTreeMap::new()),
         targets: Arc::new(BTreeMap::new()),
+        published_information: BTreeSet::new(),
         owners: BTreeMap::new(),
         extensions: BTreeMap::new(),
         missing: BTreeSet::new(),
@@ -374,6 +375,9 @@ fn install(
     for (id, targets) in loaded.metadata.targets.iter() {
         catalog.targets_mut().insert(id.clone(), targets.clone());
     }
+    catalog
+        .published_information
+        .extend(loaded.metadata.published_information.iter().cloned());
     catalog
         .extensions
         .insert(loaded.identity.catalog_id.clone(), loaded.identity.clone());
@@ -729,6 +733,20 @@ fn parse(
             entry.reason = Some(crate::product_message!(
                 "backend.definitions.extension.additional_expression_or_text_constraints_unsupported"
             ));
+        }
+        if kind.is_some()
+            && node
+                .children()
+                .filter(|child| child.has_tag_name((NS, "VALUE-CONFIG-CLASSES")))
+                .flat_map(|classes| classes.descendants())
+                .any(|class| {
+                    class.has_tag_name((NS, "CONFIG-CLASS"))
+                        && super::xml_text_trimmed(class) == "PUBLISHED-INFORMATION"
+                })
+        {
+            catalog
+                .published_information
+                .insert(entry.definition_id.clone());
         }
         catalog.insert(entry, targets)?;
     }

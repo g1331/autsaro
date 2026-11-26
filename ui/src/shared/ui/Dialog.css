@@ -1,0 +1,116 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgb(0 0 0 / 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.workbench-dialog {
+  width: min(720px, 96vw);
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--overlay);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: 0 20px 70px rgb(0 0 0 / 0.25);
+  overflow: hidden;
+}
+.workbench-dialog.confirm {
+  width: min(480px, 96vw);
+}
+.workbench-dialog.preview {
+  width: min(1100px, 96vw);
+}
+/* Categories differ in length; a fixed height keeps the dialog from jumping. */
+.workbench-dialog.settings-dialog {
+  height: min(640px, 90dvh);
+}
+.settings-dialog > .dialog-body {
+  flex: 1;
+}
+.workbench-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.workbench-dialog > header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.dialog-busy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 24px;
+  font-size: 12px;
+  color: var(--secondary);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+.dialog-busy > span:not(.busy-indicator) {
+  flex: 1;
+  min-width: 0;
+}
+.dialog-body {
+  padding: 20px 24px;
+  min-height: 0;
+  overflow: auto;
+}
+.dialog-body li {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+.workbench-dialog > footer {
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+}
+.workbench-dialog > footer > span {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--secondary);
+}
+.preview-layout {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 16px;
+  min-height: 200px;
+}
+.preview-layout > nav {
+  overflow: auto;
+  max-height: 50vh;
+}
+.preview-layout > nav > button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border-radius: 0;
+  word-break: break-word;
+}
+.preview-layout > nav small {
+  display: block;
+  margin-top: 3px;
+}
+.preview-layout > section {
+  min-width: 0;
+}
+.preview-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.preview-compare > div {
+  min-width: 0;
+}

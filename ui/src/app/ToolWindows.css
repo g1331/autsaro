@@ -1,0 +1,131 @@
+.bottom-tools {
+  position: relative;
+  flex: none;
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.tool-tabs {
+  display: flex;
+  align-items: stretch;
+  height: 32px;
+  overflow-x: auto;
+}
+.tool-tabs > button {
+  border-radius: 0;
+  padding: 5px 13px;
+  white-space: nowrap;
+  color: var(--secondary);
+}
+.tool-tabs > button[aria-pressed='true'],
+.tool-tabs > button[aria-pressed='true']:not(:disabled):not([aria-disabled='true']):hover {
+  color: var(--text);
+  background: var(--canvas);
+  box-shadow: inset 0 2px var(--primary);
+}
+.tool-tabs small {
+  padding: 0 4px;
+  background: var(--hover);
+  border-radius: 3px;
+}
+.tool-content {
+  height: var(--panel-tools-height, 230px);
+  min-height: 100px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 0 12px 12px;
+}
+.panel-resize-handle {
+  position: absolute;
+  z-index: 12;
+  touch-action: none;
+  user-select: none;
+  background: transparent;
+}
+.panel-resize-handle:hover,
+.panel-resize-handle:focus-visible,
+.panel-resize-handle.is-dragging {
+  background: var(--blue);
+}
+.panel-resize-tree,
+.panel-resize-inspector {
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+}
+.panel-resize-tree {
+  right: -3px;
+}
+.panel-resize-inspector {
+  left: -3px;
+}
+.panel-resize-tools {
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+}
+.panel-resizing,
+.panel-resizing * {
+  cursor: var(--panel-resize-cursor) !important;
+  user-select: none !important;
+}
+.tool-content > header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  background: var(--surface);
+  z-index: 1;
+}
+.tool-content .workflow-page {
+  padding: 8px 0;
+}
+summary {
+  cursor: pointer;
+  padding: 7px 0;
+}
+details + details {
+  margin-top: 4px;
+}
+.validation-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 12px;
+}
+.validation-scopes > p,
+.validation-scopes summary {
+  margin: 0;
+  padding: 4px 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.validation-scopes summary {
+  display: inline-flex;
+  align-items: center;
+  list-style: none;
+}
+.validation-scopes summary::-webkit-details-marker {
+  display: none;
+}
+.validation-scopes summary > svg {
+  margin: 0 4px 0 0;
+}
+.validation-scopes details[open] > summary > svg {
+  transform: rotate(90deg);
+}
+.validation-scopes > details {
+  margin: 0;
+}
+.validation-scopes details[open] {
+  flex-basis: 100%;
+}
+.validation-scopes details > p {
+  margin: 2px 0 2px 18px;
+}

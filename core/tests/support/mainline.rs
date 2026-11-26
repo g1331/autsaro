@@ -211,20 +211,20 @@ pub(crate) fn live_pipeline_workspace(
     for source in sources {
         std::fs::write(root.join(source.logical_path()), source.bytes()).unwrap();
     }
-    let manifest = autosar_config_core::arxml::ProjectManifest {
-        format_version: 1,
-        declared_release: "R24-11".into(),
-        profile_hint: "singlecore-ecu-v1".into(),
-        inputs: sources
+    // The analysis baseline runs these current inputs with the first-parent
+    // generator. Use that producer's own manifest version and membership.
+    let direct = autosar_config_core::Workspace::open(
+        sources
             .iter()
-            .map(|source| autosar_config_core::arxml::ProjectInput {
-                path: source.logical_path().into(),
-                role_hint: "standard".into(),
-            })
+            .map(|source| root.join(source.logical_path()))
             .collect(),
-        application_inputs: Vec::new(),
-        accepted_extension_definitions: Vec::new(),
-    };
+    )
+    .unwrap();
+    let mut manifest = direct.generation_snapshot().unwrap().manifest;
+    manifest.profile_hint = "singlecore-ecu-v1".into();
+    for source in &mut manifest.inputs {
+        source.role_hint = "standard".into();
+    }
     let path = root.join("workbench-project.json");
     std::fs::write(&path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
     autosar_config_core::Workspace::open_project_manifest(&path, &root.join("cache")).unwrap()
@@ -1171,7 +1171,7 @@ pub(crate) fn forged_handoff(
             let path = package.join("inputs/workbench-project.json");
             let mut manifest: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-            manifest["formatVersion"] = 2.into();
+            manifest["formatVersion"] = 99.into();
             let bytes = serde_json::to_vec_pretty(&manifest).unwrap();
             std::fs::write(&path, &bytes).unwrap();
             let policy_path = package.join("meta/seal-policy.json");

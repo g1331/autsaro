@@ -1,0 +1,126 @@
+.central-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--canvas);
+}
+.document-tabs {
+  display: flex;
+  align-items: stretch;
+  flex: none;
+  min-height: 39px;
+  background: var(--shell);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.document-tabs > [role='tablist'] {
+  display: flex;
+  flex: none;
+}
+.document-tabs [role='presentation'] {
+  display: flex;
+  align-items: center;
+  border-right: 1px solid var(--line);
+  flex: none;
+}
+.document-tabs [role='tab'] {
+  border-radius: 0;
+  min-height: 38px;
+  padding: 7px 13px;
+  white-space: nowrap;
+  color: var(--secondary);
+}
+.document-tabs .active {
+  background: var(--canvas);
+  box-shadow: inset 0 -2px var(--primary);
+}
+.document-tabs .active [role='tab'] {
+  color: var(--text);
+}
+.document-tabs .tab-close {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  margin-right: 6px;
+  color: var(--secondary);
+}
+.document-tabs > .icon-button {
+  align-self: center;
+  margin: 0 5px;
+}
+.document-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.document-page,
+.source-document,
+.workflow-page {
+  padding: 20px;
+}
+.document-heading,
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.document-heading span,
+.section-header p {
+  font-size: 12px;
+  color: var(--secondary);
+}
+.eyebrow {
+  display: none;
+}
+.section-actions,
+.inspector-actions,
+.field-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+.table-wrap {
+  overflow-x: auto;
+  width: 100%;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 560px;
+  font-size: 12px;
+  text-align: left;
+}
+caption {
+  text-align: left;
+  color: var(--secondary);
+  padding: 8px 0;
+}
+th {
+  background: var(--surface);
+  font-weight: 600;
+  padding: 9px 10px;
+  position: sticky;
+  top: 0;
+}
+td {
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+td small {
+  display: block;
+  padding-top: 3px;
+}
+tbody tr:not([aria-current='true']):hover {
+  background: var(--hover);
+}
+.path-text {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}

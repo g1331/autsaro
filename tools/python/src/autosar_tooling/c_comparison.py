@@ -427,19 +427,22 @@ def compare(
                     value["kernelSha256"] = sorted(value["kernelSha256"])
             return value
         current_target = target_configuration(project, current["scope"])
-        baseline_target = mapped(target_configuration(old_root, previous["scope"]))
-        r11_transition = source_tree and (baseline_target.get("format"), current_target.get("format")) == (
+        previous_target = mapped(target_configuration(old_root, previous["scope"]))
+        r11_transition = source_tree and (previous_target.get("format"), current_target.get("format")) == (
             "autosar-build-target-v3", "autosar-build-target-v4",
         )
         if r11_transition:
-            # Compare the build configuration across the known protocol migration.
-            # The source seals retain each tree's exact protocol and format versions.
-            delivery = baseline_target["nativeDelivery"]
-            if delivery["format"] != "autosar-workbench-handoff-v4":
-                raise ValueError("R11 baseline delivery version differs")
-            delivery["format"] = "autosar-workbench-handoff-v5"
-            baseline_target.update(format="autosar-build-target-v4", hostBatchProtocol="HostBatchV2")
-        if normalized(current_target) != normalized(baseline_target):
+            # Match the target across the protocol migration after checking each source seal.
+            previous_target.update(format="autosar-build-target-v4", hostBatchProtocol="HostBatchV2")
+        if source_tree:
+            match current_target.get("nativeDelivery"), previous_target.get("nativeDelivery"):
+                case {"format": "autosar-workbench-handoff-v5" as version}, (
+                    {"format": "autosar-workbench-handoff-v4"} as previous_delivery
+                ):
+                    # v5 can carry inactive applications. The rest of the handoff
+                    # still has to match, including its input snapshots and slots.
+                    previous_delivery["format"] = version
+        if normalized(current_target) != normalized(previous_target):
             raise ValueError("Target/sample configuration differs")
         scope_fields = ("target", "profile", "entries", "compilerFlags", "includePaths",
                         "translationUnits", "supplemental")

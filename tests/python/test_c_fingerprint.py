@@ -44,22 +44,25 @@ class FingerprintTests(unittest.TestCase):
             "directives": [visible],
         })
 
-    def test_windows_analyzer_contract_refuses_tampering_and_cross_image_substitution(self):
+    def test_windows_disposition_bindings_require_the_matching_binary(self):
         with tempfile.TemporaryDirectory() as directory:
-            executable = Path(directory) / "cppcheck.exe"
-            binaries = {"older": b"older PE", "newer": b"newer PE"}
-            expected = {image: hashlib.sha256(data).hexdigest() for image, data in binaries.items()}
-            with patch.object(c_disposition, "WINDOWS_ANALYZERS", expected):
-                for image, binary in binaries.items():
-                    executable.write_bytes(binary)
-                    self.assertEqual(c_disposition.verify_windows_analyzer(executable, image), expected[image])
-                    with self.assertRaisesRegex(ValueError, "needs assessment"):
-                        c_disposition.verify_windows_analyzer(executable, "unknown")
-                    with self.assertRaisesRegex(ValueError, "needs assessment"):
-                        c_disposition.verify_windows_analyzer(executable, next(iter(expected.keys() - {image})))
-                    executable.write_bytes(binary + b"\x00")
-                    with self.assertRaisesRegex(ValueError, "needs assessment"):
-                        c_disposition.verify_windows_analyzer(executable, image)
+            root = Path(directory)
+            target = c_disposition.WINDOWS
+            binary, new_binary = "a" * 64, "b" * 64
+            proof, fingerprint = "c" * 64, "d" * 64
+            sample = "standard-ecu"
+            path = root / c_disposition.DIRECTORY / target / binary / (sample + ".json")
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps({
+                "format": c_disposition.FORMAT, "target": target, "sample": sample,
+                "proofs": {proof: [fingerprint]},
+            }), encoding="utf-8")
+            with patch.object(c_disposition, "WINDOWS_DISPOSITION_BINARIES", (binary,)):
+                self.assertEqual(c_disposition.load(root, target, sample, binary), {fingerprint: proof})
+                self.assertEqual(c_disposition.load(root, target, sample, new_binary), {})
+                path.unlink()
+                with self.assertRaises(FileNotFoundError):
+                    c_disposition.load(root, target, sample, binary)
 
     @staticmethod
     def inventory(summary, output, *, driver="a" * 64, backend="b" * 64):
@@ -520,6 +523,23 @@ class FingerprintTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         self.assertEqual(result["staleDispositions"], sorted(approval))
         self.assertEqual(c_fingerprint.verdict([], [row], set())["status"], "passed")
+
+    def test_disposition_registry_parse_failure_identifies_the_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            target, sample = c_gate.TARGETS[0], "no-diagnostic"
+            registry = root / c_disposition.DIRECTORY / target / f"{sample}.json"
+            registry.parent.mkdir(parents=True)
+            for content in ("{", "[[]]"):
+                registry.write_text(content, encoding="utf-8")
+                with self.assertRaises(ValueError) as error:
+                    c_disposition.load(root, target, sample)
+                self.assertIn(str(registry), str(error.exception))
+            with (patch.object(c_disposition.json, "loads", side_effect=RecursionError("nested JSON")),
+                  self.assertRaises(ValueError) as error):
+                c_disposition.load(root, target, sample)
+            self.assertIn(str(registry), str(error.exception))
+            self.assertIsInstance(error.exception.__cause__, RecursionError)
 
     def test_disposition_fingerprint_requires_current_technical_and_formal_proof(self):
         with tempfile.TemporaryDirectory() as directory:

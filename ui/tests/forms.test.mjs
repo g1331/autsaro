@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
-import { intInRange } from '../src/workbench/forms';
+import { intInRange } from '../src/shared/ui/forms';
 
 test('invalid form values are rejected before native commands are sent', () => {
   for (const value of ['', '1.5', 'NaN', '-1', '9']) {

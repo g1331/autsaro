@@ -14,12 +14,12 @@ import {
   resources,
   translate,
 } from '../src/i18n';
-import { errorText, intInRange } from '../src/workbench/forms';
-import { useWorkbench } from '../src/workbench/useWorkbench';
-import { SettingsPage } from '../src/pages/SettingsPage';
-import { createSettingsActions } from '../src/workbench/settingsActions';
-import { initialState } from '../src/workbench/state';
-import { OwnedLog } from '../src/workbench/Dialog';
+import { errorText, intInRange } from '../src/shared/ui/forms';
+import { useWorkbench } from '../src/app/useWorkbench';
+import { SettingsPage } from '../src/features/settings/SettingsPage';
+import { createSettingsActions } from '../src/features/settings/settingsActions';
+import { initialState } from './support/workbench-state.mjs';
+import { OwnedLog } from '../src/shared/ui/Dialog';
 import { withCommands } from './support/commands.mjs';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false, invoke: vi.fn() }));

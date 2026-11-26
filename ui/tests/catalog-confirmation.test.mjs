@@ -3,9 +3,9 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { previewLanguage, translate } from '../src/i18n';
-import { SettingsPage } from '../src/pages/SettingsPage';
-import { PreviewDialogs } from '../src/workbench/PreviewDialogs';
-import { useWorkbench } from '../src/workbench/useWorkbench';
+import { SettingsPage } from '../src/features/settings/SettingsPage';
+import { PreviewDialogs } from '../src/app/PreviewDialogs';
+import { useWorkbench } from '../src/app/useWorkbench';
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), open: vi.fn(), confirm: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true, invoke: native.invoke }));
