@@ -1,7 +1,7 @@
 /** @file Independent driver tests select the runtime's standalone defaults. */
 #ifndef ECU_PROFILE_CONFIG_H
 #define ECU_PROFILE_CONFIG_H
-#define COM_MAX_PDUS      8u
+#define COM_MAX_PDUS          8u
 #define COMM_USER_CAPACITY    6u
 #define COMM_CHANNEL_CAPACITY 6u
 #ifndef CAN_HOH_CAPACITY
