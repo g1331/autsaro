@@ -291,7 +291,9 @@ static COMM_CODE void ComM_Publish(void)
         ComM_ModeType mode = COMM_NO_COMMUNICATION;
         SchM_Enter_ComM_COMM_STATE();
         if (comm_configuration != NULL_PTR) {
-            for (uint16 i = 0u; i < comm_configuration->channel_count; ++i) {
+            for (uint16 i = 0u;
+                 (i < COMM_CHANNEL_CAPACITY) && (i < comm_configuration->channel_count);
+                 ++i) {
                 if (comm_channels[i].published != comm_channels[i].indicated) {
                     comm_channels[i].published = comm_channels[i].indicated;
                     channel = &comm_configuration->channels[i];
@@ -339,7 +341,7 @@ COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr)
                 comm_user_published[i] = COMM_NO_COMMUNICATION;
             }
         }
-        for (uint16 i = 0u; i < ConfigPtr->channel_count; ++i) {
+        for (uint16 i = 0u; (i < COMM_CHANNEL_CAPACITY) && (i < ConfigPtr->channel_count); ++i) {
             ComM_ResetChannel(&comm_channels[i]);
         }
         SchM_Exit_ComM_COMM_STATE();
@@ -352,7 +354,8 @@ static COMM_CODE boolean ComM_NoPendingRequest(const ComM_ConfigType *config)
 {
     boolean idle = config != NULL_PTR;
     if (idle) {
-        for (uint16 i = 0u; (i < config->channel_count) && idle; ++i) {
+        for (uint16 i = 0u; (i < COMM_CHANNEL_CAPACITY) && (i < config->channel_count) && idle;
+             ++i) {
             idle = comm_channels[i].state == COMM_NO_COM_NO_PENDING_REQUEST;
         }
     }

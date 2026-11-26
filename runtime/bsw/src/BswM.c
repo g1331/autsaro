@@ -95,7 +95,9 @@ static BSWM_CODE void BswM_Process(void)
         ComM_ModeType mode = COMM_NO_COMMUNICATION;
         SchM_Enter_BswM_BSWM_STATE();
         if (bswm_configuration != NULL_PTR) {
-            for (uint16 i = 0u; i < bswm_configuration->channel_count; ++i) {
+            for (uint16 i = 0u;
+                 (i < COMM_CHANNEL_CAPACITY) && (i < bswm_configuration->channel_count);
+                 ++i) {
                 BswM_PortType *port = &bswm_ports[i];
                 if (port->postponed != 0u) {
                     --port->postponed;
@@ -123,7 +125,8 @@ BSWM_CODE void BswM_ComM_CurrentMode(NetworkHandleType Network, ComM_ModeType Re
     boolean owner = FALSE;
     SchM_Enter_BswM_BSWM_STATE();
     if ((bswm_configuration != NULL_PTR) && (RequestedMode <= COMM_FULL_COMMUNICATION)) {
-        for (uint16 i = 0u; i < bswm_configuration->channel_count; ++i) {
+        for (uint16 i = 0u; (i < COMM_CHANNEL_CAPACITY) && (i < bswm_configuration->channel_count);
+             ++i) {
             if (Network == bswm_configuration->channels[i]) {
                 bswm_ports[i].mode = RequestedMode;
                 ++bswm_ports[i].postponed;

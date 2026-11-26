@@ -77,7 +77,8 @@ static ECU_HOSTBUSSM_CODE Ecu_HostBusSM_BindingType Ecu_HostBusSM_Binding(uint8 
 {
     Ecu_HostBusSM_BindingType binding = {NULL_PTR, NULL_PTR};
     if (bussm_configuration != NULL_PTR) {
-        for (uint16 i = 0u; i < bussm_configuration->channel_count; ++i) {
+        for (uint16 i = 0u; (i < COMM_CHANNEL_CAPACITY) && (i < bussm_configuration->channel_count);
+             ++i) {
             const Ecu_HostBusSM_ChannelConfigType *config = &bussm_configuration->channels[i];
             if ((controller ? config->controller : config->channel) == id) {
                 binding.config = config;
@@ -118,7 +119,7 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Init(const Ecu_HostBusSM_ConfigType *Confi
     if (Ecu_HostBusSM_Valid(ConfigPtr)) {
         Ecu_HostBusSM_Enter();
         bussm_configuration = ConfigPtr;
-        for (uint16 i = 0u; i < ConfigPtr->channel_count; ++i) {
+        for (uint16 i = 0u; (i < COMM_CHANNEL_CAPACITY) && (i < ConfigPtr->channel_count); ++i) {
             bussm_channels[i].requested = COMM_NO_COMMUNICATION;
             bussm_channels[i].pending = FALSE;
             ++bussm_channels[i].revision;
