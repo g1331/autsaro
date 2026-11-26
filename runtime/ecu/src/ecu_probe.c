@@ -42,6 +42,22 @@ void Ecu_TargetTestShutdown(StatusType reason)
     }
 }
 #endif
+static void write_probe_output(const Ecu_OutputRecord *output)
+{
+    char storage[192];
+    Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
+    Os_HostTextField(&text, "ecu_output epoch=", output->epoch);
+    Os_HostTextField(&text, " ticket=", output->ticket);
+    Os_HostTextField(&text, " pdu=", output->pdu);
+    Os_HostTextField(&text, " id=", output->can_id);
+    Os_HostTextField(&text, " dlc=", output->dlc);
+    if (output->data_phase_bitrate != 0u) {
+        Os_HostTextField(&text, " brs=", output->brs ? 1u : 0u);
+        Os_HostTextField(&text, " data_bitrate=", output->data_phase_bitrate);
+    }
+    Os_HostTextByte(&text, '\n');
+    probe_require(Os_HostTextWrite(&text) != 0);
+}
 static Os_HostThreadResultType probe_control(void *argument)
 {
     uint64_t step;
@@ -61,15 +77,7 @@ static Os_HostThreadResultType probe_control(void *argument)
             Ecu_OutputRecord output;
             StatusType status = Ecu_TargetTakeOutput(&output);
             if (status == E_OK) {
-                char storage[192];
-                Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
-                Os_HostTextField(&text, "ecu_output epoch=", output.epoch);
-                Os_HostTextField(&text, " ticket=", output.ticket);
-                Os_HostTextField(&text, " pdu=", output.pdu);
-                Os_HostTextField(&text, " id=", output.can_id);
-                Os_HostTextField(&text, " dlc=", output.dlc);
-                Os_HostTextByte(&text, '\n');
-                probe_require(Os_HostTextWrite(&text) != 0);
+                write_probe_output(&output);
                 probe_require(Ecu_TargetConfirmOutput(output.ticket, output.pdu) == E_OK);
             } else {
                 probe_require(status == E_OS_NOFUNC);

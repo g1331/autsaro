@@ -77,6 +77,7 @@ static uint64 driver_lifetime CAN_VAR_CLEARED; /**< Successful Init count. */
 static Can_TxSinkType tx_sink CAN_VAR_CLEARED; /**< Host output; set by Init. */
 static uint8 fd_padding CAN_VAR_CLEARED;       /**< FD padding byte; set by Init. */
 static uint32 fd_tx_bitrate CAN_VAR_CLEARED;   /**< FD Tx bitrate; zero disables FD; set by Init. */
+static boolean fd_tx_brs CAN_VAR_CLEARED;      /**< FD bitrate switch; set by Init. */
 static CanMode can_controller_mode CAN_VAR_CLEARED;       /**< Controller state; Init: STOPPED. */
 static uint8 can_bus_off CAN_VAR_CLEARED;                 /**< In bus-off; Init resets. */
 static uint8 busoff_notification_pending CAN_VAR_CLEARED; /**< Bus-off for CanIf; Init resets. */
@@ -179,7 +180,8 @@ CAN_CODE void Can_Init(const Can_ConfigType *Config)
         tx_sink = Config->sink;
         fd_padding = Config->fd_padding;
         fd_tx_bitrate = Config->data_bitrate;
-        if ((fd_tx_bitrate != 0u) && (!Config->brs)) {
+        fd_tx_brs = (fd_tx_bitrate != 0u) && Config->brs;
+        if ((fd_tx_bitrate != 0u) && (!fd_tx_brs)) {
             fd_tx_bitrate = Config->nominal_bitrate;
         }
         can_initialized = 1u;
@@ -414,10 +416,13 @@ CAN_CODE EcuStatus Can_InternalHostFlush(void)
     } else if ((tx_pending != 0u) && (tx_in_flight == 0u)) {
         const uint32 id = tx_id;
         const uint8 length = tx_length;
+        const boolean fd = (id & CAN_ID_FD_FLAG) != 0u;
+        const boolean brs = fd && fd_tx_brs;
+        const uint32 data_phase_bitrate = fd ? fd_tx_bitrate : 0u;
         const PduIdType handle = tx_handle;
         const Can_TxSinkType sink = tx_sink;
         const uint64 lifetime = driver_lifetime;
-        uint8 payload[CAN_FD_MAX_LENGTH] = {0u};
+        uint8 payload[CAN_FD_MAX_LENGTH] = {0};
         uint8 i;
         for (i = 0u; i < length; ++i) {
             payload[i] = tx_payload[i];
@@ -426,7 +431,7 @@ CAN_CODE EcuStatus Can_InternalHostFlush(void)
         tx_in_flight = 1u;
         tx_cancelled = 0u;
         SchM_Exit_Can_CAN_STATE();
-        result = Ecu_ExecutionTransmit(sink, handle, id, length, payload);
+        result = Ecu_ExecutionTransmit(sink, handle, id, length, payload, brs, data_phase_bitrate);
         SchM_Enter_Can_CAN_STATE();
         tx_in_flight = 0u;
         if ((can_initialized != 0u) && (lifetime == driver_lifetime) &&
@@ -667,7 +672,7 @@ static CAN_CODE EcuStatus Can_DeliverRx(void)
     if ((can_initialized != 0u) && (rx_processing == 0u) && (rx_pending != 0u)) {
         uint32 id = rx_id;
         uint8 length = rx_length;
-        uint8 payload[CAN_FD_MAX_LENGTH] = {0u};
+        uint8 payload[CAN_FD_MAX_LENGTH] = {0};
         const uint64 lifetime = driver_lifetime;
         const Can_HwType mailbox = {id, CAN_RX_HOH, CAN_CANIF_CONTROLLER_ID};
         PduInfoType info = {payload, NULL_PTR, length};

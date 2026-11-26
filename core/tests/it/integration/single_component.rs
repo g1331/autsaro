@@ -19,7 +19,7 @@ fn fd_configuration_requires_the_selected_controller_and_preserves_brs_and_paddi
         let plan = build(&configured).unwrap_or_else(|issues| panic!("{issues:?}"));
         let can = serde_json::to_value(&plan.description().communication_runtime).unwrap();
         assert_eq!(can["can"]["nominalBitrate"], 500_000);
-        assert_eq!(can["can"]["dataBitrate"], 2_000_000);
+        assert_eq!(can["can"]["dataBitrate"], 2_000_500);
         assert_eq!(can["can"]["brs"], brs == "true");
         assert_eq!(can["can"]["fdPadding"], 165);
     }
@@ -31,6 +31,12 @@ fn fd_configuration_requires_the_selected_controller_and_preserves_brs_and_paddi
             "CAN_FD_CONFIGURATION",
         ),
         ("Fd", "CanControllerFdBaudRate", "0", "CAN_FD_CONFIGURATION"),
+        (
+            "Fd",
+            "CanControllerFdBaudRate",
+            "2000.0001",
+            "CAN_FD_CONFIGURATION",
+        ),
         (
             "Fd",
             "CanControllerFdBaudRate",

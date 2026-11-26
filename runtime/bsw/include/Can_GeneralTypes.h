@@ -82,7 +82,7 @@ static inline uint8 Can_FdLengthToDlc(uint8 length)
 {
     uint8 dlc = length;
     if (length > CAN_FD_MAX_LENGTH) {
-        dlc = UINT8_MAX;
+        dlc = (uint8)UINT8_MAX;
     } else if (length > CAN_CLASSICAL_MAX_LENGTH) {
         dlc = CAN_CLASSICAL_MAX_LENGTH + 1u;
         while ((dlc < CAN_FD_MAX_DLC) && (Can_FdDlcToLength(dlc) < length)) {

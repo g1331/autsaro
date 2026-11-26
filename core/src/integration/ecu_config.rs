@@ -1471,10 +1471,8 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
     config.push_str(
         r#"RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc)
 {
-    if ((!Can_IsValidId(id)) || (!Can_IsWireLength(id, dlc))) {
-        return 0;
-    }
-    if (((id & CAN_ID_FD_FLAG) != 0u) && (ecu_can_driver.data_bitrate == 0u)) {
+    if ((!Can_IsValidId(id)) || (!Can_IsWireLength(id, dlc)) ||
+        (((id & CAN_ID_FD_FLAG) != 0u) && (ecu_can_driver.data_bitrate == 0u))) {
         return 0;
     }
 "#,
@@ -1493,9 +1491,9 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
 "#,
             if signal.receive {
                 if signal.accepts_fd {
-                    "((id & CAN_ID_FD_FLAG) != 0u) || (dlc == 4u)"
+                    "((id & CAN_ID_FD_FLAG) != 0u) ? (dlc >= 4u) : (dlc == 4u)"
                 } else if signal.fd {
-                    "1"
+                    "dlc >= 4u"
                 } else {
                     "dlc == 4u"
                 }

@@ -786,7 +786,7 @@ pub(crate) fn fd_can_sources() -> Vec<InputSource> {
     let mut sources = single_component_sources();
     let definition = "/AUTOSAR/EcucDefs/Can/CanConfigSet/CanController/CanControllerBaudrateConfig/CanControllerFdBaudrateConfig";
     let parameters = [
-        ("FLOAT", "CanControllerFdBaudRate", "2000"),
+        ("FLOAT", "CanControllerFdBaudRate", "2000.5"),
         ("BOOLEAN", "CanControllerTxBitRateSwitch", "true"),
         ("INTEGER", "CanControllerPropSeg", "1"),
         ("INTEGER", "CanControllerSeg1", "5"),

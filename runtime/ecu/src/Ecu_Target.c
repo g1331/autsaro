@@ -427,7 +427,12 @@ void Os_IntegrationOnWaiting(TaskType id, EventMaskType pending, EventMaskType p
         }
     }
 }
-EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, const uint8_t *data)
+EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu,
+                                    uint32_t id,
+                                    uint8_t dlc,
+                                    const uint8_t *data,
+                                    boolean brs,
+                                    uint32 data_phase_bitrate)
 {
     static uint64_t
         next_output_ticket;       /**< Owner-only monotonic output identity; initially zero. */
@@ -456,6 +461,8 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, con
     slot->record.pdu = pdu;
     slot->record.can_id = id;
     slot->record.dlc = dlc;
+    slot->record.brs = brs;
+    slot->record.data_phase_bitrate = data_phase_bitrate;
     (void)memset(slot->record.data, 0, sizeof(slot->record.data));
     if (dlc != 0u) {
         (void)memcpy(slot->record.data, data, dlc);

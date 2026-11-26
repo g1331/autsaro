@@ -132,6 +132,10 @@ pub(super) fn c_name(value: &str) -> String {
 }
 
 pub(crate) fn milliseconds(value: &str) -> Option<u32> {
+    decimal_thousandths(value)
+}
+
+pub(super) fn decimal_thousandths(value: &str) -> Option<u32> {
     let (mantissa, exponent) = match value.split_once(['e', 'E']) {
         Some((mantissa, exponent)) => (mantissa, exponent.parse::<i32>().ok()?),
         None => (value, 0),

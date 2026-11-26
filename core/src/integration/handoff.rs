@@ -100,6 +100,11 @@ pub(super) fn verification_files(
     let inputs = json!({
         "format": "autosar-ecu-test-inputs-v2", "periodMs": shape.period_ms,
         "canFd": communication.can.data_bitrate.is_some(),
+        "fdTiming": communication.can.data_bitrate.map(|data_bitrate| json!({
+            "nominalBitrate": communication.can.nominal_bitrate,
+            "dataBitrate": data_bitrate,
+            "brs": communication.can.brs,
+        })),
         "channels": {"0": communication.can.physical_channel},
         "endpoints": {
             "receive": endpoint("RX", shape.rx.can_if_handle, shape.rx.encoded_id(), shape.rx.accepts_fd, 4),

@@ -141,8 +141,20 @@ fn host_batch_mixed_can_preserves_width_and_exact_id_on_one_channel() {
 
 #[test]
 fn host_batch_fd_is_verified_by_the_moved_packages_own_tool() {
+    verify_moved_fd_package(true);
+    verify_moved_fd_package(false);
+}
+
+fn verify_moved_fd_package(brs: bool) {
     let scratch = super::Scratch::new();
-    let plan = super::build(&super::fd_can_sources()).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let mut sources = super::fd_can_sources();
+    super::mainline::parameter(
+        &mut sources,
+        "Fd",
+        "CanControllerTxBitRateSwitch",
+        if brs { "true" } else { "false" },
+    );
+    let plan = super::build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
     let (project, _) =
         super::single_component_project_from(&scratch.0, super::tooling::native_target(), &plan);
     let moved = scratch.0.join("receiver");
@@ -184,17 +196,34 @@ fn host_batch_fd_is_verified_by_the_moved_packages_own_tool() {
         Duration::from_secs(300),
     );
     require_success(&output);
+    let evidence = String::from_utf8_lossy(&output.stdout);
+    assert!(evidence.contains("protocol=can-fd-policy PASS batches=2"));
+    let rate = if brs { 2_000_500 } else { 500_000 };
     assert!(
-        String::from_utf8_lossy(&output.stdout).contains("protocol=can-fd-policy PASS batches=2")
+        evidence.contains(&format!(
+            "probe=can-fd-timing PASS brs={} data_bitrate={rate}",
+            u8::from(brs)
+        )),
+        "{evidence}"
     );
     assert_eq!(fs::read(package.join("meta/files.sha256")).unwrap(), seal);
+    if !brs {
+        return;
+    }
     let binary = super::tooling::native_binary(&build, "ecu_host_batch");
     let payload = format!("78563412{}", "a5".repeat(60));
     let input = format!(
-        "BEGIN 10\nRX 0 STANDARD 1 800 64 {payload}\nCOMMIT\nBEGIN 20\nRX 800 4 2a000000\nCOMMIT\nBEGIN 20\nCOMMIT\n"
+        "BEGIN 10\nRX 0 STANDARD 1 800 64 {payload}\nCOMMIT\nBEGIN 20\nRX 0 STANDARD 1 800 4 2a000000\nRX 0 STANDARD 1 800 3 2a0000\nCOMMIT\nBEGIN 20\nRX 800 4 2a000000\nCOMMIT\nBEGIN 20\nCOMMIT\n"
     );
     let text = run(&binary, &moved.join("wire"), input.as_bytes());
-    assert_eq!(text.matches("REJECT ").count(), 2, "{text}");
+    assert_eq!(
+        text.lines()
+            .filter(|line| line.starts_with("REJECT "))
+            .map(|line| field(line, "epoch="))
+            .collect::<Vec<_>>(),
+        ["10", "10", "10"],
+        "{text}"
+    );
     assert_eq!(
         text.lines()
             .filter(|line| line.starts_with("OUT "))

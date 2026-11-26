@@ -247,9 +247,8 @@ fn bitrates(
         return Err(fail(graph, *config, "CAN_FD_CONFIGURATION"));
     }
     let data = value(graph, *config, "CanControllerFdBaudRate", false)
-        .and_then(super::native_configuration::baudrate_kbit)
-        .filter(|rate| *rate <= 16_000)
-        .map(|rate| rate * 1000)
+        .and_then(super::component::decimal_thousandths)
+        .filter(|rate| (1..=16_000_000).contains(rate))
         .ok_or_else(|| fail(graph, *config, "CAN_FD_CONFIGURATION"))?;
     let brs = match value(graph, *config, "CanControllerTxBitRateSwitch", false) {
         Some("true" | "1") => true,

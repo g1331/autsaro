@@ -13,7 +13,7 @@
 `Can_PduType`、`Can_IdType`、`Can_HwType` 与标准 API 签名沿用 R24-11。
 `Can_ConfigType` 的末尾新增波特率、BRS 和发送 HOH 填充值，随 ECU 配置一起生成。
 驱动收发快照容纳 64 字节，HostBatchV2 的 `length` 表示线帧字节数，`fd` 取自编码标识符。
-目标元数据的 `canFrameProfile` 标记这一交付能力。旧包需从原 ARXML 重新生成，
+主机输出记录附带 BRS 和 bit/s 速率供 probe 观察。目标元数据的 `canFrameProfile` 标记这一交付能力。旧包需从原 ARXML 重新生成，
 包内工具及验证输入由生成包的封存清单绑定。
 
 ## 未由测试覆盖的条目
@@ -29,7 +29,7 @@
 | 改变波特率 | 不适用（配置：ECUC_Can_00482=true）：SWS_Can_00062、00255、00256、00260、00422、00500、SWS_CAN_00491、SWS_Can_00492、00493、00494 |
 | Partial Networking | 不适用（配置：ECUC_Can_00529=true、ECUC_Can_00530）：SWS_Can_00601、00602、00603、ECUC_Can_00531、00532、00533、00534、00535、00536、00537 |
 | 多路发送与硬件 FIFO | 不适用（配置：ECUC_Can_00095=true、ECUC_Can_00467>1）：SWS_Can_00277、00401、00402、00403、00489、00490 |
-| CAN FD 位时序 | 差距 #170：ECUC_Can_00476、00477、00478、00479、00494 的硬件位时序及 SSP 待真实目标验收。主机配置消费 nominal/data bitrate 和 BRS，驱动的字节路径与硬件采样分开。 |
+| CAN FD 位时序 | 差距 #170：ECUC_Can_00476、00477、00478、00479、00494 的硬件位时序及 SSP 待真实目标验收。驱动将 BRS 与实际选用的数据阶段速率传到主机输出队列，由包内 probe 观察。硬件采样由目标验证。 |
 | TriggerTransmit | 不适用（配置：ECUC_Can_00486=true）：SWS_Can_00503、00504、00506 |
 | 分区映射 | 不适用（配置：ECUC_Can_00491、ECUC_Can_00492）：SWS_Can_CONSTR_00509、SWS_Can_CONSTR_00510、SWS_Can_CONSTR_00511 |
 | 硬件对象负载长度 | 不适用（配置：ECUC_Can_00495）：SWS_Can_CONSTR_00512 |

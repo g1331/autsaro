@@ -33,6 +33,12 @@ def verify(project: Path, build_directory: Path) -> None:
     can_fd = inputs.get("canFd")
     if type(can_fd) is not bool:
         raise ValueError("Verification input lacks its CAN frame capability. Regenerate from the original ARXML.")
+    fd_timing = inputs.get("fdTiming")
+    if can_fd and (not isinstance(fd_timing, dict)
+                   or type(fd_timing.get("brs")) is not bool
+                   or any(type(fd_timing.get(name)) is not int or fd_timing[name] <= 0
+                          for name in ("nominalBitrate", "dataBitrate"))):
+        raise ValueError("Configured FD controller timing is incomplete")
     channels = inputs.get("channels")
     endpoints = inputs.get("endpoints")
     roles = {"receive": ("RX", 4), "transmit": ("TX", 4),
@@ -219,6 +225,20 @@ def verify(project: Path, build_directory: Path) -> None:
     if ("ecu_probe completed=20" not in probe_lines
             or not any(line.startswith("lifecycle=Closed state=Ready reason=0 ") for line in probe_lines)):
         raise AssertionError(f"Normal probe did not complete: {probe_output}")
+    transmit = endpoints["transmit"]
+    if transmit["fdPolicy"] == "FD" and period <= 20:
+        brs = fd_timing["brs"]
+        rate = fd_timing["dataBitrate" if brs else "nominalBitrate"]
+        can_id = transmit["id"] | 0x40000000
+        if transmit["format"] == "EXTENDED":
+            can_id |= 0x80000000
+        prefix = f" pdu={transmit['handle']} id={can_id} dlc={transmit['wireLength']}"
+        observations = [line for line in probe_lines
+                        if line.startswith("ecu_output ") and prefix + " " in line]
+        if (len(observations) != 20 // period
+                or any(not line.endswith(f" brs={int(brs)} data_bitrate={rate}") for line in observations)):
+            raise AssertionError(f"FD output bitrate switch or data phase rate differs: {probe_output}")
+        print(f"probe=can-fd-timing PASS brs={int(brs)} data_bitrate={rate}")
     print("probe=normal PASS ticks=20 COM diagnostics parsed")
     sealed_sources(project)
     print("ECU_HANDOFF_VERIFY PASS: CAN/DID echo, single-HOH arbitration, two-DID boundary, real N_Cr timeout/recovery, malformed admission; host behavior only.")
