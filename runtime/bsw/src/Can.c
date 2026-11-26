@@ -35,6 +35,15 @@
 #ifndef CAN_TX_HOH
 #define CAN_TX_HOH 0u
 #endif
+#define CAN_HOH_ID_STANDARD 0u
+#define CAN_HOH_ID_EXTENDED 1u
+#define CAN_HOH_ID_MIXED    2u
+#ifndef CAN_RX_ID_TYPE
+#define CAN_RX_ID_TYPE CAN_HOH_ID_STANDARD
+#endif
+#ifndef CAN_TX_ID_TYPE
+#define CAN_TX_ID_TYPE CAN_HOH_ID_STANDARD
+#endif
 #ifndef CAN_RX_HOH
 #define CAN_RX_HOH 0u
 #endif
@@ -50,10 +59,6 @@
 #ifndef CAN_BUSOFF_POLLING
 #define CAN_BUSOFF_POLLING STD_OFF
 #endif
-
-/* Can_IdType frame-type bit 30 marks CAN FD; standard IDs use bits 0-10 (SWS_Can_00416). */
-#define CAN_ID_FD_FLAG      0x40000000u
-#define CAN_ID_STANDARD_MAX 0x7FFu
 
 #define CAN_INDICATION_MODE   0u
 #define CAN_INDICATION_BUSOFF 1u
@@ -330,12 +335,19 @@ static CAN_CODE EcuStatus Can_StoreTransmit(const Can_PduType *pdu)
     return ECU_OK;
 }
 
+static CAN_CODE boolean Can_HohMatchesId(uint8 format, Can_IdType id)
+{
+    return (format == CAN_HOH_ID_MIXED) ||
+           ((format == CAN_HOH_ID_EXTENDED) == ((id & CAN_ID_EXTENDED_FLAG) != 0u));
+}
+
 static CAN_CODE EcuStatus Can_WriteHost(Can_HwHandleType hth, const Can_PduType *pdu)
 {
     EcuStatus result = ECU_ERR_CONFIG;
     if ((hth != CAN_TX_HOH) || (pdu == NULL_PTR) || (pdu->sdu == NULL_PTR)) {
         /* Invalid host configuration or caller input. */
-    } else if ((pdu->id & ~CAN_ID_FD_FLAG) > CAN_ID_STANDARD_MAX) {
+    } else if (!Can_IsClassicalId(pdu->id & ~CAN_ID_FD_FLAG) ||
+               !Can_HohMatchesId(CAN_TX_ID_TYPE, pdu->id)) {
         /* No FD configuration: the FD bit is not evaluated (SWS_Can_00486). */
         result = ECU_ERR_FRAME_ID;
     } else if (pdu->length > 8u) {
@@ -586,7 +598,7 @@ static CAN_CODE EcuStatus Can_ReceiveHost(uint32 id, uint8 dlc, const uint8 data
     EcuStatus result = ECU_OK;
     uint8 lost = 0u;
     SchM_Enter_Can_CAN_STATE();
-    if (id > CAN_ID_STANDARD_MAX) {
+    if (!Can_IsClassicalId(id)) {
         result = ECU_ERR_FRAME_ID;
     } else if (dlc > 8u) {
         result = ECU_ERR_FRAME_DLC;
@@ -594,6 +606,8 @@ static CAN_CODE EcuStatus Can_ReceiveHost(uint32 id, uint8 dlc, const uint8 data
         result = ECU_ERR_CONTROLLER;
     } else if (data == NULL_PTR) {
         result = ECU_ERR_CONFIG;
+    } else if (!Can_HohMatchesId(CAN_RX_ID_TYPE, id)) {
+        /* The hardware object ignores identifiers of the other width. */
     } else if ((rx_processing != 0u) || (rx_pending != 0u)) {
         result = ECU_ERR_CAN_BUSY;
         lost = accepted;

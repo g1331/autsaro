@@ -363,7 +363,7 @@ int main(void)
         with tempfile.TemporaryDirectory(prefix="autosar-build-modes-") as temporary:
             directory = Path(temporary)
             stdin = directory / "batch.stdin"
-            stdin.write_bytes(b"BEGIN 1\nCOMMIT\n")
+            stdin.write_bytes(b"PROTOCOL HostBatchV2\nBEGIN 1\nCOMMIT\n")
 
             def execute(argv, stage, run_env, input_file=None):
                 return OwnedProcess(ProcessSpec.seconds(argv, directory, 180, directory, stage,
@@ -396,7 +396,7 @@ int main(void)
                                 self.assertNotIn("ecu_probe completed=20", observed)
                             else:
                                 self.assertTrue(result.success, observed)
-                                self.assertIn("READY HostBatchV1" if mode == "host-batch"
+                                self.assertIn("READY HostBatchV2" if mode == "host-batch"
                                               else "ecu_probe completed=20", observed)
             self.assertEqual((project / "meta/files.sha256").read_bytes(), seal)
 

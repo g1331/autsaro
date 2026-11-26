@@ -12,18 +12,18 @@ from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/rehearse_ecu_handoff.py"
 RECEIVER = runpy.run_path(str(SCRIPT))
-READY = "READY HostBatchV1\n"
+READY = "READY HostBatchV2\nPROTOCOL_OK HostBatchV2\n"
 COMMIT_STATUS = (
     " status=0 input_status=0 transport_status=0 transport_epoch=0 transport_count=0\n"
 )
 COMMIT = "COMMIT_OK batch=1 epoch=1 sequence=1 input_first=0 inputs=0" + COMMIT_STATUS
 CLOSED = "lifecycle=Closed state=Ready reason=0 trace=I\n"
 PIPELINE_OUTPUT = [
-    "OUT epoch=1 sequence=4 ticket=1 pdu=1 id=1800 dlc=8 data=0762123400000000\n",
-    "OUT epoch=10 sequence=16 ticket=2 pdu=0 id=801 dlc=4 data=78563412\n",
-    "OUT epoch=10 sequence=17 ticket=3 pdu=1 id=1800 dlc=8 data=0762123412345678\n",
-    "OUT epoch=20 sequence=31 ticket=4 pdu=0 id=801 dlc=4 data=78563412\n",
-    "OUT epoch=20 sequence=32 ticket=5 pdu=1 id=1800 dlc=8 data=0762123412345678\n",
+    "OUT epoch=1 sequence=4 ticket=1 pdu=1 channel=0 format=STANDARD fd=0 id=1800 length=8 data=0762123400000000\n",
+    "OUT epoch=10 sequence=16 ticket=2 pdu=0 channel=0 format=STANDARD fd=0 id=801 length=4 data=78563412\n",
+    "OUT epoch=10 sequence=17 ticket=3 pdu=1 channel=0 format=STANDARD fd=0 id=1800 length=8 data=0762123412345678\n",
+    "OUT epoch=20 sequence=31 ticket=4 pdu=0 channel=0 format=STANDARD fd=0 id=801 length=4 data=78563412\n",
+    "OUT epoch=20 sequence=32 ticket=5 pdu=1 channel=0 format=STANDARD fd=0 id=1800 length=8 data=0762123412345678\n",
 ]
 
 

@@ -104,7 +104,7 @@ class CMakeBuildTests(unittest.TestCase):
 
             # The CMake binaries run like the ecu-tool binaries and keep the checked sections.
             stdin = directory / "batch.stdin"
-            stdin.write_bytes(b"BEGIN 1\nCOMMIT\n")
+            stdin.write_bytes(b"PROTOCOL HostBatchV2\nBEGIN 1\nCOMMIT\n")
             logs = directory / "logs"
             logs.mkdir(mode=0o700)
             for mode, name in [("host-batch", "ecu_host_batch"), ("probe", "ecu_probe")]:

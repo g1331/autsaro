@@ -259,12 +259,14 @@ static Os_HostThreadResultType control(void *argument)
         Os_HostSleepMs(1u);
     }
     Ecu_HostBatchInitialize(&batch);
+    require(Ecu_HostBatchParse(&batch, "PROTOCOL HostBatchV2", 20u, &command) == E_OK);
     if (mode == 3) {
         batch.sequence = UINT64_MAX;
         require(Ecu_HostBatchParse(&batch, "BEGIN 0", 7u, &command) == E_OK);
         require(Ecu_HostBatchParse(&batch, "COMMIT", 6u, &command) == E_OS_LIMIT);
         require(batch.completed_epoch == UINT64_C(0));
         Ecu_HostBatchInitialize(&batch);
+        require(Ecu_HostBatchParse(&batch, "PROTOCOL HostBatchV2", 20u, &command) == E_OK);
         batch.sequence = UINT64_MAX - UINT64_C(1);
         require(Ecu_HostBatchParse(&batch, "BEGIN 1", 7u, &command) == E_OK);
         require(Ecu_HostBatchParse(&batch, "COMMIT", 6u, &command) == E_OK);
@@ -275,6 +277,7 @@ static Os_HostThreadResultType control(void *argument)
             require(initial.epoch == UINT64_C(0));
         }
         Ecu_HostBatchInitialize(&batch);
+        require(Ecu_HostBatchParse(&batch, "PROTOCOL HostBatchV2", 20u, &command) == E_OK);
         batch.sequence = UINT64_MAX - UINT64_C(1);
         require(Ecu_HostBatchParse(&batch, "BEGIN 0", 7u, &command) == E_OK);
         require(Ecu_HostBatchParse(&batch, "COMMIT", 6u, &command) == E_OK);

@@ -15,10 +15,10 @@ from ecu_tools.verify import verify
 class VerifierTests(unittest.TestCase):
     def replay(self, period: int, mutation=None):
         # Fixed public CAN/UDS vectors, not output read from a built ECU or the oracle.
-        rx = "RX 800 4 78563412"
-        read = "RX 1792 8 0322123400000000"
-        two = "RX 1792 8 05221234f1860000"
-        cts = "RX 1792 8 3000000000000000"
+        rx = "RX 0 STANDARD 0 800 4 78563412"
+        read = "RX 0 STANDARD 0 1792 8 0322123400000000"
+        two = "RX 0 STANDARD 0 1792 8 05221234f1860000"
+        cts = "RX 0 STANDARD 0 1792 8 3000000000000000"
         value = "78563412"
         sf = "0762123412345678"
         ff = "100a621234123456"
@@ -33,7 +33,7 @@ class VerifierTests(unittest.TestCase):
                 (period + 1, [rx, read], value, [sf], False),
                 (period + 2, [rx, two], value, [ff], False),
                 (period + 3, [rx, cts], value, [cf], False),
-                (period + 4, [rx, "RX 1792 8 07221234f1861234"], value, ["037f221300000000"], False),
+                (period + 4, [rx, "RX 0 STANDARD 0 1792 8 07221234f1861234"], value, ["037f221300000000"], False),
             ],
             "arbitration": [
                 (period, [rx], value, [], False),
@@ -44,7 +44,7 @@ class VerifierTests(unittest.TestCase):
                 (5 * period, [rx, read], value, [sf], False),
             ],
             "ncr-recovery": [
-                (1, ["RX 1792 8 1009221234123412"], "00000000", ["3000000000000000"], False),
+                (1, ["RX 0 STANDARD 0 1792 8 1009221234123412"], "00000000", ["3000000000000000"], False),
                 *wait,
                 (deadline, [], "00000000", [], True),
                 (recovery, [rx], value, [], False),
@@ -58,8 +58,8 @@ class VerifierTests(unittest.TestCase):
                 self.assertIsNone(stdin_file)
                 return "ecu_probe completed=20\nlifecycle=Closed state=Ready reason=0 "
             name = label.removeprefix("protocol-")
-            commands = []
-            records = ["READY HostBatchV1"]
+            commands = ["PROTOCOL HostBatchV2"]
+            records = ["READY HostBatchV2", "PROTOCOL_OK HostBatchV2"]
             previous = 0
             for batch, (at, messages, tx, diagnostics, error) in enumerate(scenarios[name], 1):
                 commands.extend([f"BEGIN {at}", *messages, "COMMIT"])
@@ -74,7 +74,7 @@ class VerifierTests(unittest.TestCase):
                     outputs = mutation(name, batch, outputs)
                 for sequence, (epoch, can_id, dlc, data) in enumerate(outputs, 1):
                     records.append(f"OUT epoch={epoch} sequence={sequence} ticket={sequence} "
-                                   f"pdu=0 id={can_id} dlc={dlc} data={data}")
+                                   f"pdu={int(can_id == 1800)} channel=0 format=STANDARD fd=0 id={can_id} length={dlc} data={data}")
                 records.append(f"COMMIT_{'ERROR' if error else 'OK'} batch={batch} epoch={at} "
                                f"sequence=0 inputs={len(messages)} status=0 input_status=0 "
                                f"transport_status={10 if error else 0} "
@@ -95,10 +95,18 @@ class VerifierTests(unittest.TestCase):
             project = Path(temporary)
             (project / "meta").mkdir()
             (project / "logs").mkdir()
-            inputs = {"format": "autosar-ecu-test-inputs-v1", "periodMs": period,
-                      "receiveCanId": 800, "transmitCanId": 801, "requestCanId": 1792,
-                      "responseCanId": 1800, "did": 0x1234, "initialReceiveValue": 0,
-                      "receiveTimeoutMs": 200}
+            endpoints = {
+                role: {"module": "CanIf", "direction": direction, "handle": handle,
+                       "channel": 0, "format": "STANDARD", "fdPolicy": "CLASSICAL",
+                       "id": can_id, "logicalLength": size, "wireLength": size}
+                for role, direction, handle, can_id, size in [
+                    ("receive", "RX", 0, 800, 4), ("transmit", "TX", 0, 801, 4),
+                    ("request", "RX", 1, 1792, 8), ("response", "TX", 1, 1800, 8),
+                ]
+            }
+            inputs = {"format": "autosar-ecu-test-inputs-v2", "periodMs": period,
+                      "channels": {"0": "/Network/Bus"}, "endpoints": endpoints,
+                      "did": 0x1234, "initialReceiveValue": 0, "receiveTimeoutMs": 200}
             (project / "meta/verification-inputs.json").write_text(json.dumps(inputs), encoding="utf-8")
             with (patch("ecu_tools.verify.sealed_sources", return_value=([], {
                     "profile": "ecu", "target": "linux-x64-controlled-v1"})),

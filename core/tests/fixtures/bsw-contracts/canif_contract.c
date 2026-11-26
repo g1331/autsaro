@@ -96,12 +96,12 @@ static const Det_ConfigType det = {NULL_PTR, 0u, hooks, 1u};
 static const LSduR_RxRouteType ls_rx[] = {{0u, 10u, indicated}, {1u, 11u, indicated}};
 static const LSduR_TxRouteType ls_tx[] = {{LSDUR_UP_PDUR, 20u, 0u, confirmed, NULL_PTR}};
 static const LSduR_PBConfigType ls = {1u, ls_rx, 2u, ls_tx, 1u};
-static const CanIf_RxPduConfigType rx[] = {{0x100u, 0u, 4u}, {0x101u, 1u, 2u}};
+static const CanIf_RxPduConfigType rx[] = {{0x100u, 0u, 4u, FALSE}, {0x101u, 1u, 2u, FALSE}};
 static const CanIf_TxPduConfigType tx[] = {{0x200u, 0u, 4u}};
 /* Verifies: SWS_CANIF_00144／00523: the set carries every L-PDU and the dispatch targets. */
 static const CanIf_ConfigType canif = {rx, 2u, tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u};
 /* Two Rx PDUs on one CAN ID cannot be routed. */
-static const CanIf_RxPduConfigType ambiguous[] = {{0x100u, 0u, 4u}, {0x100u, 1u, 4u}};
+static const CanIf_RxPduConfigType ambiguous[] = {{0x100u, 0u, 4u, FALSE}, {0x100u, 1u, 4u, FALSE}};
 static const CanIf_ConfigType invalid = {ambiguous, 2u, tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u};
 static const Can_ConfigType can = {sink};
 static uint8 payload[9] = {0x11u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u};
@@ -151,10 +151,10 @@ static void reject_configuration(const CanIf_ConfigType *configuration)
 static void reject_configurations(void)
 {
     const CanIf_RxPduConfigType bad_rx[] = {
-        {0x800u, 0u, 4u},
-        {0x100u, 0u, 9u},
+        {0x800u, 0u, 4u, FALSE},
+        {0x100u, 0u, 9u, FALSE},
     };
-    const CanIf_RxPduConfigType duplicate_rx[] = {rx[0], {0x101u, 0u, 4u}};
+    const CanIf_RxPduConfigType duplicate_rx[] = {rx[0], {0x101u, 0u, 4u, FALSE}};
     const CanIf_TxPduConfigType bad_tx[] = {
         {0x800u, 0u, 4u},
         {0x200u, 0u, 0u},
@@ -173,7 +173,7 @@ static void reject_configurations(void)
     CanIf_TxPduConfigType too_many_tx[33];
     CanIf_ConfigType config = canif;
     for (unsigned index = 0u; index < 33u; ++index) {
-        too_many_rx[index] = (CanIf_RxPduConfigType){0x100u + index, (PduIdType)index, 4u};
+        too_many_rx[index] = (CanIf_RxPduConfigType){0x100u + index, (PduIdType)index, 4u, FALSE};
         too_many_tx[index] = (CanIf_TxPduConfigType){0x200u + index, (PduIdType)index, 4u};
     }
     config.receive = too_many_rx;
@@ -324,5 +324,30 @@ int main(void) {
     deinit();
     uninitialized();
     Can_DeInit();
+
+    /* Verifies: SWS_CANIF_00877. A caller reporting FD can match *_CAN,
+     * while the same numeric ID in *_NO_FD_CAN matches Classical only. */
+    {
+        static const CanIf_RxPduConfigType mixed[] = {
+            {0x7ffu, 0u, 4u, TRUE},
+            {0x800007ffu, 1u, 4u, FALSE},
+        };
+        CanIf_ConfigType mixed_config = canif;
+        const unsigned standard = indications[0];
+        const unsigned extended = indications[1];
+        mixed_config.receive = mixed;
+        init(&mixed_config);
+        Can_Init(&can);
+        controller(CAN_CS_STARTED);
+        assert(set_pdu(0u, CANIF_ONLINE) == E_OK);
+        receive(0u, 0u, 0x400007ffu, 4u);
+        receive(0u, 0u, 0xc00007ffu, 4u);
+        assert(indications[0] == standard + 1u && indications[1] == extended);
+        receive(0u, 0u, 0x800007ffu, 4u);
+        assert(indications[1] == extended + 1u);
+        controller(CAN_CS_STOPPED);
+        deinit();
+        Can_DeInit();
+    }
     return 0;
 }

@@ -2697,7 +2697,7 @@ fn integration_plan_refuses_missing_and_duplicate_patch_inputs_before_editing() 
         let (code, key) = match case {
             "missing_child" => (
                 "CAN_ID_CONFLICT",
-                "backend.integration.communication.classical_can_standard_identifier_invalid",
+                "backend.integration.communication.classical_can_identifier_or_format_invalid",
             ),
             "missing_parameter" => (
                 "CAN_ID_CONFLICT",

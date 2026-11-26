@@ -431,7 +431,7 @@ fn sealed_optional_did_and_network_only_routes_use_real_producers() {
         spec.stdin_stream = true;
         let owner = tooling::execution_owner();
         let mut child = owner.spawn(spec, None).unwrap();
-        let input_result = child.write_stdin(b"BEGIN 0\nRX 800 4 2A000000\nRX 1792 8 0322F18600000000\nCOMMIT\nBEGIN 1\nCOMMIT\nBEGIN 1\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 2\nCOMMIT\nBEGIN 10\nCOMMIT\n");
+        let input_result = child.write_stdin(b"PROTOCOL HostBatchV2\nBEGIN 0\nRX 0 STANDARD 0 800 4 2a000000\nRX 0 STANDARD 0 1792 8 0322f18600000000\nCOMMIT\nBEGIN 1\nCOMMIT\nBEGIN 1\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\nBEGIN 2\nCOMMIT\nBEGIN 10\nCOMMIT\n");
         child.close_stdin();
         let result = tooling::wait_success(child, &format!("{diagnostic}: input={input_result:?}"));
         let text = std::fs::read_to_string(&result.stdout).unwrap();
@@ -447,7 +447,7 @@ fn sealed_optional_did_and_network_only_routes_use_real_producers() {
                 (
                     fields["epoch"].parse::<u64>().unwrap(),
                     fields["id"].parse::<u32>().unwrap(),
-                    fields["dlc"].parse::<u8>().unwrap(),
+                    fields["length"].parse::<u8>().unwrap(),
                     fields["data"].to_string(),
                 )
             })

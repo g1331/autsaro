@@ -253,8 +253,9 @@ def preprocess_unit(compiler_args: list[str], directory: Path, index: int, proje
     return definitions, provenance
 
 
-def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str], list[dict], dict]:
-    names, target = sealed_sources(project)
+def prepare(project: Path, target_id: str, output: Path, *,
+            analysis_baseline: bool = False) -> tuple[Path, list[str], list[dict], dict]:
+    names, target = sealed_sources(project, analysis_baseline=analysis_baseline)
     if target["target"] != target_id:
         raise ValueError("Requested analysis target differs from the sealed target")
     if TARGETS[target_id] != platform.system():
@@ -278,7 +279,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
         compiler, flags, output, target_id.startswith("windows"))
     root = output / "project"
     shutil.copytree(project, root)
-    sealed_sources(root)
+    sealed_sources(root, analysis_baseline=analysis_baseline)
     sources = list(sources)
     patched_lines = {}
     provenance_error = None
@@ -827,7 +828,10 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         summary["tool"] = identity
         summary["coverage"] = coverage(addons)
         summary["sourceSealSha256"] = digest(project / FILE_HASHES)
-        root, sources, database, scope = prepare(project, target_id, output)
+        analysis_baseline = sdk_revision is not None
+        root, sources, database, scope = prepare(
+            project, target_id, output, analysis_baseline=analysis_baseline,
+        )
         summary["scope"] = scope
         scope["cppcheckFilesDirectory"] = identity.get("filesDirectory", "")
         entries = scope.get("entries") or {}
@@ -881,7 +885,7 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         if scope.get("profile") == "ecu":
             summary["generatedRetention"] = c_retention.analyze(diagnostics, root, target_id)
         summary["sourceClassification"] = c_sdk.summary(diagnostics, scope.get("sdkHeaders", []), not scope.get("sdkLineDirectives", False))
-        sealed_sources(project)
+        sealed_sources(project, analysis_baseline=analysis_baseline)
         if digest(project / FILE_HASHES) != summary["sourceSealSha256"]:
             raise ValueError("Source seal changed during analysis")
         if semantic_identity(executable, scope, directories) != summary["semanticIdentity"]:

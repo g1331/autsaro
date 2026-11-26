@@ -199,7 +199,7 @@ static void tx(PduIdType id, Std_ReturnType status) {
         observed();
     }
 }
-static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u}};
+static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u, FALSE}};
 static const CanIf_TxPduConfigType transmits[] = {{0x321u, 51u, 1u}};
 static const CanIf_ConfigType canif = {receives, 1u, transmits, 1u, mode, busoff, 0u, 0u, 0u, 0u};
 static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};

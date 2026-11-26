@@ -49,7 +49,7 @@ class ActualCAnalysisTests(unittest.TestCase):
         abi = "x86_64-w64-mingw32" if platform.system() == "Windows" else "x86_64-linux-gnu"
         extra_files = extra_files or {}
         files = {**extra_files, source_name: source, "target.json": json.dumps({
-            "format": "autosar-build-target-v3", "target": target, "abi": abi, "profile": "host",
+            "format": "autosar-build-target-v4", "target": target, "abi": abi, "profile": "host",
             "compilerFlags": ["-std=c99", "-Wall", "-Wextra", "-Werror", *(["-pedantic"] if pedantic else [])],
             "sources": [source_name, *(name for name in extra_files if name.endswith(".c") and name not in unbuilt)],
             "includePaths": ["."]})}
@@ -422,7 +422,8 @@ DWORD FixtureWait(HANDLE object)
                 "patch.diff": "--- a/unit.c\n+++ b/unit.c\n@@ -1 +1 @@\n-int kernel(void) { return 0; }\n+" + delivered,
             })
             target = json.loads((project / "target.json").read_text())
-            target.update(profile="ecu", sources=["bsw/src/main.c"], kernelSources=["unit.c"],
+            target.update(profile="ecu", hostBatchProtocol="HostBatchV2",
+                          sources=["bsw/src/main.c"], kernelSources=["unit.c"],
                           entries={"host-batch": "host.c", "probe": "probe.c"},
                           kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}],
                           kernelSha256={"unit.c": hashlib.sha256(delivered.encode()).hexdigest()})
@@ -497,7 +498,7 @@ DWORD FixtureWait(HANDLE object)
                 target = json.loads((project / "target.json").read_text())
                 if stage == "patch-0":
                     target["compilerFlags"].append("-fexceptions")
-                    target.update(profile="ecu", kernelSources=["unit.c"],
+                    target.update(profile="ecu", hostBatchProtocol="HostBatchV2", kernelSources=["unit.c"],
                                   kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}])
                     (project / "target.json").write_text(json.dumps(target))
                     seal = project / "meta/files.sha256"
@@ -1085,8 +1086,8 @@ DWORD FixtureWait(HANDLE object)
             self.assertTrue(any(d["id"] == "autsaro-hostThreadInBsw" for d in before["diagnostics"]))
             original_prepare = c_check.prepare
             # The generated header is actually passed to Cppcheck, changing its diagnostics.
-            def modeled(*args):
-                copied, units, database, scope = original_prepare(*args)
+            def modeled(*args, **kwargs):
+                copied, units, database, scope = original_prepare(*args, **kwargs)
                 model = args[2] / "injected-model.h"
                 model.write_text("#define pthread_create() 0\n")
                 scope["platformModel"] = {"path": str(model), "sha256": hashlib.sha256(model.read_bytes()).hexdigest()}

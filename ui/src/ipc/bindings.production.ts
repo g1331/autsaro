@@ -204,12 +204,15 @@ export type BuildReport = {
 export type BuildTarget = 'windows-x64-controlled-v1' | 'linux-x64-controlled-v1';
 
 export type CanRuntimeContract = {
+  physicalChannel: string;
   controller: string;
   controllerId: number;
   canIfControllerId: number;
   receiveHardware: string;
+  receiveIdType: string;
   receiveHandle: number;
   transmitHardware: string;
+  transmitIdType: string;
   transmitHandle: number;
   readWritePeriod: string;
   readWritePeriodMs: number;
@@ -493,7 +496,10 @@ export type DiagnosticContract = {
   rxNpdu: string;
   txNpdu: string;
   requestCanId: number;
+  requestExtended: boolean;
+  requestAcceptsFd: boolean;
   responseCanId: number;
+  responseExtended: boolean;
   requestCanIfHandle: number;
   responseCanIfHandle: number;
   p2Ms: number;
@@ -524,7 +530,10 @@ export type DiagnosticTransportContract = {
   rxNpdu: string;
   txNpdu: string;
   requestCanId: number;
+  requestExtended: boolean;
+  requestAcceptsFd: boolean;
   responseCanId: number;
+  responseExtended: boolean;
   requestCanIfHandle: number;
   responseCanIfHandle: number;
   p2Ms: number;
@@ -1162,6 +1171,8 @@ export type SignalChannel = {
   trigger: string;
   canIfPdu: string;
   canId: number;
+  extended: boolean;
+  acceptsFd: boolean;
   canIfHandle: number;
   receive: boolean;
   dlc: number;

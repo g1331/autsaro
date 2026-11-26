@@ -63,7 +63,7 @@ def run_case(name, mode, mutation=None, *, killed=False, output_failure=False, i
     binary = build(project, directory / "build", mode)
     print(f"compiled mutation={name}", flush=True)
     stdin = directory / "commands"
-    stdin.write_text("BEGIN 20\nCOMMIT\n")
+    stdin.write_text("PROTOCOL HostBatchV2\nBEGIN 20\nCOMMIT\n")
     try:
         stdout = query([str(binary)], directory, "normal", stdin_file=stdin if mode == "host-batch" else None)
         diagnostics = json.loads((directory / "normal-com-rejections.json").read_text())
