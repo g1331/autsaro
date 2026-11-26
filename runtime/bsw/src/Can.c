@@ -703,6 +703,23 @@ static CAN_CODE void Can_ConfirmTx(Can_ControllerRuntimeType *state)
     SchM_Exit_Can_CAN_STATE();
 }
 
+static CAN_CODE boolean Can_HasReceiveHoh(uint8 controller, uint32 id)
+{
+    boolean result = FALSE;
+    const Can_ConfigType *config = can_configuration;
+    if (config->controller_count == 0u) {
+        result = Can_HohMatchesId(CAN_RX_ID_TYPE, id);
+    } else {
+        for (uint32 i = 0u; (i < CAN_HOH_CAPACITY) && (i < config->hardware_count) && !result;
+             ++i) {
+            const Can_HohConfigType *hoh = &config->hardware[i];
+            result = hoh->receive && (hoh->controller == controller) &&
+                     Can_HohMatchesId(hoh->format, id);
+        }
+    }
+    return result;
+}
+
 static CAN_CODE EcuStatus
 Can_ReceiveHost(uint8 controller, uint32 id, uint8 dlc, const uint8 *data, uint8 accepted)
 {
@@ -721,9 +738,8 @@ Can_ReceiveHost(uint8 controller, uint32 id, uint8 dlc, const uint8 *data, uint8
         result = ECU_ERR_CONTROLLER;
     } else if (data == NULL_PTR) {
         result = ECU_ERR_CONFIG;
-    } else if ((can_configuration->controller_count == 0u) &&
-               (!Can_HohMatchesId(CAN_RX_ID_TYPE, id))) {
-        /* The hardware object ignores identifiers of the other width. */
+    } else if (!Can_HasReceiveHoh(controller, id)) {
+        /* No receive hardware object on this controller accepts the identifier width. */
     } else if ((state->rx_processing != 0u) || (state->rx_pending != 0u)) {
         result = ECU_ERR_CAN_BUSY;
         lost = accepted;

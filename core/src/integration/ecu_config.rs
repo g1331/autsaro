@@ -1753,7 +1753,9 @@ RTE_Ecu_CODE int Ecu_StackFrameShape(uint8 channel, uint32 id, uint8 dlc)
                 ((frame->id == id) || (frame->dual && (frame->id == (id & ~CAN_ID_FD_FLAG))))) {
                 result = 0;
                 if (frame->receive) {
-                    result = fd ? (dlc >= frame->length) : (dlc == frame->length);
+                    if ((dlc == frame->length) || (fd && (dlc > frame->length))) {
+                        result = 1;
+                    }
                     break;
                 }
             }

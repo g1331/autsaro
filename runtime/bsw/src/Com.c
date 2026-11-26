@@ -12,10 +12,10 @@
 #error "Com.c -> SchM_Com.h: incompatible AUTOSAR release"
 #endif
 #include "Com_Internal.h"
-#include "Ecu_ProfileConfig.h"
 #include <stddef.h>
 #include <string.h>
 
+#include "Ecu_ProfileConfig.h"
 #define COM_PDU_BYTES 4u
 #define COM_MAX_OWED  0xffffffffu
 #define COM_START_SEC_VAR_CLEARED_UNSPECIFIED
@@ -25,26 +25,25 @@
  * the configured signal initial values. */
 static const Com_ConfigType *com_configuration
     COM_VAR_CLEARED; /**< Published configuration; DeInit clears. */
-static uint32 signal_values[COM_PDU_CAPACITY] COM_VAR_CLEARED; /**< Native UINT32 signal values;
-                                                                  Init reloads. */
 static uint32
-    com_ticks[COM_PDU_CAPACITY] COM_VAR_CLEARED; /**< Rx-main periods left; Init resets. */
-static boolean com_rx_reloaded[COM_PDU_CAPACITY] COM_VAR_CLEARED; /**< Reloaded in this Rx tick;
+    signal_values[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Native UINT32 signal values; Init reloads. */
+static uint32 com_ticks[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Rx-main periods left; Init resets. */
+static boolean com_rx_reloaded[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Reloaded in this Rx tick;
                                                                       Init resets. */
 /* Notifications owed per Rx PDU: every reception is acknowledged (SWS_Com_00883), repeated
  * timeouts coalesce, and the event recorded last is also delivered last, so a stale timeout
  * never follows a fresh reception. */
-static uint32 receptions_owed[COM_PDU_CAPACITY] COM_VAR_CLEARED; /**< Pending Rx notifications; Init
-                                                                    resets. */
-static boolean timeout_owed[COM_PDU_CAPACITY] COM_VAR_CLEARED;   /**< Pending timeout notification;
-                                                                    Init resets. */
+static uint32
+    receptions_owed[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Pending Rx notifications; Init resets. */
 static boolean
-    timeout_last[COM_PDU_CAPACITY] COM_VAR_CLEARED; /**< Timeout follows receptions; Init resets. */
-static boolean receive_started COM_VAR_CLEARED;     /**< Rx group is started; Init resets. */
+    timeout_owed[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Pending timeout notification; Init resets. */
+static boolean
+    timeout_last[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Timeout follows receptions; Init resets. */
+static boolean receive_started COM_VAR_CLEARED; /**< Rx group is started; Init resets. */
 /* Tx mode FALSE selects the absent ComTxModeFalse, i.e. NONE (ECUC_Com_00496); Init
  * evaluates the TMS of the filterless PDUs to TRUE again (SWS_Com_00677, 00877). */
-static boolean tx_mode_false[COM_PDU_CAPACITY] COM_VAR_CLEARED; /**< Tx mode NONE instead of
-                                                               PERIODIC; Init resets. */
+static boolean tx_mode_false[COM_MAX_PDUS] COM_VAR_CLEARED; /**< Tx mode NONE instead of PERIODIC;
+                                                               Init resets. */
 /* Reception DM of the Rx group; independent of start and stop (SWS_Com_00772). */
 static boolean monitoring COM_VAR_CLEARED; /**< Rx deadline monitoring enabled; Init resets. */
 static boolean reception_before_main
@@ -110,7 +109,7 @@ static COM_CODE void Com_Reset(void)
     receive_started = FALSE;
     monitoring = FALSE;
     reception_before_main = FALSE;
-    for (index = 0u; index < COM_PDU_CAPACITY; ++index) {
+    for (index = 0u; index < COM_MAX_PDUS; ++index) {
         signal_values[index] = 0u;
         com_ticks[index] = 0u;
         com_rx_reloaded[index] = FALSE;
@@ -175,7 +174,7 @@ static COM_CODE boolean Com_ValidConfig(const Com_ConfigType *config)
 {
     boolean valid = FALSE;
     if ((config != NULL_PTR) && (config->pdus != NULL_PTR) && (config->pdu_count > 0u) &&
-        (config->pdu_count <= COM_PDU_CAPACITY)) {
+        (config->pdu_count <= COM_MAX_PDUS)) {
         valid = TRUE;
         for (uint16 index = 0u; index < config->pdu_count; ++index) {
             uint16 previous;

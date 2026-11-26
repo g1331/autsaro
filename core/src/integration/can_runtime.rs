@@ -658,7 +658,7 @@ pub(super) fn profile_header(
                 "CAN_HOH_CAPACITY",
                 format!("{}u", communication.hardware.len()),
             ),
-            ("COM_PDU_CAPACITY", format!("{com_pdu_count}u")),
+            ("COM_MAX_PDUS", format!("{com_pdu_count}u")),
             ("COMM_USER_CAPACITY", format!("{comm_user_count}u")),
             ("COMM_CHANNEL_CAPACITY", format!("{comm_channel_count}u")),
             (
