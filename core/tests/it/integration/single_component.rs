@@ -459,7 +459,7 @@ fn reference_shape_records_independent_verification_inputs() {
             serde_json::json!({
                 "module": "CanIf", "direction": direction, "handle": handle, "channel": 0,
                 "format": "STANDARD", "fdPolicy": "CLASSICAL", "id": id,
-                "logicalLength": length, "wireLength": length,
+                "logicalLength": length, "wireLength": length, "frameOffset": 0,
             }),
             "{role}"
         );

@@ -104,12 +104,12 @@ fn comm_services_execute_real_user_calls_and_mode_publications() {
     );
     mutations.push(("wrong-second-user".into(), changed, false));
     let mut changed = original.clone();
-    let publication = "comm_user_publications[i].notify(comm_user_publications[i].mode);";
+    let publication = "comm_publication.claims[i].notify(comm_publication.claims[i].mode);";
     assert_eq!(changed[2].matches(publication).count(), 1);
     changed[2] = changed[2].replace(
         publication,
         &format!(
-            "if (comm_user_publications[i].mode > COMM_FULL_COMMUNICATION) {{ {publication} }}"
+            "if (comm_publication.claims[i].mode > COMM_FULL_COMMUNICATION) {{ {publication} }}"
         ),
     );
     mutations.push(("missing-user-notifications".into(), changed, false));
@@ -137,7 +137,7 @@ fn comm_services_execute_real_user_calls_and_mode_publications() {
     changed[1] = changed[1].replace(callback, "SchM_Switch_ComM_UM_HostUser(");
     mutations.push(("wrong-user-publisher".into(), changed, false));
     let mut changed = original.clone();
-    for published in ["state->published", "comm_user_published[i]"] {
+    for published in ["state->published", "comm_publication.previous[i]"] {
         let marker = format!("{published} = COMM_NO_COMMUNICATION;");
         assert_eq!(changed[2].matches(&marker).count(), 1);
         changed[2] = changed[2].replace(

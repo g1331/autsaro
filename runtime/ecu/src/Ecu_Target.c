@@ -5,6 +5,9 @@
 #include "Os_IntegrationHooks.h"
 #include "Os_Backend.h"
 #include "Can_Host.h"
+#include "Can_Cfg.h"
+#include "Ecu_ProfileConfig.h"
+#include "Ecu_Config.h"
 #include "CanIf.h"
 #include "CanTp.h"
 #include "CanTp_Internal.h"
@@ -312,6 +315,50 @@ static StatusType batch_time(uint64_t at, Os_TickCompletionType *completed)
     }
     return (status == E_OS_ID) ? E_OS_VALUE : ((status == E_OS_NOFUNC) ? E_OS_STATE : status);
 }
+typedef struct {
+    Can_IdType id;   /**< Encoded configured identifier. */
+    uint8 channel;   /**< Driver controller for this endpoint. */
+    uint8 length;    /**< Configured payload length. */
+    boolean receive; /**< TRUE for an admissible Rx endpoint. */
+    boolean dual;    /**< TRUE for Classical and FD with the same format. */
+} Ecu_HostFramePolicyType;
+#include "Ecu_HostFramePolicy.h"
+
+static boolean host_can_if_controller(uint8 channel, uint8 *controller)
+{
+    const uint16 index = channel;
+    const boolean valid = (index < CAN_CONTROLLER_CAPACITY) && (controller != NULL_PTR);
+    if (valid) {
+        *controller = Ecu_Policy.can_config->controllers[index].can_if;
+    }
+    return valid;
+}
+
+static int host_frame_shape(uint8 channel, uint32 id, uint8 dlc)
+{
+    int result = 0;
+    const uint16 controller = channel;
+    const boolean fd = (id & CAN_ID_FD_FLAG) != 0u;
+    if ((controller < CAN_CONTROLLER_CAPACITY) && Can_IsValidId(id) && Can_IsWireLength(id, dlc) &&
+        ((!fd) || (Ecu_Policy.can_config->controllers[controller].data_bitrate != 0u))) {
+        result = 1;
+        for (uint32 i = 0u; i < (sizeof(frame_policies) / sizeof(frame_policies[0])); ++i) {
+            const Ecu_HostFramePolicyType *frame = &frame_policies[i];
+            if ((frame->channel == channel) &&
+                ((frame->id == id) || (frame->dual && (frame->id == (id & ~CAN_ID_FD_FLAG))))) {
+                result = 0;
+                if (frame->receive) {
+                    if ((dlc == frame->length) || (fd && (dlc > frame->length))) {
+                        result = 1;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    return result;
+}
+
 StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count)
 {
     uint16_t index;
@@ -325,10 +372,10 @@ StatusType Ecu_TargetValidateFrames(const Ecu_BatchFrame *frames, uint16_t count
         const Ecu_BatchFrame *frame = &frames[index];
         uint8 controller;
         if (frame->kind == ECU_BATCH_FRAME) {
-            if (Ecu_StackFrameShape(frame->channel, frame->id, frame->dlc) == 0) {
+            if (host_frame_shape(frame->channel, frame->id, frame->dlc) == 0) {
                 return E_OS_VALUE;
             }
-        } else if ((!Ecu_StackCanIfController(frame->channel, &controller)) ||
+        } else if ((!host_can_if_controller(frame->channel, &controller)) ||
                    (frame->kind < ECU_BATCH_STOPPED) || (frame->kind > ECU_BATCH_STARTED)) {
             return E_OS_VALUE;
         }
@@ -551,7 +598,7 @@ static EcuStatus consume_batch_input(const Ecu_BatchFrame *frame)
     EcuStatus status = ECU_OK;
     switch (frame->kind) {
         case ECU_BATCH_FRAME:
-            status = Can_HostInjectChannel(frame->channel, frame->id, frame->dlc, frame->data);
+            status = Ecu_Policy.ingress(frame->channel, frame->id, frame->dlc, frame->data);
             Ecu_ComReceptionBeforeMain(batch_epoch > processed_epoch);
             Ecu_CanTpReceptionBeforeMain(batch_epoch > processed_epoch);
             Can_MainFunction_Read();
@@ -562,7 +609,7 @@ static EcuStatus consume_batch_input(const Ecu_BatchFrame *frame)
             break;
         case ECU_BATCH_OFFLINE: {
             uint8 controller;
-            if ((!Ecu_StackCanIfController(frame->channel, &controller)) ||
+            if ((!host_can_if_controller(frame->channel, &controller)) ||
                 (Ecu_HostBusSM_HostOffline(controller) != E_OK)) {
                 status = ECU_ERR_CONTROLLER;
             }

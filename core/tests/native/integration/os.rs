@@ -611,7 +611,7 @@ fn delivery_and_independent_control() {
     let binary = build_ecu(&project, &root.join("build"), "test", None);
     let stdout = run(&binary, &[]);
     // Com periodic transmission (SWS_Com_00495) at the 20 ms period with the
-    // permuted CanIf handle 1 and CAN identifier 1101; nothing at 10 ms.
+    // permuted CanIf handle 1 and CAN identifier 1101 on channel 0; nothing at 10 ms.
     let outputs = stdout
         .lines()
         .filter(|line| line.starts_with("ecu_output "))
@@ -619,7 +619,7 @@ fn delivery_and_independent_control() {
     assert_eq!(outputs.len(), 1, "{stdout}");
     assert!(
         outputs[0].starts_with("ecu_output epoch=20 ")
-            && outputs[0].ends_with("pdu=1 id=1101 dlc=4"),
+            && outputs[0].ends_with("pdu=1 id=1101 dlc=4 channel=0"),
         "{stdout}"
     );
 }

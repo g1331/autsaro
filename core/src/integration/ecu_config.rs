@@ -818,12 +818,6 @@ pub(super) fn files(
         ),
         c_layout::section("RTE_Ecu", "Rte", "CODE", false)
     ));
-    config_data(
-        &mut config,
-        "Ecu",
-        "const EcuPolicyConfig Ecu_Policy",
-        &values("ECU_TX_QUEUED"),
-    );
     let controllers = communication
         .channels
         .iter()
@@ -864,7 +858,7 @@ pub(super) fn files(
         "static const Can_HohConfigType can_hardware[]",
         &hardware,
     );
-    init_data(
+    config_data(
         &mut config,
         "Can",
         "static const Can_ConfigType ecu_can_driver",
@@ -873,6 +867,12 @@ pub(super) fn files(
             controllers.len(),
             hardware.len(),
         )),
+    );
+    config_data(
+        &mut config,
+        "Ecu",
+        "const EcuPolicyConfig Ecu_Policy",
+        &values("ECU_TX_QUEUED, &ecu_can_driver, &Can_HostInjectChannel"),
     );
     let routing_headers = r#"#include "Com_Cfg.h"
 #include "CanIf_Cfg.h"
@@ -1309,7 +1309,7 @@ pub(super) fn files(
         "static const Ecu_HostBusSM_ChannelConfigType bus_channels[]",
         &bus_rows,
     );
-    init_data(
+    config_data(
         &mut config,
         "Ecu_HostBusSM",
         "static const Ecu_HostBusSM_ConfigType bus_config",
@@ -1510,9 +1510,9 @@ pub(super) fn files(
         case COMM_SILENT_COMMUNICATION:
         case COMM_FULL_COMMUNICATION:
             for (uint16 index = 0u; index < COMM_CHANNEL_CAPACITY; ++index) {
-                if (bus_channels[index].channel == channel) {
+                if (bus_config.channels[index].channel == channel) {
                     result = Ecu_HostBusSM_ConfirmControllerMode(
-                        channel, bus_channels[index].controller, requested);
+                        channel, bus_config.channels[index].controller, requested);
                     break;
                 }
             }
@@ -1526,7 +1526,6 @@ pub(super) fn files(
 "#,
         );
     }
-    config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", false));
     let mut startup_users = std::collections::BTreeSet::new();
     for channel in &mode.channels {
         let user = mode
@@ -1540,19 +1539,15 @@ pub(super) fn files(
         .into_iter()
         .map(|user| Item::Value(name("ComM", "ComMUser", user)))
         .collect::<Vec<_>>();
-    config_data(
-        &mut config,
-        "Ecu",
-        "static const ComM_UserHandleType starter_users[]",
-        &users,
-    );
-    config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
+    config.push_str("static RTE_Ecu_CODE Std_ReturnType Ecu_StartCommunication(void)\n{\n");
+    let startup = c_layout::initializer("const ComM_UserHandleType starter_users[]", "", &users);
+    for line in startup.lines() {
+        config.push_str(&format!("    {line}\n"));
+    }
     config.push_str(
-        r#"static RTE_Ecu_CODE Std_ReturnType Ecu_StartCommunication(void)
-{
-    Std_ReturnType result = E_OK;
+        r#"    Std_ReturnType result = E_OK;
     for (uint16 i = 0u; i < COMM_CHANNEL_CAPACITY; ++i) {
-        ComM_CommunicationAllowed(bus_channels[i].channel, TRUE);
+        ComM_CommunicationAllowed(bus_config.channels[i].channel, TRUE);
     }
     for (uint16 i = 0u;
          (i < (sizeof(starter_users) / sizeof(starter_users[0]))) && (result == E_OK);
@@ -1561,12 +1556,12 @@ pub(super) fn files(
     }
     if (result == E_OK) {
         for (uint16 i = 0u; i < COMM_CHANNEL_CAPACITY; ++i) {
-            (void)ComM_RunChannel(bus_channels[i].channel);
+            (void)ComM_RunChannel(bus_config.channels[i].channel);
         }
         Can_MainFunction_Mode();
         for (uint16 i = 0u; (i < COMM_CHANNEL_CAPACITY) && (result == E_OK); ++i) {
             Can_ControllerStateType actual = CAN_CS_UNINIT;
-            result = CanIf_GetControllerMode(bus_channels[i].controller, &actual);
+            result = CanIf_GetControllerMode(bus_config.channels[i].controller, &actual);
             if (actual != CAN_CS_STARTED) {
                 result = E_NOT_OK;
             }
@@ -1619,7 +1614,7 @@ pub(super) fn files(
 "#,
         );
         config.push_str(&stage(3));
-        config.push_str("    Can_Init(&ecu_can_driver);\n");
+        config.push_str("    Can_Init(Ecu_Policy.can_config);\n");
         config.push_str(&stage(4));
         config.push_str(
             r#"    CanIf_Init(&CanIf_Config);
@@ -1725,7 +1720,8 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
             3,
             r#"Can_MainFunction_BusOff();
         for (uint16 i = 0u; i < CAN_CONTROLLER_CAPACITY; ++i) {
-            (void)Can_SetControllerMode(can_controllers[i].controller, CAN_CS_STOPPED);
+            const Can_ControllerConfigType *controller = &Ecu_Policy.can_config->controllers[i];
+            (void)Can_SetControllerMode(controller->controller, CAN_CS_STOPPED);
         }
         Can_MainFunction_Mode();
         Can_DeInit();
@@ -1789,62 +1785,27 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
             tp.encoded_response_id()
         )));
     }
-    config.push_str(
-        r#"typedef struct {
-    Can_IdType id;   /**< Encoded configured identifier. */
-    uint8 channel;   /**< Driver controller for this endpoint. */
-    uint8 length;    /**< Configured payload length. */
-    boolean receive; /**< TRUE for an admissible Rx endpoint. */
-    boolean dual;    /**< TRUE for Classical and FD with the same format. */
-} Ecu_HostFramePolicyType;
+    let host_policy = format!(
+        r#"/** @file Generated route policy private to the host batch target. */
+#ifndef ECU_HOST_FRAME_POLICY_H
+#define ECU_HOST_FRAME_POLICY_H
 
+{start}{policy} /**< Configured frame identities for host admission. */
+{stop}#endif
 "#,
+        start = c_layout::section("RTE_Ecu", "Rte", "CONFIG_DATA_PREBUILD_UNSPECIFIED", true),
+        policy = c_layout::initializer(
+            "static const Ecu_HostFramePolicyType frame_policies[]",
+            "RTE_Ecu_CONFIG_DATA_PREBUILD_UNSPECIFIED",
+            &frame_policies,
+        ),
+        stop = c_layout::section("RTE_Ecu", "Rte", "CONFIG_DATA_PREBUILD_UNSPECIFIED", false),
     );
-    config_data(
-        &mut config,
-        "Ecu",
-        "static const Ecu_HostFramePolicyType frame_policies[]",
-        &frame_policies,
-    );
-    config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
-    config.push_str(
-        r#"RTE_Ecu_CODE boolean Ecu_StackCanIfController(uint8 channel, uint8 *controller)
-{
-    const uint16 index = channel;
-    const boolean valid = (index < CAN_CONTROLLER_CAPACITY) && (controller != NULL_PTR);
-    if (valid) {
-        *controller = can_controllers[index].can_if;
-    }
-    return valid;
-}
-
-RTE_Ecu_CODE int Ecu_StackFrameShape(uint8 channel, uint32 id, uint8 dlc)
-{
-    int result = 0;
-    const uint16 controller = channel;
-    const boolean fd = (id & CAN_ID_FD_FLAG) != 0u;
-    if ((controller < CAN_CONTROLLER_CAPACITY) && Can_IsValidId(id) && Can_IsWireLength(id, dlc) &&
-        ((!fd) || (can_controllers[controller].data_bitrate != 0u))) {
-        result = 1;
-        for (uint32 i = 0u; i < (sizeof(frame_policies) / sizeof(frame_policies[0])); ++i) {
-            const Ecu_HostFramePolicyType *frame = &frame_policies[i];
-            if ((frame->channel == channel) &&
-                ((frame->id == id) || (frame->dual && (frame->id == (id & ~CAN_ID_FD_FLAG))))) {
-                result = 0;
-                if (frame->receive) {
-                    if ((dlc == frame->length) || (fd && (dlc > frame->length))) {
-                        result = 1;
-                    }
-                    break;
-                }
-            }
-        }
-    }
-    return result;
-}
-"#,
-    );
-    config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", false));
+    outputs.emit(
+        ECU,
+        "integration/include/Ecu_HostFramePolicy.h",
+        host_policy,
+    )?;
     if description.diagnostic_transport.is_some() {
         let function = c_layout::short_function(
             "static RTE_Dcm_CODE void Ecu_DcmAuthenticationMode(uint8 state)",

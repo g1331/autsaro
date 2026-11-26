@@ -134,8 +134,8 @@ BSWM_CODE void BswM_ComM_CurrentMode(NetworkHandleType Network, ComM_ModeType Re
                 bswm_ports[i].mode = RequestedMode;
                 ++bswm_ports[i].postponed;
                 if (!processing) {
-                    processing = TRUE;
-                    owner = TRUE;
+                    processing = (boolean)TRUE;
+                    owner = (boolean)TRUE;
                 }
                 break;
             }

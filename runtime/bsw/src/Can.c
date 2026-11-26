@@ -235,7 +235,7 @@ CAN_CODE void Can_DeInit(void)
 {
     SchM_Enter_Can_CAN_STATE();
     if (can_initialized != 0u) {
-        boolean all_stopped = TRUE;
+        boolean all_stopped = (boolean)TRUE;
         const uint16 count = Can_ControllerCount(can_configuration);
         for (uint16 i = 0u; (i < CAN_CONTROLLER_CAPACITY) && (i < count); ++i) {
             all_stopped = all_stopped && (controllers[i].can_controller_mode != CAN_STARTED);
@@ -296,7 +296,7 @@ CAN_CODE Std_ReturnType Can_GetControllerMode(uint8 Controller,
 {
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_Can_CAN_STATE();
-    Can_ControllerRuntimeType *state = Can_Controller(Controller);
+    const Can_ControllerRuntimeType *state = Can_Controller(Controller);
     if ((state != NULL_PTR) && (ControllerModePtr != NULL_PTR)) {
         if (state->can_controller_mode == CAN_STARTED) {
             *ControllerModePtr = CAN_CS_STARTED;
@@ -398,31 +398,33 @@ static CAN_CODE boolean Can_HohMatchesId(uint8 format, Can_IdType id)
 /* Array positions are independent of the configured identifiers. */
 static CAN_CODE boolean Can_TransmitHoh(Can_HwHandleType handle, Can_HohConfigType *hoh)
 {
-    boolean found = FALSE;
+    const Can_HohConfigType *selected = NULL_PTR;
+    Can_HohConfigType standalone;
     if (can_initialized != 0u) {
         if (can_configuration->controller_count == 0u) {
             if (handle == CAN_TX_HOH) {
-                const Can_HohConfigType standalone = {CAN_TX_HOH,
-                                                      CAN_CONTROLLER_ID,
-                                                      CAN_TX_ID_TYPE,
-                                                      FALSE,
-                                                      can_configuration->fd_padding};
-                *hoh = standalone;
-                found = TRUE;
+                standalone = (Can_HohConfigType){CAN_TX_HOH,
+                                                 CAN_CONTROLLER_ID,
+                                                 CAN_TX_ID_TYPE,
+                                                 FALSE,
+                                                 can_configuration->fd_padding};
+                selected = &standalone;
             }
         } else {
             for (uint32 i = 0u; (i < CAN_HOH_CAPACITY) && (i < can_configuration->hardware_count);
                  ++i) {
                 const Can_HohConfigType *entry = &can_configuration->hardware[i];
                 if ((entry->handle == handle) && (!entry->receive)) {
-                    *hoh = *entry;
-                    found = TRUE;
+                    selected = entry;
                     break;
                 }
             }
         }
     }
-    return found;
+    if (selected != NULL_PTR) {
+        *hoh = *selected;
+    }
+    return selected != NULL_PTR;
 }
 
 static CAN_CODE EcuStatus Can_WriteHost(Can_HwHandleType hth,
@@ -705,11 +707,10 @@ static CAN_CODE void Can_ConfirmTx(Can_ControllerRuntimeType *state)
 
 static CAN_CODE boolean Can_HasReceiveHoh(uint8 controller, uint32 id)
 {
-    boolean result = FALSE;
     const Can_ConfigType *config = can_configuration;
-    if (config->controller_count == 0u) {
-        result = Can_HohMatchesId(CAN_RX_ID_TYPE, id);
-    } else {
+    const boolean standalone = config->controller_count == 0u;
+    boolean result = standalone && Can_HohMatchesId(CAN_RX_ID_TYPE, id);
+    if (!standalone) {
         for (uint32 i = 0u; (i < CAN_HOH_CAPACITY) && (i < config->hardware_count) && !result;
              ++i) {
             const Can_HohConfigType *hoh = &config->hardware[i];

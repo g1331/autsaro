@@ -77,19 +77,16 @@ static ComM_ChannelStateType
 static ComM_ModeType
     comm_requests[COMM_USER_CAPACITY] COMM_VAR_CLEARED; /**< Latest request per user; ComM_Init sets
                                                            NO. */
-static ComM_ModeType
-    comm_user_published[COMM_USER_CAPACITY] COMM_VAR_CLEARED; /**< Last indicated user mode;
-                                                                 initialized to NO. */
 typedef struct {
     ComM_UserModeType notify; /**< Claimed RTE publication. */
     ComM_ModeType mode;       /**< Lowest indicated channel mode. */
 } ComM_UserPublicationType;
 
-/* Only the context owning comm_publishing reads or writes this snapshot. */
-static ComM_UserPublicationType
-    comm_user_publications[COMM_USER_CAPACITY] COMM_VAR_CLEARED; /**< User notifications claimed
-                                                                    under COMM_STATE. */
-static boolean comm_publishing COMM_VAR_CLEARED;                 /**< Publisher; Init preserves. */
+static struct {
+    ComM_ModeType previous[COMM_USER_CAPACITY]; /**< Last indicated mode, initialized to NO. */
+    ComM_UserPublicationType claims[COMM_USER_CAPACITY]; /**< Snapshot claimed under COMM_STATE. */
+    boolean publishing; /**< Exclusive publisher owns the snapshot; Init preserves it. */
+} comm_publication COMM_VAR_CLEARED; /**< Shared user publication state under COMM_STATE. */
 #define COMM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "ComM_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -115,16 +112,28 @@ static COMM_CODE uint16 ComM_Channel(const ComM_ConfigType *config, NetworkHandl
     return result;
 }
 
+static COMM_CODE uint16 ComM_User(const ComM_ConfigType *config, ComM_UserHandleType user)
+{
+    uint16 index = COMM_USER_CAPACITY;
+    if (config != NULL_PTR) {
+        for (uint16 i = 0u; (i < COMM_USER_CAPACITY) && (i < config->user_count); ++i) {
+            if (config->users[i].user == user) {
+                index = i;
+                break;
+            }
+        }
+    }
+    return index;
+}
+
 static COMM_CODE boolean ComM_ValidUsers(const ComM_ConfigType *config)
 {
     boolean valid = TRUE;
     for (uint16 i = 0u; ((i < COMM_USER_CAPACITY) && (i < config->user_count)) && valid; ++i) {
         const ComM_UserModeConfigType *user = &config->users[i];
         valid = (user->user != COMM_NOT_USED_USER_ID) && (user->channels != NULL_PTR) &&
-                (user->channel_count > 0u) && (user->channel_count <= config->channel_count);
-        for (uint16 j = 0u; (j < i) && valid; ++j) {
-            valid = config->users[j].user != user->user;
-        }
+                (user->channel_count > 0u) && (user->channel_count <= config->channel_count) &&
+                (ComM_User(config, user->user) == i);
         for (uint16 j = 0u; (j < user->channel_count) && valid; ++j) {
             valid = ComM_Channel(config, user->channels[j]) < COMM_CHANNEL_CAPACITY;
             for (uint16 k = 0u; (k < j) && valid; ++k) {
@@ -151,19 +160,6 @@ static COMM_CODE boolean ComM_Valid(const ComM_ConfigType *config)
         valid = valid && ComM_ValidUsers(config);
     }
     return valid;
-}
-static COMM_CODE uint16 ComM_User(ComM_UserHandleType user)
-{
-    uint16 index = COMM_USER_CAPACITY;
-    if (comm_configuration != NULL_PTR) {
-        for (uint16 i = 0u; (i < COMM_USER_CAPACITY) && (i < comm_configuration->user_count); ++i) {
-            if (comm_configuration->users[i].user == user) {
-                index = i;
-                break;
-            }
-        }
-    }
-    return index;
 }
 static COMM_CODE boolean ComM_Demand(const ComM_ChannelStateType *state, NetworkHandleType channel)
 {
@@ -274,8 +270,8 @@ static COMM_CODE uint16 ComM_ClaimUsers(ComM_UserPublicationType *publications)
                 lowest = comm_channels[index].indicated;
             }
         }
-        if (comm_user_published[i] != lowest) {
-            comm_user_published[i] = lowest;
+        if (comm_publication.previous[i] != lowest) {
+            comm_publication.previous[i] = lowest;
             if (user->notify != NULL_PTR) {
                 publications[count].notify = user->notify;
                 publications[count].mode = lowest;
@@ -302,19 +298,19 @@ static COMM_CODE void ComM_Publish(void)
                     comm_channels[i].published = comm_channels[i].indicated;
                     channel = &comm_configuration->channels[i];
                     mode = comm_channels[i].published;
-                    count = ComM_ClaimUsers(comm_user_publications);
+                    count = ComM_ClaimUsers(comm_publication.claims);
                     break;
                 }
             }
         }
         if (channel == NULL_PTR) {
-            comm_publishing = FALSE;
+            comm_publication.publishing = FALSE;
             owner = FALSE;
         }
         SchM_Exit_ComM_COMM_STATE();
         if (owner) {
             for (uint16 i = 0u; i < count; ++i) {
-                comm_user_publications[i].notify(comm_user_publications[i].mode);
+                comm_publication.claims[i].notify(comm_publication.claims[i].mode);
             }
             BswM_ComM_CurrentMode(channel->channel, mode);
             ComM_NotifyDcm(channel, mode);
@@ -329,7 +325,7 @@ static COMM_CODE void ComM_ResetChannel(ComM_ChannelStateType *state)
     state->wakeup = FALSE;
     state->minimum_remaining = 0u;
     state->indicated = COMM_NO_COMMUNICATION;
-    if (!comm_publishing) {
+    if (!comm_publication.publishing) {
         state->published = COMM_NO_COMMUNICATION;
     }
     ComM_ClaimBus(state, COMM_NO_COMMUNICATION);
@@ -341,8 +337,8 @@ COMM_CODE void ComM_Init(const ComM_ConfigType *ConfigPtr)
         comm_configuration = ConfigPtr;
         for (uint16 i = 0u; (i < COMM_USER_CAPACITY) && (i < ConfigPtr->user_count); ++i) {
             comm_requests[i] = COMM_NO_COMMUNICATION;
-            if (!comm_publishing) {
-                comm_user_published[i] = COMM_NO_COMMUNICATION;
+            if (!comm_publication.publishing) {
+                comm_publication.previous[i] = COMM_NO_COMMUNICATION;
             }
         }
         for (uint16 i = 0u; (i < COMM_CHANNEL_CAPACITY) && (i < ConfigPtr->channel_count); ++i) {
@@ -367,7 +363,7 @@ static COMM_CODE boolean ComM_NoPendingRequest(const ComM_ConfigType *config)
 }
 static COMM_CODE boolean ComM_AllBusesNoCom(const ComM_ConfigType *config)
 {
-    boolean idle = TRUE;
+    boolean idle = (boolean)TRUE;
     for (uint16 i = 0u; (i < config->channel_count) && idle; ++i) {
         ComM_ModeType mode = COMM_FULL_COMMUNICATION;
         idle = (config->current(config->channels[i].channel, &mode) == E_OK) &&
@@ -414,7 +410,8 @@ COMM_CODE Std_ReturnType ComM_GetInhibitionStatus(NetworkHandleType Channel,
 {
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
-    if (ComM_Channel(comm_configuration, Channel) < COMM_CHANNEL_CAPACITY && (Status != NULL_PTR)) {
+    if ((ComM_Channel(comm_configuration, Channel) < COMM_CHANNEL_CAPACITY) &&
+        (Status != NULL_PTR)) {
         /* Wake-up inhibition and mode limitation are disabled. */
         *Status = 0u;
         result = E_OK;
@@ -441,7 +438,7 @@ COMM_CODE Std_ReturnType ComM_RequestComMode(ComM_UserHandleType User, ComM_Mode
     Std_ReturnType result = E_NOT_OK;
     const ComM_UserModeConfigType *user = NULL_PTR;
     SchM_Enter_ComM_COMM_STATE();
-    const uint16 index = ComM_User(User);
+    const uint16 index = ComM_User(comm_configuration, User);
     if ((index < COMM_USER_CAPACITY) &&
         ((ComMode == COMM_NO_COMMUNICATION) || (ComMode == COMM_FULL_COMMUNICATION))) {
         user = &comm_configuration->users[index];
@@ -466,7 +463,7 @@ COMM_CODE Std_ReturnType ComM_GetRequestedComMode(ComM_UserHandleType User, ComM
     Std_ReturnType result = E_NOT_OK;
     uint16 index;
     SchM_Enter_ComM_COMM_STATE();
-    index = ComM_User(User);
+    index = ComM_User(comm_configuration, User);
     if ((index < COMM_USER_CAPACITY) && (ComMode != NULL_PTR)) {
         *ComMode = comm_requests[index];
         result = E_OK;
@@ -482,7 +479,7 @@ COMM_CODE Std_ReturnType ComM_GetCurrentComMode(ComM_UserHandleType User, ComM_M
     const ComM_UserModeConfigType *user = NULL_PTR;
     ComM_BusGetType current = NULL_PTR;
     SchM_Enter_ComM_COMM_STATE();
-    const uint16 index = ComM_User(User);
+    const uint16 index = ComM_User(comm_configuration, User);
     if ((index < COMM_USER_CAPACITY) && (ComMode != NULL_PTR)) {
         user = &comm_configuration->users[index];
         current = comm_configuration->current;
@@ -510,7 +507,7 @@ COMM_CODE Std_ReturnType ComM_GetCurrentPNCComMode(ComM_UserHandleType User, Com
 {
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
-    if ((ComM_User(User) < COMM_USER_CAPACITY) && (ComMode != NULL_PTR)) {
+    if ((ComM_User(comm_configuration, User) < COMM_USER_CAPACITY) && (ComMode != NULL_PTR)) {
         /* PncSupport=false gives every configured static user zero PNCs. SWS_ComM_01023
          * hands the code out as ComMode and SWS_ComM_91002 lists it as return value. */
         *ComMode = COMM_E_NO_PNC_ASSIGNED;
@@ -525,7 +522,7 @@ COMM_CODE Std_ReturnType ComM_GetMaxComMode(ComM_UserHandleType User, ComM_ModeT
 {
     Std_ReturnType result = E_NOT_OK;
     SchM_Enter_ComM_COMM_STATE();
-    if ((ComM_User(User) < COMM_USER_CAPACITY) && (ComMode != NULL_PTR)) {
+    if ((ComM_User(comm_configuration, User) < COMM_USER_CAPACITY) && (ComMode != NULL_PTR)) {
         /* Neither mode limitation nor wake-up inhibition is selected. */
         *ComMode = COMM_FULL_COMMUNICATION;
         result = E_OK;
@@ -587,8 +584,8 @@ COMM_CODE void ComM_BusSM_ModeIndication(NetworkHandleType Channel, ComM_ModeTyp
     const uint16 index = ComM_Channel(comm_configuration, Channel);
     if ((index < COMM_CHANNEL_CAPACITY) && (ComMode <= COMM_FULL_COMMUNICATION)) {
         comm_channels[index].indicated = ComMode;
-        if (!comm_publishing) {
-            comm_publishing = TRUE;
+        if (!comm_publication.publishing) {
+            comm_publication.publishing = TRUE;
             owner = TRUE;
         }
     }

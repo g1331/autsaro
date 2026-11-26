@@ -110,7 +110,7 @@ static CANIF_CODE boolean CanIf_ValidMapping(uint8 offset,
 
 static CANIF_CODE boolean CanIf_ValidRx(const CanIf_ConfigType *config)
 {
-    boolean valid = TRUE;
+    boolean valid = (boolean)TRUE;
     for (uint16 i = 0u; (i < config->receive_count) && valid; ++i) {
         const CanIf_RxPduConfigType *route = &config->receive[i];
         const boolean fd_only = (route->can_id & CAN_ID_FD_FLAG) != 0u;
@@ -133,7 +133,7 @@ static CANIF_CODE boolean CanIf_ValidRx(const CanIf_ConfigType *config)
 
 static CANIF_CODE boolean CanIf_ValidTx(const CanIf_ConfigType *config)
 {
-    boolean valid = TRUE;
+    boolean valid = (boolean)TRUE;
     for (uint16 i = 0u; (i < config->transmit_count) && valid; ++i) {
         const CanIf_TxPduConfigType *route = &config->transmit[i];
         const uint8 maximum =
