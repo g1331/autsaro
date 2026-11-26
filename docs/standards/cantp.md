@@ -20,7 +20,7 @@ CanTp 只在自己的 `CANTP_STATE` 区内读写连接状态、计时器与接�
 
 SWS_CanTp_00229 把超时与协议错误称为开发错误，表 SWS_CanTp_00352 则把它们定义为运行时错误；实现按表格经 `Det_ReportRuntimeError` 报告。
 
-TX_DL 从 EcuC 的发送数据 N-PDU `PduLength` 取得。首帧的 CAN_DL 不超过 8 时 RX_DL 为 8，否则等于 CAN_DL。小 SF 使用一个 PCI 字节，FD SF escape 使用两个，FF 的 12 位长度占两个字节，32 位 escape 占六个，CF 总是占一个。CanTp 按各帧的 PCI 与数据长度计算线上长度，在调用 LSduR 前以 `CanTpPaddingByte` 填充。已配置填充的 FC 发 8 字节，FD 帧超过 8 字节时取下一个可用离散长度。接收时只把有效数据交给上层。
+TX_DL 从 EcuC 的发送数据 N-PDU `PduLength` 取得。首帧的 CAN_DL 不超过 8 时 RX_DL 为 8，否则等于 CAN_DL。小 SF 使用一个 PCI 字节，FD SF escape 使用两个，FF 的 12 位长度占两个字节，32 位 escape 占六个，CF 总是占一个。CanTp 按各帧的 PCI 与数据长度计算线上长度，在调用 LSduR 前以 `CanTpPaddingByte` 填充。已配置填充的 FC 发 8 字节，FD 帧超过 8 字节时取下一个可用离散长度。接收时只把有效数据交给上层。FD SF 的 SF_DL 与实际 CAN_DL 须对应同一离散长度，超量填充的 SF 不会替换正在进行的分段接收。
 
 首帧长度先解码为 `uint32`，只有可由所选 `PduLengthType` 表示时才调用 PduR。不可表示的长度报告 `CANTP_E_COM`，新有效首帧仍先按 SWS_CanTp_00057 终止旧接收。`cantp_lengths.c` 验证生成的 UINT8／UINT16／UINT32 类型边界，`cantp_fd.c` 覆盖 FD 下的长度、分段、错误恢复和确认归属。Dcm 对现有 UDS 协议仍执行单请求缓冲策略，响应沿被接受请求的连接返回。
 

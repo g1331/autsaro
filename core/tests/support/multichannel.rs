@@ -484,6 +484,15 @@ pub(crate) fn multichannel_sources(count: usize) -> Vec<InputSource> {
 
 /// Two FD diagnostic links reuse the same CAN IDs on different physical buses.
 pub(crate) fn multichannel_diagnostic_sources() -> Vec<InputSource> {
+    diagnostic_sources(false)
+}
+
+/// Two links on one bus share the response N-PDU, with distinct request IDs.
+pub(crate) fn shared_tx_diagnostic_sources() -> Vec<InputSource> {
+    diagnostic_sources(true)
+}
+
+fn diagnostic_sources(shared_tx: bool) -> Vec<InputSource> {
     let mut inputs = multichannel_sources(2);
     for input in &mut inputs {
         let file = input.logical_path();
@@ -502,6 +511,9 @@ pub(crate) fn multichannel_diagnostic_sources() -> Vec<InputSource> {
                 .replace("DiagRequest", "DiagRequest1")
                 .replace("DiagResponse", "DiagResponse1");
             if file == "extract.arxml" && is_diagnostic {
+                if shared_tx && name.starts_with("DiagResponse") {
+                    continue;
+                }
                 match tag {
                     "CAN-FRAME" | "N-PDU" => add(&mut edits, node, second),
                     "FRAME-PORT" | "I-PDU-PORT" | "CAN-FRAME-TRIGGERING" | "PDU-TRIGGERING" => {
@@ -509,16 +521,34 @@ pub(crate) fn multichannel_diagnostic_sources() -> Vec<InputSource> {
                             .descendants()
                             .find(|candidate| {
                                 candidate.has_tag_name(tag)
-                                    && text(*candidate, "SHORT-NAME")
-                                        .is_some_and(|name| name.starts_with("RxValue1"))
+                                    && text(*candidate, "SHORT-NAME").is_some_and(|name| {
+                                        if shared_tx {
+                                            name.starts_with("RxValue")
+                                                && !name.starts_with("RxValue1")
+                                        } else {
+                                            name.starts_with("RxValue1")
+                                        }
+                                    })
                             })
                             .unwrap();
-                        second = network(&second, 1);
+                        if shared_tx {
+                            second = second.replace("<IDENTIFIER>1792</", "<IDENTIFIER>1793</");
+                        } else {
+                            second = network(&second, 1);
+                        }
                         add(&mut edits, location, second);
                     }
                     _ => {}
                 }
             } else if file == "ecuc.arxml" && tag == "ECUC-CONTAINER-VALUE" {
+                if shared_tx {
+                    if name.starts_with("DiagResponse")
+                        && (definition(node, "CanIfTxPduCfg") || name == "DiagResponsePdu")
+                    {
+                        continue;
+                    }
+                    second = second.replace("DiagResponse1Pdu", "DiagResponsePdu");
+                }
                 let parameters: &[(&str, usize)] = if definition(node, "CanTpChannel") {
                     second = second
                         .replace(
@@ -530,9 +560,9 @@ pub(crate) fn multichannel_diagnostic_sources() -> Vec<InputSource> {
                     &[
                         ("CanTpRxNSduId", 1),
                         ("CanTpRxNPduId", 1),
-                        ("CanTpTxFcNPduConfirmationPduId", 1),
+                        ("CanTpTxFcNPduConfirmationPduId", usize::from(!shared_tx)),
                         ("CanTpTxNSduId", 1),
-                        ("CanTpTxNPduConfirmationPduId", 1),
+                        ("CanTpTxNPduConfirmationPduId", usize::from(!shared_tx)),
                         ("CanTpRxFcNPduId", 1),
                     ]
                 } else if definition(node, "DcmDslConnection") {
@@ -540,8 +570,10 @@ pub(crate) fn multichannel_diagnostic_sources() -> Vec<InputSource> {
                         .replace("<SHORT-NAME>Connection</", "<SHORT-NAME>Connection1</")
                         .replace("<SHORT-NAME>Physical</", "<SHORT-NAME>Physical1</")
                         .replace("<SHORT-NAME>Receive</", "<SHORT-NAME>Receive1</")
-                        .replace("<SHORT-NAME>Transmit</", "<SHORT-NAME>Transmit1</")
-                        .replace("/ComM/Config/Host</", "/ComM/Config/Host1</");
+                        .replace("<SHORT-NAME>Transmit</", "<SHORT-NAME>Transmit1</");
+                    if !shared_tx {
+                        second = second.replace("/ComM/Config/Host</", "/ComM/Config/Host1</");
+                    }
                     &[
                         ("DcmDslProtocolRxConnectionId", 1),
                         ("DcmDslProtocolRxPduId", 1),
@@ -550,7 +582,11 @@ pub(crate) fn multichannel_diagnostic_sources() -> Vec<InputSource> {
                 } else if !is_diagnostic {
                     continue;
                 } else if definition(node, "CanIfRxPduCfg") {
-                    second = second.replace("/Handles/Receive</", "/Handles/Receive1</");
+                    if shared_tx {
+                        second = set(&second, "CanIfRxPduCanId", 1793);
+                    } else {
+                        second = second.replace("/Handles/Receive</", "/Handles/Receive1</");
+                    }
                     &[("CanIfRxPduId", 5)]
                 } else if definition(node, "CanIfTxPduCfg") {
                     second = second.replace("/TransmitBuffer</", "/TransmitBuffer1</");
@@ -577,6 +613,9 @@ pub(crate) fn multichannel_diagnostic_sources() -> Vec<InputSource> {
         let suffix = if channel == 0 { "" } else { "1" };
         enable_can_fd(&mut inputs, suffix);
         for (direction, rx) in [("Request", true), ("Response", false)] {
+            if shared_tx && !rx && channel == 1 {
+                continue;
+            }
             let name = format!("Diag{direction}{suffix}");
             let global_pdu = format!("{name}Pdu");
             let dl = if !rx && channel == 1 { "12" } else { "64" };
@@ -594,8 +633,8 @@ pub(crate) fn multichannel_diagnostic_sources() -> Vec<InputSource> {
             if rx {
                 parameter(&mut inputs, &name, "CanIfRxPduDataLengthCheck", "false");
             }
-            let network = format!("ReferenceCan{suffix}");
-            let trigger = format!("/Extract/{network}/Channel/{name}Trigger");
+            let network_suffix = if shared_tx { "" } else { suffix };
+            let trigger = format!("/Extract/ReferenceCan{network_suffix}/Channel/{name}Trigger");
             xml_edit(
                 &mut inputs,
                 "ecuc.arxml",

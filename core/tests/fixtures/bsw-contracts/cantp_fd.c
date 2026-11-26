@@ -226,6 +226,13 @@ static void segmented_rx(void)
     CanTp_TxConfirmation(40u, E_OK);
     receive(B, consecutive, 16u);
     assert(sessions[A].rx_copied == 14u && sessions[B].rx_copied == 29u);
+    /* SF_DL 9 belongs to CAN_DL 12. Excess padding in a 16-byte frame must
+     * not preempt the admitted FF or reset the expected sequence number. */
+    const unsigned rx_done = sessions[A].rx_done;
+    uint8 invalid_sf[16] = {0u, 9u};
+    payload(invalid_sf, 2u, 9u, 0u, 16u);
+    receive(A, invalid_sf, 16u);
+    assert(sessions[A].rx_done == rx_done && sessions[A].rx_copied == 14u);
     receive(A, consecutive, 16u);
     receive(A, last, 8u);
     receive(B, last, 8u);

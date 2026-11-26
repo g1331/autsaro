@@ -267,7 +267,8 @@ static CANTP_CODE CanTp_StartType CanTp_DecodeStart(const uint8 *data, uint8 len
                     start.pci = 1u;
                 }
             } else if ((low == 0u) && (data[1] > CANTP_SHORT_SF_MAX) &&
-                       (data[1] <= CanTp_SingleCapacity(length))) {
+                       (data[1] <= CanTp_SingleCapacity(length)) &&
+                       (CanTp_WireLength(2u + data[1]) == length)) {
                 start.total = data[1];
                 start.pci = 2u;
             } else {

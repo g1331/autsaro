@@ -87,9 +87,18 @@ fn host_batch_project() -> Built {
 fn generated_host_batch_keeps_configured_channels_isolated() {
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
     // The 17-channel case also exercises the PduR and LSduR tables above 32 Rx routes.
-    for count in [2, 3, 4, 6, 17] {
+    for (count, shared_tx) in [
+        (2, false),
+        (2, true),
+        (3, false),
+        (4, false),
+        (6, false),
+        (17, false),
+    ] {
         let scratch = super::Scratch::new();
-        let sources = if count == 2 {
+        let sources = if shared_tx {
+            crate::support::multichannel::shared_tx_diagnostic_sources()
+        } else if count == 2 {
             crate::support::multichannel::multichannel_diagnostic_sources()
         } else {
             crate::support::multichannel::multichannel_sources(count)
@@ -136,7 +145,14 @@ fn generated_host_batch_keeps_configured_channels_isolated() {
         )
         .unwrap();
         let endpoints = metadata["configuredEndpoints"].as_object().unwrap();
-        assert_eq!(endpoints.len(), 3 * count + if count == 2 { 4 } else { 2 });
+        let diagnostic_endpoints = if shared_tx {
+            3
+        } else if count == 2 {
+            4
+        } else {
+            2
+        };
+        assert_eq!(endpoints.len(), 3 * count + diagnostic_endpoints);
         for channel in 0..count {
             assert!(metadata["channels"][channel.to_string()].as_str().is_some());
             let matching = endpoints
@@ -152,6 +168,32 @@ fn generated_host_batch_keeps_configured_channels_isolated() {
         }
         let binary =
             super::sealed_builds::host_batch(&project, &scratch.0.join("host-batch-build"));
+        if shared_tx {
+            let script = b"BEGIN 1\nRX 1 STANDARD 1 1792 8 023e00cccccccccc\nCOMMIT\nBEGIN 2\nRX 1 STANDARD 1 1793 8 023e00cccccccccc\nCOMMIT\n";
+            let observed = run(&binary, &scratch.0.join("shared-diagnostic"), script);
+            let responses = observed
+                .lines()
+                .filter(|line| line.starts_with("OUT "))
+                .map(|line| {
+                    (
+                        field(line, "epoch="),
+                        field(line, "pdu="),
+                        field(line, "channel="),
+                        field(line, "id="),
+                        field(line, "data="),
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                responses,
+                [
+                    ("1", "1", "1", "1800", "027e00cccccccccc"),
+                    ("2", "1", "1", "1800", "027e00cccccccccc"),
+                ],
+                "{observed}"
+            );
+            continue;
+        }
         if count == 2 {
             fd_diagnostic_isolation(&binary, &scratch.0);
         }

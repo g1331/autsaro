@@ -1255,8 +1255,9 @@ pub(super) fn files(
         "PduR",
         "const PduR_PBConfigType PduR_Config",
         &values(&format!(
-            "{configuration_id}u, pd_rx, {}u, pd_tx, {tx_count}u, {}, {}u",
+            "{configuration_id}u, pd_rx, {}u, pd_tx, {}u, {}, {}u",
             pd_rx.len(),
+            pd_tx.len(),
             if transport.is_some() {
                 "tp_routes"
             } else {

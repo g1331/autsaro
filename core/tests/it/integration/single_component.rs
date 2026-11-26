@@ -3209,7 +3209,7 @@ fn cantp_timer_shorter_than_two_periods_is_refused() {
 
 /// The selected channel carries one connection per direction; a second N-SDU is refused.
 #[test]
-fn second_cantp_connection_is_refused() {
+fn duplicate_cantp_nsdu_reference_is_refused() {
     // Rejects: ECUC_CanTp_00137, ECUC_CanTp_00138
     for (name, definition) in [
         ("DiagRequest", "/CanTpRxNSdu"),
