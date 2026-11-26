@@ -202,6 +202,16 @@ pub(super) fn initializer(declaration: &str, attribute: &str, items: &[Item]) ->
     if head.len() + " = {".len() <= COLUMNS || attribute.is_empty() {
         return format!("{head} = {{\n{}}};", lines("    ", items));
     }
+    // A long array declarator keeps its object name and section attribute together.
+    if table
+        && declaration.ends_with(']')
+        && let Some((ty, name)) = declaration.rsplit_once(' ')
+    {
+        let continuation = format!("    {name} {attribute} = {{");
+        if fits(&continuation) {
+            return format!("{ty}\n{continuation}\n{}}};", lines("        ", items));
+        }
+    }
     // clang-format breaks before the section attribute of an over-long head.
     let continued = format!("{declaration}\n    {attribute} = {};", inline(items));
     if fits(&continued) && !table {
@@ -631,6 +641,12 @@ mod tests {
         assert_eq!(
             initializer(head, attribute, &items),
             format!("{head}\n    {attribute} = {{0u, 0u}};")
+        );
+        let ty = "static const Ecu_HostBusSM_ChannelConfigType";
+        let row = Item::Row(vec!["7u".into(), "9u".into()]);
+        assert_eq!(
+            initializer(&format!("{ty} bus_channels[]"), attribute, &[row]),
+            format!("{ty}\n    bus_channels[] {attribute} = {{\n        {{7u, 9u}},\n}};")
         );
         let long: Vec<_> = (0..30)
             .map(|value| Item::Value(format!("{value}u")))
