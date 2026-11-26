@@ -1206,7 +1206,7 @@ fn every_builtin_ecuc_parameter_has_product_guidance_in_both_languages() {
         used, authored,
         "orphaned guidance is not reachable through the catalog"
     );
-    assert_eq!(count, 510);
+    assert_eq!(count, 511);
     assert_eq!(modules.len(), 15);
 }
 

@@ -2482,12 +2482,16 @@ fn pdur_features_outside_the_selection_are_refused_at_their_source() {
         } else {
             object
         };
-        rejected_with(
-            &sources,
-            ("REFERENCE_UNRESOLVED", "DEFINITION_UNKNOWN"),
-            "ecuc.arxml",
-            &object,
-        );
+        if name == "PduRDestPduDataProvision" {
+            rejected_at(&sources, "VALUE_RANGE", "ecuc.arxml", &object);
+        } else {
+            rejected_with(
+                &sources,
+                ("REFERENCE_UNRESOLVED", "DEFINITION_UNKNOWN"),
+                "ecuc.arxml",
+                &object,
+            );
+        }
     }
 }
 
