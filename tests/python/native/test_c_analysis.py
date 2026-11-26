@@ -231,8 +231,10 @@ DWORD FixtureWait(HANDLE object)
     return WaitForSingleObject(object, INFINITE);
 }
 """
-        # This standalone fixture carries no reviewed production SDK sites.
+        # The synthetic port exercises SDK evidence but has no supplier kernel
+        # or reviewed production SDK sites to assess.
         with (tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()),
+              patch.object(c_acceptance, "_freertos_positions", return_value={}),
               patch.object(c_acceptance, "_sdk_records", return_value={"definitions": {}, "sites": []}),
               patch.dict(os.environ, {"ImageOS": "test", "ImageVersion": "test"})):
             os.environ.pop("GITHUB_REPOSITORY", None)
