@@ -220,13 +220,17 @@ def verify(project: Path, build_directory: Path) -> None:
         ])
     actor("malformed", [], malformed=True)
     probe = build(project, build_directory / "probe", "probe")
-    probe_output = query([str(probe)], logs, "probe", timeout=60)
+    transmit = endpoints["transmit"]
+    ticks = max(20, period) if transmit["fdPolicy"] == "FD" else 20
+    probe_command = [str(probe)]
+    if ticks != 20:
+        probe_command.extend(["--ticks", str(ticks)])
+    probe_output = query(probe_command, logs, "probe", timeout=60)
     probe_lines = probe_output.splitlines()
-    if ("ecu_probe completed=20" not in probe_lines
+    if (f"ecu_probe completed={ticks}" not in probe_lines
             or not any(line.startswith("lifecycle=Closed state=Ready reason=0 ") for line in probe_lines)):
         raise AssertionError(f"Normal probe did not complete: {probe_output}")
-    transmit = endpoints["transmit"]
-    if transmit["fdPolicy"] == "FD" and period <= 20:
+    if transmit["fdPolicy"] == "FD":
         brs = fd_timing["brs"]
         rate = fd_timing["dataBitrate" if brs else "nominalBitrate"]
         can_id = transmit["id"] | 0x40000000
@@ -235,10 +239,10 @@ def verify(project: Path, build_directory: Path) -> None:
         prefix = f" pdu={transmit['handle']} id={can_id} dlc={transmit['wireLength']}"
         observations = [line for line in probe_lines
                         if line.startswith("ecu_output ") and prefix + " " in line]
-        if (len(observations) != 20 // period
+        if (len(observations) != ticks // period
                 or any(not line.endswith(f" brs={int(brs)} data_bitrate={rate}") for line in observations)):
             raise AssertionError(f"FD output bitrate switch or data phase rate differs: {probe_output}")
         print(f"probe=can-fd-timing PASS brs={int(brs)} data_bitrate={rate}")
-    print("probe=normal PASS ticks=20 COM diagnostics parsed")
+    print(f"probe=normal PASS ticks={ticks} COM diagnostics parsed")
     sealed_sources(project)
     print("ECU_HANDOFF_VERIFY PASS: CAN/DID echo, single-HOH arbitration, two-DID boundary, real N_Cr timeout/recovery, malformed admission; host behavior only.")

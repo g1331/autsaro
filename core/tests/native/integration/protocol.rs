@@ -154,7 +154,24 @@ fn verify_moved_fd_package(brs: bool) {
         "CanControllerTxBitRateSwitch",
         if brs { "true" } else { "false" },
     );
-    let plan = super::build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let plan = if brs {
+        super::build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"))
+    } else {
+        use autosar_config_core::integration::IntegrationEdit;
+        let mut workspace =
+            super::mainline::live_pipeline_workspace(&scratch.0.join("live"), &sources);
+        workspace
+            .edit_integration(IntegrationEdit {
+                application_period_ms: Some(250),
+                ..IntegrationEdit::default()
+            })
+            .unwrap();
+        let save = workspace.preview_integration_save().unwrap();
+        workspace
+            .save_integration_previewed(&save.revision)
+            .unwrap();
+        workspace.saved_integration_plan().unwrap()
+    };
     let (project, _) =
         super::single_component_project_from(&scratch.0, super::tooling::native_target(), &plan);
     let moved = scratch.0.join("receiver");
@@ -208,6 +225,10 @@ fn verify_moved_fd_package(brs: bool) {
     );
     assert_eq!(fs::read(package.join("meta/files.sha256")).unwrap(), seal);
     if !brs {
+        assert!(
+            evidence.contains("probe=normal PASS ticks=250"),
+            "{evidence}"
+        );
         return;
     }
     let binary = super::tooling::native_binary(&build, "ecu_host_batch");

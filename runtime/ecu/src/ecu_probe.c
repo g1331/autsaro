@@ -1,4 +1,4 @@
-/** @file Host probe executable that runs 20 ticks and confirms every output. */
+/** @file Host probe executable that confirms every output during a selected tick window. */
 #include "Ecu_Target.h"
 #include "Ecu_TargetConfig.h"
 #include "Ecu_ComRejection.h"
@@ -7,6 +7,9 @@
 #include "Os_HostIo.h"
 #include <errno.h>
 #include <stdlib.h>
+#include <string.h>
+
+static uint32_t probe_ticks = 20u; /**< Main sets before the control thread starts. */
 
 static void probe_require(boolean condition)
 {
@@ -67,7 +70,7 @@ static Os_HostThreadResultType probe_control(void *argument)
         probe_require((Os_HostMonotonicMs() - started) < 5000u);
         Os_HostSleepMs(1u);
     }
-    for (step = UINT64_C(1); step <= UINT64_C(20); ++step) {
+    for (step = UINT64_C(1); step <= probe_ticks; ++step) {
         uint64_t ticket;
         Os_TickCompletionType completion;
         probe_require(Os_TargetAdvanceOneTick(step, &ticket) == E_OK);
@@ -93,8 +96,13 @@ static Os_HostThreadResultType probe_control(void *argument)
         probe_require((completion.epoch == step) && (completion.kernel_tick == (uint32_t)step));
     }
     probe_require(Ecu_ComDrainRejections(TRUE) != 0);
-    probe_require(Os_HostWriteBytes(
-                      0, "ecu_probe completed=20\n", sizeof("ecu_probe completed=20\n") - 1u) != 0);
+    {
+        char storage[64];
+        Os_HostTextType text = {storage, sizeof(storage), 0u, 0};
+        Os_HostTextField(&text, "ecu_probe completed=", probe_ticks);
+        Os_HostTextByte(&text, '\n');
+        probe_require(Os_HostTextWrite(&text) != 0);
+    }
     ShutdownOS(E_OK);
     return 0u;
 }
@@ -117,9 +125,20 @@ int main(int argc, char **argv)
         /* No failure-stage argument keeps the default test selection. */
     }
 #else
-    (void)argv;
-    if (argc != 1) {
+    if ((argc == 3) && (strcmp(argv[1], "--ticks") == 0)) {
+        char *end;
+        unsigned long long value;
+        errno = 0;
+        value = strtoull(argv[2], &end, 10);
+        if ((errno != 0) || (argv[2][0] < '0') || (argv[2][0] > '9') || (*end != '\0') ||
+            (value == 0u) || (value > UINT32_MAX)) {
+            return 98;
+        }
+        probe_ticks = (uint32_t)value;
+    } else if (argc != 1) {
         return 98;
+    } else {
+        /* Standalone use keeps the default observation window. */
     }
 #endif
     if (Ecu_TargetPrepare() != E_OK) {
