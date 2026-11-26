@@ -61,3 +61,5 @@ BSWGeneral §6 p31 的 NA 追溯规则允许忽略被模块排除 SRS 所对应�
 以上八个自有源码／头位置加两个生成配置位置，共十个物理位置，分别进入host-batch／probe，不按program重复计数。必要性连接固定 `SWS_MemMap_00003` 的声明／定义双侧映射和 `SWS_BSW_00006` 的实现包含责任；移除STOP、把全部include提前或依赖默认段均不保留该机制。SchM_LSduR的Enter／Exit属于共享RTE实现，不混入这里的LSDUR_CODE。
 
 `LSduR_MemMap.h`四个关键词撤销位于模板行7／14／21／28，分别消费cleared与CODE的START／STOP；00011直接要求这四个请求撤销，内部active／属性撤销另按Advisory实现理由判断。D4.10对象是该头首个 `@file` 与实际多次请求：一次性guard会吞掉第二次STOP，函数内映射又违反00023。真实C/C++非法／嵌套／错配拒绝、段继承及STOP后清理控制误配风险；路由调用在独占区外、不可变配置生命周期及真实CAN/DID消费者控制实际借用风险。这些证据不替代当前Windows执行、provider或完整221项判断；后续累计复核与BSW00115逐处注释仍待完成。
+
+路由表的不可变条目和计数由配置生成。初始化使用表的实际计数，计数以 `uint16` 表示。

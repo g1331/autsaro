@@ -26,9 +26,9 @@ class AssetBuildTests(unittest.TestCase):
             before = manifest.read_bytes()
             runtime = root / "runtime/bsw/src/Det.c"
             runtime.write_bytes(runtime.read_bytes() + b"\n/* Build-time asset identity regression. */\n")
-            command = ["cargo", "test", "--locked", "-p", "autosar-config-core", "--test", "it"]
-            for selected in ("delivery::runtime_source_inventory", "c_analysis::"):
-                result = subprocess.run([*command, "--", selected], cwd=root, env=env,
+            command = ["cargo", "test", "--locked", "-p", "autosar-config-core", "--test"]
+            for selected in (("it", "--", "delivery::runtime_source_inventory"), ("c_analysis",)):
+                result = subprocess.run([*command, *selected], cwd=root, env=env,
                                         capture_output=True, text=True, check=False)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(manifest.read_bytes(), before)

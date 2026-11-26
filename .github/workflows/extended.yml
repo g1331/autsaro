@@ -161,7 +161,7 @@ jobs:
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
       - name: Generate complete receiver samples
-        run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-core --test it -- 'c_analysis::'
+        run: python -m autosar_tooling.ci_reporting run -- cargo test --locked -p autosar-config-core --test c_analysis
       - name: All moved samples build and run with receiver Python 3.11–3.14
         shell: python
         run: |

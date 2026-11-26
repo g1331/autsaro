@@ -53,10 +53,10 @@ typedef struct {
     LSduR_PBConfigIdType id; /**< Generated identity; zero in the selected precompile profile. */
     const LSduR_RxRouteType
         *receive;         /**< Immutable Rx table; NULL only when receive_count is zero. */
-    uint16 receive_count; /**< Rx route count, 0..32. */
+    uint16 receive_count; /**< Rx route count. */
     const LSduR_TxRouteType
         *transmit;         /**< Immutable Tx table; NULL only when transmit_count is zero. */
-    uint16 transmit_count; /**< Tx route count, 0..32. */
+    uint16 transmit_count; /**< Tx route count. */
 } LSduR_PBConfigType;
 /** Publish the first valid immutable route set (CP_SWS_LSduR_91006).
  * @param[in] ConfigPtr Generated configuration and tables; at most 32 routes in each table. NULL or

@@ -94,8 +94,7 @@ def prepare(baseline: Path, output: Path | None = None) -> None:
     environment = {**os.environ,
                    "AUTOSAR_C_ANALYSIS_SAMPLES": str(output.resolve()),
                    "CARGO_TARGET_DIR": str(baseline.resolve() / "target")}
-    subprocess.run(["cargo", "test", "--locked", "-p", "autosar-config-core", "--test", "it",
-                    "--", "c_analysis::"], cwd=baseline, env=environment, check=True)
+    subprocess.run(["cargo", "test", "--locked", "-p", "autosar-config-core", "--test", "c_analysis"], cwd=baseline, env=environment, check=True)
     found = {path.name for path in output.iterdir()}
     if found != set(SAMPLES):
         raise ValueError(f"Generated baseline sample inventory differs: {found}")

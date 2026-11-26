@@ -131,6 +131,15 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_PublishPendingMode(void);
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ConfirmControllerMode(NetworkHandleType Channel,
                                                                       uint8 ControllerId,
                                                                       ComM_ModeType ComMode);
+/** Put the selected CanIf PDU channel offline and publish its resulting mode.
+ * @param[in] ControllerId Initialized CanIf controller bound to this provider.
+ * @return E_OK on transition, E_NOT_OK if the controller refuses it.
+ * Preconditions: Provider initialized and selected controller started.
+ * Context: Owner executing an admitted HostBatch mode input.
+ * Reentrancy: Reentrant for different channels.
+ * Ownership: No pointer retained.
+ */
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_HostOffline(uint8 ControllerId);
 /** CanIf controller mode indication (CanIfDispatchUserCtrlModeIndicationName): applies
  * the requested directions on STARTED and indicates the completed mode to ComM.
  * @param[in] ControllerId Configured controller; others are ignored.

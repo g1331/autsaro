@@ -4,7 +4,7 @@
 
 ### Breaking
 
-- Regenerate ECU packages for configured CAN controller and HOH tables, channel-scoped CanIf routes and confirmations, and ComM/BswM/Dcm channel bindings. Update direct initializers of `Can_ConfigType`, `CanIf_ConfigType` and its route types. HostBatchV2 uses the configured driver channel in frame and mode records, and the probe reports the channel with each output (#486)
+- Regenerate ECU packages for configured CAN controller and HOH tables, channel-scoped CanIf routes and confirmations, and ComM/BswM/Dcm channel bindings. Update direct initializers of `Can_ConfigType`, `CanIf_ConfigType` and its route types. HostBatchV2 uses the configured driver channel in frame and mode records, and the probe reports the channel with each output. PduR and LSduR use the generated route counts (#486)
 
 - ComM, BswM and the host BusSM use immutable channel tables. ComM also stores each user's channel relations. Regenerate ECU packages and update direct initializers of `ComM_ConfigType`, `BswM_ConfigType` and `Ecu_HostBusSM_ConfigType` before rebuilding consumers (#464)
 

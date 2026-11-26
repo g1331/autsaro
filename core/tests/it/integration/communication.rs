@@ -30,6 +30,33 @@ fn multichannel_topologies_preserve_controller_and_mode_bindings() {
 }
 
 #[test]
+fn diagnostic_npdu_keeps_its_network_when_another_channel_reuses_its_id() {
+    let mut sources = crate::support::multichannel::multichannel_sources(2);
+    xml_edit(
+        &mut sources,
+        "extract.arxml",
+        |node| named(node, "CAN-FRAME-TRIGGERING", "RxValue1Trigger"),
+        |xml| {
+            xml.replace(
+                "<IDENTIFIER>800</IDENTIFIER>",
+                "<IDENTIFIER>1792</IDENTIFIER>",
+            )
+        },
+    );
+    parameter(&mut sources, "RxValue1", "CanIfRxPduCanId", "1792");
+    let plan = build(&sources).unwrap();
+    let config = plan.description();
+    let transport = config.diagnostic_transport.as_ref().unwrap();
+    assert_eq!(transport.request_can_id, 1792);
+    let ids = config
+        .signals
+        .iter()
+        .filter(|signal| signal.receive && signal.can_id == 1792)
+        .count();
+    assert_eq!(ids, 1);
+}
+
+#[test]
 fn multichannel_invalid_routes_are_rejected_at_configuration_objects() {
     use super::single_component::rejected_at;
     let sources = crate::support::multichannel::multichannel_sources(2);

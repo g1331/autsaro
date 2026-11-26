@@ -248,7 +248,7 @@ fn can_link(
         ));
     }
     let target = super::can_id::pdu_trigger_reference(graph, pdu)?;
-    let triggers: Vec<_> = graph
+    let mut triggers: Vec<_> = graph
         .of_kind("CAN-FRAME-TRIGGERING")
         .into_iter()
         .filter(|trigger| {
@@ -259,6 +259,22 @@ fn can_link(
                 && super::can_id::trigger_id(graph, *trigger) == Some(id)
         })
         .collect();
+    // Legacy global PDUs may omit a System Template reference. If the typed ID is
+    // reused on another network, only a frame mapped to an N-PDU can be the diagnostic link.
+    if target.is_none() && triggers.len() > 1 {
+        triggers.retain(|trigger| {
+            graph.target(*trigger, "FRAME-REF").is_some_and(|frame| {
+                graph
+                    .descendants(frame, "PDU-TO-FRAME-MAPPING")
+                    .into_iter()
+                    .any(|mapping| {
+                        graph
+                            .target(mapping, "PDU-REF")
+                            .is_some_and(|mapped| graph.elements[mapped].tag == "N-PDU")
+                    })
+            })
+        });
+    }
     if triggers.len() != 1 {
         return Err(reject(
             graph,

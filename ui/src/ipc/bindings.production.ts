@@ -765,6 +765,15 @@ export type ModeApi = {
   switch: boolean;
 };
 
+export type ModeChannel = {
+  channel: string;
+  channelHandle: number;
+  canIfController: string;
+  mainSymbol: string;
+  periodMs: number;
+  input: string;
+};
+
 export type ModeMachine = {
   publisher: Endpoint;
   mapping: string | null;
@@ -783,15 +792,6 @@ export type ModeMachine = {
   switchSymbol: string;
   modeSymbol: string;
   variable: string;
-};
-
-export type ModeChannel = {
-  channel: string;
-  channelHandle: number;
-  canIfController: string;
-  mainSymbol: string;
-  periodMs: number;
-  input: string;
 };
 
 export type ModePort = {

@@ -176,11 +176,12 @@ pub(super) fn inspect(
             return Err(fail(graph, channel, "MODE_MAIN_SYMBOL"));
         }
         let main_symbol = format!("ComM_MainFunction_{name}");
-        if !handles.insert(channel_handle)
-            || !schedule.entities.iter().any(|entity| {
-                !entity.application && entity.symbol == main_symbol && entity.period_ms == period_ms
-            })
-        {
+        if !handles.insert(channel_handle) {
+            return Err(fail(graph, channel, "MODE_HANDLE"));
+        }
+        if !schedule.entities.iter().any(|entity| {
+            !entity.application && entity.symbol == main_symbol && entity.period_ms == period_ms
+        }) {
             return Err(fail(graph, channel, "MODE_TIMEBASE"));
         }
         channels.insert(

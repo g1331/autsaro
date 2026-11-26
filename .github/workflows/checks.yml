@@ -912,7 +912,7 @@ jobs:
           subprocess.run(['uv', 'run', '--locked', '--project', os.environ['CURRENT_INPUTS'],
               'python', '-m', 'autosar_tooling.ci_reporting', 'run', '--', 'cargo', 'test',
               '--manifest-path', str(Path(os.environ['GITHUB_WORKSPACE']) / 'Cargo.toml'),
-              '--locked', '-p', 'autosar-config-core', '--test', 'it', '--', 'c_analysis::'],
+              '--locked', '-p', 'autosar-config-core', '--test', 'c_analysis'],
               cwd=os.environ['GITHUB_WORKSPACE'], check=True)
       - name: Validate generated sample inventory and tree
         shell: python

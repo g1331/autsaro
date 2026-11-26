@@ -221,7 +221,7 @@ def changed_commands(
         if not selected["native"]:
             result.append(("analysis:samples", [
                 "cargo", "test", "--locked", "-p", "autosar-config-core", "--features",
-                "native-tests", "--test", "it", "--", "c_analysis::",
+                "native-tests", "--test", "c_analysis",
             ], 7200))
         result.append(("analysis:quality", [
             sys.executable, "-B", "-m", "autosar_tooling", "quality", "--scope", "runtime",

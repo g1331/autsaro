@@ -247,36 +247,14 @@ fn comm_generated_mapping_names_cannot_be_shadowed_by_application_types() {
 }
 
 #[test]
-fn comm_multichannel_configuration_is_rejected_at_the_added_channel() {
-    let mut sources = inputs();
-    xml_edit(
-        &mut sources,
+fn duplicate_comm_channel_handle_is_rejected_at_its_source() {
+    let mut sources = crate::support::multichannel::multichannel_sources(2);
+    parameter(&mut sources, "Host1", "ComMChannelId", "0");
+    super::single_component::rejected_at(
+        &sources,
+        "MODE_HANDLE",
         "ecuc.arxml",
-        |node| {
-            named(node, "ECUC-CONTAINER-VALUE", "Host")
-                && node.children().any(|child| {
-                    child.has_tag_name("DEFINITION-REF")
-                        && child
-                            .text()
-                            .is_some_and(|text| text.ends_with("/ComMChannel"))
-                })
-        },
-        |text| {
-            format!(
-                "{text}{}",
-                text.replace(
-                    "<SHORT-NAME>Host</SHORT-NAME>",
-                    "<SHORT-NAME>Second</SHORT-NAME>"
-                )
-            )
-        },
-    );
-    let issues = build(&sources).err().unwrap();
-    assert!(
-        issues.iter().any(|issue| issue.code == "MODE_CONFIGURATION"
-            && issue.file.as_deref() == Some("ecuc.arxml")
-            && issue.object.as_deref() == Some("/Configuration/ComM/Config/Second")),
-        "{issues:?}"
+        "/Configuration/ComM/Config/Host1",
     );
 }
 

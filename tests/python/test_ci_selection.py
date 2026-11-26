@@ -1048,7 +1048,7 @@ class CiSelectionTests(unittest.TestCase):
                 self.assertEqual(arguments[arguments.index("--project") + 1], inputs)
                 self.assertEqual(arguments[arguments.index("--manifest-path") + 1],
                                  str(Path(temporary) / "Cargo.toml"))
-                self.assertEqual(arguments[-2:], ["--", "c_analysis::"])
+                self.assertEqual(arguments[-2:], ["--test", "c_analysis"])
                 self.assertEqual(cargo.call_args.kwargs, {"cwd": temporary, "check": True})
 
     def test_analysis_readiness_rejects_acceptance_errors_but_not_known_blockers(self):

@@ -107,13 +107,13 @@ typedef struct {
     PduR_PBConfigIdType id; /**< PduRConfigurationId; zero is a valid configured identity. */
     const PduR_RxRouteType
         *receive;         /**< Immutable Rx table; NULL only when receive_count is zero. */
-    uint16 receive_count; /**< Rx route count, 0..32. */
+    uint16 receive_count; /**< Rx route count. */
     const PduR_TxRouteType
         *transmit;         /**< Immutable Tx table; NULL only when transmit_count is zero. */
-    uint16 transmit_count; /**< Tx route count, 0..32. */
+    uint16 transmit_count; /**< Tx route count. */
     const PduR_TpRouteType
         *transport;         /**< Immutable TP table; NULL only when transport_count is zero. */
-    uint16 transport_count; /**< TP route count, 0..32. */
+    uint16 transport_count; /**< TP route count. */
 } PduR_PBConfigType;
 /** Publish the first valid immutable route set (SWS_PduR_00334).
  * @param[in] ConfigPtr Generated configuration and tables; at most 32 routes in each table. NULL or
