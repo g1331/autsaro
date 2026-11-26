@@ -733,7 +733,8 @@ def validate_sources(data: dict) -> None:
                 and re.search(r"\bWaitForSingleObject\s*\([^;]*\bINFINITE\b", use)
             ):
                 port_wait = True
-    if not port_wait:
+    # Require the port witness when that translation unit belongs to the scan.
+    if port in units and not port_wait:
         raise ValueError("SDK wait " + port + ": missing active wait call source")
 
 

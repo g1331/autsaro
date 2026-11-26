@@ -29,7 +29,7 @@
 ### 判定规则
 
 1. **平台选择目录整体范围外。** `os/src/host/<平台>/` 和 `kernel/portable/<port>/` 由构建按平台选择，目标构建换成 MCU port 的对应目录。目标代码经 `#include "portmacro.h"`、`Os_HostTypes.h` 里的 `#if defined(__linux__)` 分支包含其中的头文件，属于平台选择，不改变归属。
-2. **集成目录按包含闭包判定。** `runtime/host`、`runtime/ecu/src`、`runtime/ecu/include` 里的文件，凡是出现在任一目标翻译单元的包含闭包里，就留在范围内；其余范围外。目标翻译单元是规则 1 目录和这两个集成目录之外的全部 `.c`（含生成 C 和内核文件）。闭包取 GCC `-MD` 回执（`scope.projectTranslationUnits`），覆盖两个目标、四个 profile、两个程序的并集，由检查器生成，不手写清单。`.c` 文件不会被包含，因此这一目录里的 `.c` 一律范围外；被目标代码调用的声明在头文件里，头文件按闭包留在范围内。
+2. **集成目录按包含闭包判定。** `runtime/host`、`runtime/ecu/src`、`runtime/ecu/include` 里的文件，凡是出现在任一目标翻译单元的包含闭包里，就留在范围内；其余范围外。目标翻译单元是规则 1 目录和这两个集成目录之外的全部 `.c`（含生成 C 和内核文件）。闭包取 GCC `-MD` 回执（`scope.projectTranslationUnits`），覆盖两个平台和四个 profile 的并集，由检查器生成，不手写清单。`.c` 文件不会被包含，因此这一目录里的 `.c` 一律范围外；被目标代码调用的声明在头文件里，头文件按闭包留在范围内。
 3. **项目补丁逐 hunk 判定。** 一个补丁落在规则 1 目录的 hunk 范围外，落在其余内核文件的 hunk 是目标代码，留在范围内。同一个补丁可以两边都有。
 4. 新增文件按路径适用上述规则；文件移动使归属变化时，PR 说明新归属。
 
@@ -70,10 +70,10 @@ Windows provider 的内部接缝，参数沿 Win32 创建语义；公开 OS ABI 
 
 ## 范围外保留的检查
 
-- **Cppcheck** 对范围外文件照常扫描，原始诊断照常保留在 `summary.json` 和 `diagnostics.xml`，增加“范围外”标注。`passed`、`error`、退出码和 221 项 assessment 保持原义。
-- **不回退门**（ADR 0027）对范围外位置的新增诊断只报告、不阻断；基准树与 PR 树仍然完整扫描。范围内位置的规则不变。
+- **Cppcheck** 按 [#650](https://github.com/g1331/autsaro/issues/650) 从编译数据库移除 `integration/`、`os/src/host/`、`kernel/portable/` 的仿真 `.c`。目标 TU 包含的头文件仍按真实包含关系解析。平台头中出现的原始诊断保留在 `summary.json` 和 `diagnostics.xml`，SARIF 省略范围外的主机位置，保留目标 TU 包含的公共接缝头位置。
+- **不回退门**（ADR 0027）用相同目标 TU 范围和规则分别扫描基准树与 PR 树。范围内新增诊断照常阻断，范围外原始诊断按位置计数。CTU 的调用和使用关系以目标 TU 集合为限。
 - **项目验收**（ADR 0026）不要求范围外位置有处置：它们不进入 `blocked` 判定和 `objects`，报告里单列条数。范围内的处置规则不变。
-- **clang-tidy**、sanitizer、原生测试和 `test_host_boundaries.py` 照旧；`-Wall -Wextra -Werror` 和项目规则检查（直接动态内存调用等）照旧。
+- **clang-tidy**、sanitizer、原生测试、`test_host_boundaries.py` 和 `-Wall -Wextra -Werror` 照旧。直接动态内存调用由项目 addon 单独检查，使用 reduced 模式且只加载项目规则。结果写入 `summary.json` 的 `hostProjectChecks`，原始日志在 `host-project-checks/`。这些发现只报告。
 - 范围外不放宽 AUTOSAR 契约：对外使用标准名称的接口仍须满足标准签名和语义，主机行为的验证仍按[测试说明](../development/testing/README.md)执行。
 - 已完成的整改和已有的 `MR12` 注释保留，不批量回头删除，也不再为范围外位置新增类别记录或偏离注释。
 
@@ -190,7 +190,7 @@ Windows provider 的内部接缝，参数沿 Win32 创建语义；公开 OS ABI 
 
 ## 检查器配置
 
-范围判定写进检查器的范围配置（`c_check`／`c_acceptance`）：按规则 1–3 标注每条诊断是否在范围内，并让不回退门和项目验收按上文消费。这项改动与 #55 的不回退门实现修改同一批文件，留给 #55 合并后的后续 PR，由 [#502](https://github.com/g1331/autsaro/issues/502) 承接。在此之前不回退门保持 ADR 0027 的现行行为（范围外位置照常按范围内处理），不会漏检。
+检查器按规则 1–3 标注每条诊断的位置归属。不回退门和项目验收消费相同的范围回执。#502 实现了按位置分类，#650 将范围外的仿真 `.c` 移出扫描输入。
 
 ## 同步修改与授权边界
 

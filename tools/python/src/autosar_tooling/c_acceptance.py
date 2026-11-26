@@ -332,10 +332,19 @@ def _retained_checker_entities(summary: dict, occurrences: list[dict], rule: str
     """Require the exact project diagnostic positions and their named source entities."""
     expected = Counter()
     programs = {row["name"]: row["translationUnits"] for row in summary["programs"]}
-    dependencies = summary["scope"].get("projectTranslationUnits", {})
+    scope = summary["scope"]
+    dependencies = scope.get("projectTranslationUnits", {})
+    target_only_r82 = (rule == "R8.2" and scope.get("profile") == "ecu"
+                       and set(programs) == {c_retention.TARGET_PROGRAM})
     for entity in entities:
         name, line = entity["file"], entity["line"]
-        for program, columns in entity["diagnostics"].items():
+        diagnostics = entity["diagnostics"]
+        if target_only_r82 and diagnostics.keys() == {"host-batch", "probe"}:
+            # Both approved programs reported the same declaration positions.
+            if diagnostics["host-batch"] != diagnostics["probe"]:
+                return False
+            diagnostics = {c_retention.TARGET_PROGRAM: diagnostics["host-batch"]}
+        for program, columns in diagnostics.items():
             if not any(unit == name or name in dependencies.get(unit, ())
                        for unit in programs.get(program, ())):
                 return False
@@ -585,7 +594,7 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
         candidate = next(classified)
         name = location["file"]
         if (name.startswith("kernel/")
-                or not set(diagnostic["programs"]) <= {"host-batch", "probe"}):
+                or not set(diagnostic["programs"]) <= c_retention.ANALYSIS_PROGRAMS):
             continue
         if name not in sources:
             original = origins.get(name, name if name in generated_sources else "")
@@ -948,7 +957,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
                     raise ValueError(f"SDK integration unrecorded use: {location}:{symbol}")
     result = {}
     for index, position, diagnostic, location in _positions(summary["diagnostics"]):
-        if location is None or not set(diagnostic["programs"]) <= {"host-batch", "probe"}:
+        if location is None or not set(diagnostic["programs"]) <= c_retention.ANALYSIS_PROGRAMS:
             continue
         if not diagnostic["id"].startswith("misra-c2012-"):
             continue
@@ -1089,7 +1098,7 @@ def _freertos_positions(
         line, column = int(location["line"]), int(location.get("column", 0))
         if (not 1 <= line <= len(lines) or column < 0
                 or column > len(lines[line - 1].rstrip("\r\n"))
-                or not set(diagnostic["programs"]) <= {"host-batch", "probe"}):
+                or not set(diagnostic["programs"]) <= c_retention.ANALYSIS_PROGRAMS):
             continue
         candidate = {**diagnostic, "locations": [location],
                      "patched": line in patched.get(name, ()), "adopted": False}
