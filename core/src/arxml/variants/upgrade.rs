@@ -86,6 +86,7 @@ fn migrate_source(
     text: &str,
     migrations: &[PathMigration],
     catalog: &crate::definitions::DefinitionCatalog,
+    rewrite: bool,
 ) -> Result<String, LocalizedText> {
     use super::resolve::{reference_element, xml_escape};
     use crate::arxml::{NS, apply_patches, definition, patch_text, xml::literal_text};
@@ -122,7 +123,8 @@ fn migrate_source(
             {
                 return Err(opaque());
             }
-            if reference_element(node)
+            if rewrite
+                && reference_element(node)
                 && !vendor
                 && let Some(path) = migrated_path(value.trim(), migrations)
             {
@@ -147,11 +149,9 @@ impl Workspace {
         }
         if base.reference.base_id != layers.base.reference.base_id
             || base.reference.revision == layers.base.reference.revision
-                && base.reference != layers.base.reference
         {
             return Err(
-                "The new base must have the same base ID and a new revision for changed bytes."
-                    .into(),
+                "The incoming base must keep the base ID and use a different revision.".into(),
             );
         }
         let root = project.path.parent().ok_or("Project root missing.")?;
@@ -224,9 +224,9 @@ impl Workspace {
                 .map(|path| root.join(path))
                 .collect::<BTreeSet<_>>();
             for file in &mut candidate.files {
-                if !base_files.contains(&file.path) {
-                    file.text = migrate_source(&file.text, &base.migrations, &candidate.catalog)?;
-                }
+                let rewrite = !base_files.contains(&file.path);
+                file.text =
+                    migrate_source(&file.text, &base.migrations, &candidate.catalog, rewrite)?;
             }
         }
         let project = candidate
@@ -487,8 +487,12 @@ mod tests {
     fn qualified_type_reference_is_saved_through_successive_moves() {
         let catalog = crate::definitions::DefinitionCatalog::builtin().unwrap();
         let xml = r#"<AUTOSAR xmlns="http://autosar.org/schema/r4.0"><!-- keep /A/X --><TYPE-TREF DEST="APPLICATION-SW-COMPONENT-TYPE">/A/X</TYPE-TREF></AUTOSAR>"#;
-        let first = migrate_source(xml, &[rename("/A", "/B")], &catalog).unwrap();
-        let second = migrate_source(&first, &[rename("/B/X", "/B/Y")], &catalog).unwrap();
+        assert_eq!(
+            migrate_source(xml, &[rename("/A", "/B")], &catalog, false).unwrap(),
+            xml
+        );
+        let first = migrate_source(xml, &[rename("/A", "/B")], &catalog, true).unwrap();
+        let second = migrate_source(&first, &[rename("/B/X", "/B/Y")], &catalog, true).unwrap();
         assert_eq!(
             second,
             xml.replace(">/A/X</TYPE-TREF>", ">/B/Y</TYPE-TREF>")
@@ -499,7 +503,7 @@ mod tests {
     fn unknown_supplier_definition_blocks_an_unqualified_reference() {
         let catalog = crate::definitions::DefinitionCatalog::builtin().unwrap();
         let xml = r#"<AUTOSAR xmlns="http://autosar.org/schema/r4.0"><ECUC-TEXTUAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-STRING-PARAM-DEF">/Vendor/Path</DEFINITION-REF><VALUE>/A/X</VALUE></ECUC-TEXTUAL-PARAM-VALUE></AUTOSAR>"#;
-        let error = migrate_source(xml, &[rename("/A", "/B")], &catalog).unwrap_err();
+        let error = migrate_source(xml, &[rename("/A", "/B")], &catalog, false).unwrap_err();
         assert!(
             serde_json::to_string(&error)
                 .unwrap()

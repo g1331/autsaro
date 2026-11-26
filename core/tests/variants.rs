@@ -497,6 +497,15 @@ fn upgraded_base_flows_into_fields_that_inherit() {
         .replace_layer_operations(Some(("scheduler", "urgent")), Vec::new())
         .unwrap();
     workspace.save().unwrap();
+    let current = workspace
+        .project_manifest()
+        .unwrap()
+        .layers
+        .as_ref()
+        .unwrap()
+        .base
+        .clone();
+    assert!(workspace.preview_base_upgrade(current).is_err());
     let incoming = upgrade(&path, &workspace, "4");
     let preview = workspace.preview_base_upgrade(incoming.clone()).unwrap();
     assert!(preview.conflicts.is_empty());
