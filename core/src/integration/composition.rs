@@ -821,20 +821,20 @@ pub(super) fn dcm_mode_definitions(
 ) -> Result<Vec<DcmModeDefinition>, Vec<PlanDiagnostic>> {
     let connections = graph.of_kind("ECUC-CONTAINER-VALUE").into_iter().filter(|index| {
         graph.text(*index, "DEFINITION-REF") == Some("/AUTOSAR/EcucDefs/Dcm/DcmConfigSet/DcmDsl/DcmDslProtocol/DcmDslProtocolRow/DcmDslConnection/DcmDslMainConnection")
-    }).collect::<Vec<_>>();
+    });
     // The selected protocol exports one deauthenticated mode, bound by its BSW declaration.
+    let declared: BTreeMap<_, _> = connections
+        .map(|index| (name(graph, index), index))
+        .filter(|(suffix, _)| {
+            graph
+                .objects
+                .contains_key(&format!("/AUTOSAR_Dcm/DcmAuthenticationState_{suffix}"))
+        })
+        .collect();
     let connection = one(
         graph,
         context,
-        connections
-            .into_iter()
-            .filter(|index| {
-                graph.objects.contains_key(&format!(
-                    "/AUTOSAR_Dcm/DcmAuthenticationState_{}",
-                    name(graph, *index)
-                ))
-            })
-            .collect(),
+        declared.into_values().collect(),
         "DIAGNOSTIC_REFERENCE",
     )?;
     let suffix = name(graph, connection);

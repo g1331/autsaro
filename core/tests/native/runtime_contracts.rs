@@ -1116,7 +1116,8 @@ void ComM_DCM_InactiveDiagnostic(NetworkHandleType channel) { (void)channel; }
 Std_ReturnType PduR_DcmTransmit(PduIdType id, const PduInfoType *info) { (void)id; (void)info; assert(0); return E_NOT_OK; }
 static void authentication(uint8 value) { assert(value == 0u); }
 int main(void) {
-    const Dcm_ConfigType config = {17u, 19u, 7u, 0u, NULL_PTR, 4u, 50u, 5000u, 5u, 64u, 41u, authentication, 0u};
+    const Dcm_ConnectionConfigType connections[] = {{17u, 19u, 7u, 41u}};
+    const Dcm_ConfigType config = {connections, 1u, 0u, NULL_PTR, 4u, 50u, 5000u, 5u, 64u, authentication, 0u};
     uint8 bytes[2] = {0x10u, 0x83u};
     PduInfoType info = {bytes, NULL_PTR, 2u};
     PduLengthType available;

@@ -69,7 +69,7 @@ fn dcm_features_outside_the_selection_are_refused_at_their_source() {
             "DcmDslProtocolRxAddrType",
             "DCM_FUNCTIONAL_TYPE",
             "SERVICE_UNSUPPORTED",
-            "/Configuration/Dcm/Config/Dsl/Protocols/UdsOnCan",
+            "/Configuration/Dcm/Config/Dsl/Protocols/UdsOnCan/Connection/Physical/Receive",
         ),
         // Rejects: ECUC_Dcm_00713
         (
@@ -554,15 +554,15 @@ fn dcm_transport_resources_and_boot_selection_are_bounded_at_the_source() {
             "UdsOnCan",
             "DcmDslProtocolRow",
             "OtherProtocol",
-            "DIAGNOSTIC_REFERENCE",
-            "/Configuration/Dcm/Config/Dsl/Protocols/OtherProtocol/Connection/Physical",
+            "DIAGNOSTIC_NOT_UNIQUE",
+            "/Configuration/Dcm/Config/Dsl/Protocols/OtherProtocol",
         ),
         // Rejects: ECUC_Dcm_00705
         (
             "Connection",
             "DcmDslConnection",
             "OtherConnection",
-            "DIAGNOSTIC_REFERENCE",
+            "DIAGNOSTIC_IDENTIFIER",
             "/Configuration/Dcm/Config/Dsl/Protocols/UdsOnCan/OtherConnection/Physical",
         ),
         // Rejects: ECUC_Dcm_00601
@@ -618,7 +618,7 @@ fn dcm_transport_resources_and_boot_selection_are_bounded_at_the_source() {
         &sources,
         "DIAGNOSTIC_NOT_UNIQUE",
         "ecuc.arxml",
-        "/Configuration/Dcm/Config/Dsl/Protocols/UdsOnCan",
+        "/Configuration/Dcm/Config/Dsl/Protocols/UdsOnCan/Connection/Physical",
     );
     // Rejects: ECUC_Dcm_00815
     let mut sources = single_component_sources();

@@ -704,7 +704,7 @@ static CANTP_CODE uint8 CanTp_Admit(CanTp_ConnectionType *connection, CanTp_Work
             CanTp_RxFinish(connection, E_NOT_OK);
             error = CANTP_E_COM;
         } else if (result == BUFREQ_OK) {
-            copy = TRUE;
+            copy = (boolean)TRUE;
         } else if ((result == BUFREQ_E_OVFL) && (first == TRUE)) {
             connection->rx.flow = CANTP_FS_OVFLW;
             connection->rx.state = CANTP_RX_FLOW_SEND;
@@ -740,7 +740,7 @@ static CANTP_CODE uint8 CanTp_Consecutive(CanTp_ConnectionType *connection, CanT
             error = CANTP_E_COM;
         } else {
             work->id = connection->config->upper_receive;
-            copy = TRUE;
+            copy = (boolean)TRUE;
         }
     }
     SchM_Exit_CanTp_CANTP_STATE();

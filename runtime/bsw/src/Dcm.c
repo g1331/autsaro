@@ -385,7 +385,6 @@ DCM_CODE BufReq_ReturnType Dcm_StartOfReception(PduIdType id,
             request_length = TpSduLength;
             dcm_received = 0u;
             dcm_s = DCM_RECEIVING;
-            session_change_cancelled = FALSE;
             *bufferSizePtr = (PduLengthType)dcm_configuration->buffer_length;
             result = BUFREQ_OK;
         }
