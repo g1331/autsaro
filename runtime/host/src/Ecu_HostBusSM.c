@@ -167,12 +167,10 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleT
     }
     return result;
 }
-ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Channel,
-                                                          ComM_ModeType ComMode)
+static ECU_HOSTBUSSM_CODE Std_ReturnType
+Ecu_HostBusSM_Apply(const Ecu_HostBusSM_ChannelConfigType *config, ComM_ModeType ComMode)
 {
     Std_ReturnType result = E_NOT_OK;
-    const Ecu_HostBusSM_BindingType binding = Ecu_HostBusSM_Channel(Channel);
-    const Ecu_HostBusSM_ChannelConfigType *config = binding.config;
     Can_ControllerStateType controller = CAN_CS_UNINIT;
     Std_ReturnType controller_result = E_NOT_OK;
     if ((config != NULL_PTR) && (ComMode <= COMM_FULL_COMMUNICATION)) {
@@ -190,6 +188,36 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Chan
             result = E_OK;
         } else {
             /* A direction action cannot start a stopped controller. */
+        }
+    }
+    return result;
+}
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Channel,
+                                                          ComM_ModeType ComMode)
+{
+    return Ecu_HostBusSM_Apply(Ecu_HostBusSM_Channel(Channel).config, ComMode);
+}
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyControllerMode(NetworkHandleType Channel,
+                                                                    uint8 ControllerId,
+                                                                    ComM_ModeType ComMode)
+{
+    Std_ReturnType result = E_NOT_OK;
+    const Ecu_HostBusSM_ChannelConfigType *config = Ecu_HostBusSM_Channel(Channel).config;
+    if ((config != NULL_PTR) && (config->controller == ControllerId)) {
+        result = Ecu_HostBusSM_Apply(config, ComMode);
+    }
+    return result;
+}
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_HostOffline(uint8 ControllerId)
+{
+    Ecu_HostBusSM_Enter();
+    const Ecu_HostBusSM_BindingType binding = Ecu_HostBusSM_Binding(ControllerId, TRUE);
+    Ecu_HostBusSM_Exit();
+    Std_ReturnType result = E_NOT_OK;
+    if (binding.config != NULL_PTR) {
+        result = CanIf_SetPduMode(ControllerId, CANIF_OFFLINE);
+        if (result == E_OK) {
+            Ecu_HostBusSM_Publish(binding.state, binding.config->channel);
         }
     }
     return result;

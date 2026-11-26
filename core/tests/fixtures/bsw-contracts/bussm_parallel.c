@@ -78,18 +78,17 @@ static void entered_full(uint8 NetworkId)
     assert(NetworkId == 0u);
     note(COMM_FULL_COMMUNICATION);
 }
-static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u, FALSE}};
-static const CanIf_TxPduConfigType transmits[] = {{0x321u, 51u, 1u}};
+static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u, FALSE, 0u, 0u}};
+static const CanIf_TxPduConfigType transmits[] = {{0x321u, 51u, 1u, 0u, 0u}};
+static const CanIf_ControllerConfigType canif_controllers[] = {{0u, 0u}};
 static const CanIf_ConfigType canif = {receives,
                                        1u,
                                        transmits,
                                        1u,
                                        Ecu_HostBusSM_ControllerModeIndication,
                                        Ecu_HostBusSM_ControllerBusOff,
-                                       0u,
-                                       0u,
-                                       0u,
-                                       0u};
+                                       canif_controllers,
+                                       1u};
 static const Can_ConfigType can = {.sink = sink};
 static const Ecu_HostBusSM_ChannelConfigType bus_channels[] = {{0u, 0u}};
 static const Ecu_HostBusSM_ConfigType bussm = {bus_channels, 1u};

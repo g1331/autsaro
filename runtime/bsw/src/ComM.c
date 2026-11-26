@@ -46,7 +46,6 @@
     (COMM_SW_PATCH_VERSION != COMM_C_SW_PATCH_VERSION)
 #error "ComM.c -> ComM.h: inconsistent internal software version"
 #endif
-#define COMM_USER_CAPACITY 32u /**< Maximum configured users across the ECU. */
 #define COMM_START_SEC_VAR_CLEARED_UNSPECIFIED
 #include "ComM_MemMap.h"
 /* Ordered handshake with <Bus>SM_RequestComMode. Entering a main state claims the
@@ -81,7 +80,16 @@ static ComM_ModeType
 static ComM_ModeType
     comm_user_published[COMM_USER_CAPACITY] COMM_VAR_CLEARED; /**< Last indicated user mode;
                                                                  initialized to NO. */
-static boolean comm_publishing COMM_VAR_CLEARED;              /**< Publisher; Init preserves. */
+typedef struct {
+    ComM_UserModeType notify; /**< Claimed RTE publication. */
+    ComM_ModeType mode;       /**< Lowest indicated channel mode. */
+} ComM_UserPublicationType;
+
+/* Only the context owning comm_publishing reads or writes this snapshot. */
+static ComM_UserPublicationType
+    comm_user_publications[COMM_USER_CAPACITY] COMM_VAR_CLEARED; /**< User notifications claimed
+                                                                    under COMM_STATE. */
+static boolean comm_publishing COMM_VAR_CLEARED;                 /**< Publisher; Init preserves. */
 #define COMM_STOP_SEC_VAR_CLEARED_UNSPECIFIED
 #include "ComM_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */
@@ -110,7 +118,7 @@ static COMM_CODE uint16 ComM_Channel(const ComM_ConfigType *config, NetworkHandl
 static COMM_CODE boolean ComM_ValidUsers(const ComM_ConfigType *config)
 {
     boolean valid = TRUE;
-    for (uint16 i = 0u; (i < config->user_count) && valid; ++i) {
+    for (uint16 i = 0u; ((i < COMM_USER_CAPACITY) && (i < config->user_count)) && valid; ++i) {
         const ComM_UserModeConfigType *user = &config->users[i];
         valid = (user->user != COMM_NOT_USED_USER_ID) && (user->channels != NULL_PTR) &&
                 (user->channel_count > 0u) && (user->channel_count <= config->channel_count);
@@ -148,7 +156,7 @@ static COMM_CODE uint16 ComM_User(ComM_UserHandleType user)
 {
     uint16 index = COMM_USER_CAPACITY;
     if (comm_configuration != NULL_PTR) {
-        for (uint16 i = 0u; i < comm_configuration->user_count; ++i) {
+        for (uint16 i = 0u; (i < COMM_USER_CAPACITY) && (i < comm_configuration->user_count); ++i) {
             if (comm_configuration->users[i].user == user) {
                 index = i;
                 break;
@@ -160,7 +168,9 @@ static COMM_CODE uint16 ComM_User(ComM_UserHandleType user)
 static COMM_CODE boolean ComM_Demand(const ComM_ChannelStateType *state, NetworkHandleType channel)
 {
     boolean demand = state->diagnostic || state->wakeup;
-    for (uint16 i = 0u; (i < comm_configuration->user_count) && !demand; ++i) {
+    for (uint16 i = 0u;
+         ((i < COMM_USER_CAPACITY) && (i < comm_configuration->user_count)) && !demand;
+         ++i) {
         const ComM_UserModeConfigType *user = &comm_configuration->users[i];
         if (comm_requests[i] == COMM_FULL_COMMUNICATION) {
             for (uint16 j = 0u; (j < user->channel_count) && !demand; ++j) {
@@ -251,16 +261,11 @@ static COMM_CODE void ComM_NotifyDcm(const ComM_ChannelConfigType *config, ComM_
         }
     }
 }
-typedef struct {
-    ComM_UserModeType notify; /**< Claimed RTE publication. */
-    ComM_ModeType mode;       /**< Lowest indicated channel mode. */
-} ComM_UserPublicationType;
-
 /* Inside COMM_STATE; use the actual modes even if another bus publication is queued. */
 static COMM_CODE uint16 ComM_ClaimUsers(ComM_UserPublicationType *publications)
 {
     uint16 count = 0u;
-    for (uint16 i = 0u; i < comm_configuration->user_count; ++i) {
+    for (uint16 i = 0u; (i < COMM_USER_CAPACITY) && (i < comm_configuration->user_count); ++i) {
         const ComM_UserModeConfigType *user = &comm_configuration->users[i];
         ComM_ModeType lowest = COMM_FULL_COMMUNICATION;
         for (uint16 j = 0u; j < user->channel_count; ++j) {
@@ -285,7 +290,6 @@ static COMM_CODE void ComM_Publish(void)
 {
     boolean owner = TRUE;
     while (owner) {
-        ComM_UserPublicationType users[COMM_USER_CAPACITY];
         const ComM_ChannelConfigType *channel = NULL_PTR;
         uint16 count = 0u;
         ComM_ModeType mode = COMM_NO_COMMUNICATION;
@@ -298,7 +302,7 @@ static COMM_CODE void ComM_Publish(void)
                     comm_channels[i].published = comm_channels[i].indicated;
                     channel = &comm_configuration->channels[i];
                     mode = comm_channels[i].published;
-                    count = ComM_ClaimUsers(users);
+                    count = ComM_ClaimUsers(comm_user_publications);
                     break;
                 }
             }
@@ -310,7 +314,7 @@ static COMM_CODE void ComM_Publish(void)
         SchM_Exit_ComM_COMM_STATE();
         if (owner) {
             for (uint16 i = 0u; i < count; ++i) {
-                users[i].notify(users[i].mode);
+                comm_user_publications[i].notify(comm_user_publications[i].mode);
             }
             BswM_ComM_CurrentMode(channel->channel, mode);
             ComM_NotifyDcm(channel, mode);

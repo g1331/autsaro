@@ -29,6 +29,7 @@ typedef struct {
     uint8_t data[64];          /**< Copied payload; unused bytes zero. */
     uint32 data_phase_bitrate; /**< Selected FD data phase rate in bit/s; zero for Classical. */
     boolean brs;               /**< Bitrate switch selected for this FD frame. */
+    uint8_t channel;           /**< Driver channel that owns the frame and its confirmation. */
 } Ecu_OutputRecord;
 
 /** Immutable owner-published transport failure; ordinary timeouts recover. */
@@ -204,6 +205,7 @@ StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu);
  * @param[in] dlc Payload length, 0 through 64.
  * @param[in] data Payload copied before publication.
  * @param[in] brs Whether the frame selects bitrate switching.
+ * @param[in] controller Driver channel on which the output was admitted.
  * @param[in] data_phase_bitrate Effective FD data phase rate in bit/s, zero for Classical.
  * @return ECU_OK for enqueue only; confirmation remains a separate message.
  * Preconditions: Owner required (else ECU_ERR_IO); bad shape/full queue/invalid token closes
@@ -211,7 +213,8 @@ StatusType Ecu_TargetConfirmOutput(uint64_t ticket, PduIdType pdu);
  * Reentrancy: Not reentrant on the same process-local target.
  * Ownership: Copies payload and driver token before publication; no caller pointer retained.
  */
-EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu,
+EcuStatus Ecu_TargetEnqueueTransmit(uint8 controller,
+                                    PduIdType pdu,
                                     uint32_t id,
                                     uint8_t dlc,
                                     const uint8_t *data,

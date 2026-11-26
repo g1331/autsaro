@@ -103,13 +103,17 @@ static const Det_ConfigType det = {NULL_PTR, 0u, hooks, 1u};
 static const LSduR_RxRouteType ls_rx[] = {{0u, 10u, indicated}, {1u, 11u, indicated}};
 static const LSduR_TxRouteType ls_tx[] = {{LSDUR_UP_PDUR, 20u, 0u, confirmed, NULL_PTR}};
 static const LSduR_PBConfigType ls = {1u, ls_rx, 2u, ls_tx, 1u};
-static const CanIf_RxPduConfigType rx[] = {{0x100u, 0u, 4u, FALSE}, {0x101u, 1u, 2u, FALSE}};
-static const CanIf_TxPduConfigType tx[] = {{0x200u, 0u, 4u}};
+static const CanIf_RxPduConfigType rx[] = {{0x100u, 0u, 4u, FALSE, 0u, 0u},
+                                           {0x101u, 1u, 2u, FALSE, 0u, 0u}};
+static const CanIf_TxPduConfigType tx[] = {{0x200u, 0u, 4u, 0u, 0u}};
 /* Verifies: SWS_CANIF_00144／00523: the set carries every L-PDU and the dispatch targets. */
-static const CanIf_ConfigType canif = {rx, 2u, tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u};
+static const CanIf_ControllerConfigType canif_controllers[] = {{0u, 0u}};
+static const CanIf_ConfigType canif = {rx, 2u, tx, 1u, mode, bus_off, canif_controllers, 1u};
 /* Two Rx PDUs on one CAN ID cannot be routed. */
-static const CanIf_RxPduConfigType ambiguous[] = {{0x100u, 0u, 4u, FALSE}, {0x100u, 1u, 4u, FALSE}};
-static const CanIf_ConfigType invalid = {ambiguous, 2u, tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u};
+static const CanIf_RxPduConfigType ambiguous[] = {{0x100u, 0u, 4u, FALSE, 0u, 0u},
+                                                  {0x100u, 1u, 4u, FALSE, 0u, 0u}};
+static const CanIf_ConfigType invalid = {
+    ambiguous, 2u, tx, 1u, mode, bus_off, canif_controllers, 1u};
 static const Can_ConfigType can = {.sink = sink};
 static uint8 payload[64] = {0x11u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u};
 
@@ -162,30 +166,31 @@ static void reject_configuration(const CanIf_ConfigType *configuration)
 static void reject_configurations(void)
 {
     const CanIf_RxPduConfigType bad_rx[] = {
-        {0x800u, 0u, 4u, FALSE},
-        {0x100u, 0u, 9u, FALSE},
+        {0x800u, 0u, 4u, FALSE, 0u, 0u},
+        {0x100u, 0u, 9u, FALSE, 0u, 0u},
     };
-    const CanIf_RxPduConfigType duplicate_rx[] = {rx[0], {0x101u, 0u, 4u, FALSE}};
+    const CanIf_RxPduConfigType duplicate_rx[] = {rx[0], {0x101u, 0u, 4u, FALSE, 0u, 0u}};
     const CanIf_TxPduConfigType bad_tx[] = {
-        {0x800u, 0u, 4u},
-        {0x200u, 0u, 0u},
-        {0x200u, 0u, 9u},
+        {0x800u, 0u, 4u, 0u, 0u},
+        {0x200u, 0u, 0u, 0u, 0u},
+        {0x200u, 0u, 9u, 0u, 0u},
     };
-    const CanIf_TxPduConfigType duplicate_tx[] = {tx[0], {0x201u, 0u, 4u}};
+    const CanIf_TxPduConfigType duplicate_tx[] = {tx[0], {0x201u, 0u, 4u, 0u, 0u}};
     const CanIf_ConfigType bad_configurations[] = {
-        {NULL_PTR, 2u, tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u},
-        {rx, 2u, NULL_PTR, 1u, mode, bus_off, 0u, 0u, 0u, 0u},
-        {rx, 2u, tx, 1u, NULL_PTR, bus_off, 0u, 0u, 0u, 0u},
-        {rx, 2u, tx, 1u, mode, NULL_PTR, 0u, 0u, 0u, 0u},
-        {duplicate_rx, 2u, tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u},
-        {rx, 2u, duplicate_tx, 2u, mode, bus_off, 0u, 0u, 0u, 0u},
+        {NULL_PTR, 2u, tx, 1u, mode, bus_off, canif_controllers, 1u},
+        {rx, 2u, NULL_PTR, 1u, mode, bus_off, canif_controllers, 1u},
+        {rx, 2u, tx, 1u, NULL_PTR, bus_off, canif_controllers, 1u},
+        {rx, 2u, tx, 1u, mode, NULL_PTR, canif_controllers, 1u},
+        {duplicate_rx, 2u, tx, 1u, mode, bus_off, canif_controllers, 1u},
+        {rx, 2u, duplicate_tx, 2u, mode, bus_off, canif_controllers, 1u},
     };
     CanIf_RxPduConfigType too_many_rx[33];
     CanIf_TxPduConfigType too_many_tx[33];
     CanIf_ConfigType config = canif;
     for (unsigned index = 0u; index < 33u; ++index) {
-        too_many_rx[index] = (CanIf_RxPduConfigType){0x100u + index, (PduIdType)index, 4u, FALSE};
-        too_many_tx[index] = (CanIf_TxPduConfigType){0x200u + index, (PduIdType)index, 4u};
+        too_many_rx[index] =
+            (CanIf_RxPduConfigType){0x100u + index, (PduIdType)index, 4u, FALSE, 0u, 0u};
+        too_many_tx[index] = (CanIf_TxPduConfigType){0x200u + index, (PduIdType)index, 4u, 0u, 0u};
     }
     config.receive = too_many_rx;
     config.receive_count = 33u;
@@ -220,7 +225,8 @@ static void check_fd_policies(void)
     };
     static const Can_IdType formats[] = {0x123u, 0x40000123u, 0x80000123u, 0xc0000123u};
     CanIf_ConfigType config = canif;
-    CanIf_RxPduConfigType pair[2] = {{0x123u, 0u, 4u, FALSE}, {0x40000123u, 1u, 4u, FALSE}};
+    CanIf_RxPduConfigType pair[2] = {{0x123u, 0u, 4u, FALSE, 0u, 0u},
+                                     {0x40000123u, 1u, 4u, FALSE, 0u, 0u}};
     CanIf_TxPduConfigType fd_tx = tx[0];
     config.receive = pair;
     config.transmit = &fd_tx;
@@ -410,8 +416,8 @@ int main(void)
      * while the same numeric ID in *_NO_FD_CAN matches Classical only. */
     {
         static const CanIf_RxPduConfigType mixed[] = {
-            {0x7ffu, 0u, 4u, TRUE},
-            {0x800007ffu, 1u, 4u, FALSE},
+            {0x7ffu, 0u, 4u, TRUE, 0u, 0u},
+            {0x800007ffu, 1u, 4u, FALSE, 0u, 0u},
         };
         CanIf_ConfigType mixed_config = canif;
         const unsigned standard = indications[0];

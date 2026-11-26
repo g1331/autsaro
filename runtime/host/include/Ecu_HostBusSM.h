@@ -1,4 +1,4 @@
-/** @file Explicit CDD provider for one controlled-host CAN channel.
+/** @file Explicit CDD provider for configured controlled-host CAN channels.
  * Full completion requires actual STARTED indication and ONLINE PDU mode.
  * Bus-off cannot be recovered by an ordinary ComM request. The normal host
  * CAN mode command remains the explicit recovery boundary.
@@ -88,6 +88,28 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleT
  */
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Channel,
                                                           ComM_ModeType ComMode);
+/** Apply the configured BswM direction action for this channel and CanIf controller.
+ * @param[in] Channel ComM network handle selected by the BswM indication.
+ * @param[in] ControllerId Explicit CanIf binding from the configured callout.
+ * @param[in] ComMode NO, SILENT or FULL.
+ * @return Direction action status, or E_NOT_OK for a mismatched binding.
+ * Preconditions: Provider initialized.
+ * Context: BswM action outside exclusive areas.
+ * Reentrancy: Reentrant for different channels.
+ * Ownership: No pointer retained.
+ */
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyControllerMode(NetworkHandleType Channel,
+                                                                    uint8 ControllerId,
+                                                                    ComM_ModeType ComMode);
+/** Put the selected CanIf PDU channel offline and publish its resulting mode.
+ * @param[in] ControllerId Initialized CanIf controller bound to this provider.
+ * @return E_OK on transition, E_NOT_OK if the controller refuses it.
+ * Preconditions: Provider initialized and selected controller started.
+ * Context: Owner executing an admitted HostBatch mode input.
+ * Reentrancy: Reentrant for different channels.
+ * Ownership: No pointer retained.
+ */
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_HostOffline(uint8 ControllerId);
 /** CanIf controller mode indication (CanIfDispatchUserCtrlModeIndicationName): applies
  * the requested directions on STARTED and indicates the completed mode to ComM.
  * @param[in] ControllerId Configured controller; others are ignored.

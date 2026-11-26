@@ -2,7 +2,7 @@
 
 本篇属于 [ComM](README.md)。条款来自固定 R24-11 原始 SpecificationsARXML；标记仅作用于同一格中紧随其后的编号。行为测试的 `Verifies:` 与这里的处置共同核算。
 
-ComM 提供的 C API 与回调按标准签名实现。`ComM_GetCurrentPNCComMode` 在 PNC 关闭时对每个已配置用户返回 `COMM_E_NO_PNC_ASSIGNED`。`ComMService` 经共同类型化 C/S、port-defined argument 和显式 SWC-BSW mapping 提供五项用户服务，每个用户有独立的 `UR_{user_name}`／`UM_{user_name}` 端口。ComM 根据静态用户／通道关系查询和发布最低模式，运行时通道表由生成容量约束。集成生成入口当前接纳一个 CDD／NM NONE 通道。
+ComM 提供的 C API 与回调按标准签名实现。`ComM_GetCurrentPNCComMode` 在 PNC 关闭时对每个已配置用户返回 `COMM_E_NO_PNC_ASSIGNED`。`ComMService` 经共同类型化 C/S、port-defined argument 和显式 SWC-BSW mapping 提供五项用户服务，每个用户有独立的 `UR_{user_name}`／`UM_{user_name}` 端口。ComM 根据静态用户／通道关系查询和发布最低模式，运行时通道表由生成容量约束。集成生成入口接纳多个 CDD／NM NONE 通道。
 
 R24-11 的 `SWS_ComM_01000` 表把 Request／GetRequested 的两项 API 映射交叉书写；本实现按同条 IN／OUT 参数、`SWS_ComM_00745` 连接及两项 API 正文绑定同名 API。`SWS_ComM_00662` 与 00744 的旧示例使用 UM000 序列，01010／01011 的端口定义表使用 ECUC 用户名；交付采用端口定义表的名称，用户顺序由配置对象路径确定，端口常量独立使用 ComMUserIdentifier。`ComMMode` 的 ALPHABETIC_ORDER 为 FULL＝0、NO＝1、SILENT＝2，桥接层按名称转换 ComM C 枚举。
 
@@ -12,7 +12,7 @@ R24-11 的 `SWS_ComM_01000` 表把 Request／GetRequested 的两项 API 映射�
 | ComM_GetStatus 与 ComM_InitStatusType | 已核对（ComM.h 的 COMM_UNINIT＝0、COMM_INIT＝1；mode_contract.c 断言 Init 前、成功 DeInit 后为 UNINIT，空指针 E_NOT_OK）：SWS_ComM_00242、00668 |
 | Init 前的 API 行为 | 已核对（ComM.c 在 configuration 为 NULL 时 API 不执行并返回 E_NOT_OK，回调与主函数直接返回；mode_contract.c 在 ComM_Init 之前断言 request、GetCurrentComMode、inhibition_status、classification、pnc_current 返回 E_NOT_OK 且出参保持，wake_up 无副作用；该行为不依赖 ComMDevErrorDetect）：SWS_ComM_00612 |
 | ComM_RequestComMode | 已核对（签名与 E_OK／E_NOT_OK 返回按标准；仅接受 NO 与 FULL，未知用户、SILENT、WITH_WAKEUP 均 E_NOT_OK，COMM_E_MODE_LIMITATION 因限制关闭而不出现；mode_contract.c）：SWS_ComM_00110 |
-| ComM_GetRequestedComMode／GetCurrentComMode／GetMaxComMode | 已核对（ComM.c 同名函数；GetMaxComMode 在无抑制、无限制时恒为 FULL，单通道故最低模式即该值；未知用户与空指针 E_NOT_OK 且出参保持；mode_contract.c）：SWS_ComM_00079–00083、00085、00374 |
+| ComM_GetRequestedComMode／GetCurrentComMode／GetMaxComMode | 已核对（ComM.c 同名函数；GetMaxComMode 在无抑制、无限制时恒为 FULL，所有关联通道允许 FULL，因此最低上限为 FULL；未知用户与空指针 E_NOT_OK 且出参保持；mode_contract.c）：SWS_ComM_00079–00083、00085、00374 |
 | ComM_GetInhibitionStatus 与 ComM_SetECUGroupClassification | 已核对（GetInhibitionStatus 对配置通道恒写 0，未知通道、空指针与 Init 前 E_NOT_OK；SetECUGroupClassification Init 后 E_OK 但无行为依赖于它［抑制功能均被拒绝］；mode_contract.c 的 inhibition_status／classification 断言）：SWS_ComM_00552、00619 |
 | ComM_GetCurrentPNCComMode | 已核对（PNC 关闭，已配置用户返回 COMM_E_NO_PNC_ASSIGNED 并把同一值写入出参 ComMode：01023 要求把它作为 ComMode 交出，91002 把它列为返回值，两种读法都满足；未知用户、空指针与 Init 前 E_NOT_OK；mode_contract.c 的 pnc_current 断言）：SWS_ComM_01023、91002 |
 | 回调：CommunicationAllowed、EcuM 唤醒、Dcm 诊断 | 已核对（ComM_BswM.h、ComM_EcuM.h、ComM_Dcm.h 声明并由 ComM.c 实现，其他通道与 Init 前被忽略；mode_contract.c 与 diagnostic_contract.c［真实 Dcm 调用］）：SWS_ComM_00275、00871–00874 |
@@ -30,7 +30,7 @@ R24-11 的 `SWS_ComM_01000` 表把 Request／GetRequested 的两项 API 映射�
 | 主模式变化及初始化例外 | 已核对（ComM_Publish 的 indicated／comm_published 去重保留；rte_comm_contract.c 检查初始 NO 零通知、SILENT／FULL／NO 变化、重复 FULL 零新增以及回调重入后的最终 NO）：SWS_ComM_00472 |
 | BusSM 实际模式向上传播 | 已核对（ComM_BusSM_ModeIndication 经单飞 ComM_Publish 在 COMM_STATE 外调用用户桥、BswM_ComM_CurrentMode 与 ComM_NotifyDcm；rte_comm_contract.c 读回 RTE 实际模式，mode_contract.c／bussm_parallel.c 保留真实下层模式及 BswM／Dcm 通知回归）：SWS_ComM_00675 |
 | 每用户 UM 端口对应正确 API | 已核对（ecu_config::files 为各用户生成独立 Ecu_ComMMode_UM_* 桥接函数，分别调用对应 SchM_Switch_ComM_UM_*；rte_comm_contract.c 同时观察两个 Rte_Mode，错绑第二用户 publisher 的变异被拒绝）：SWS_ComM_00778 |
-| 一个用户关联多个通道时的最低模式聚合 | 差距 #464：SWS_ComM_00176、00663（comm_multichannel.c 通过六通道 CDD 配置核对不同映射的 GetCurrentComMode、最低模式发布、去重、初始 NO 和保持计时，实际 ARXML 生成与 CanIf／BusSM／Dcm 闭环待验收） |
+| 一个用户关联多个通道时的最低模式聚合 | 已核对（comm_multichannel.c 用六通道 CDD 配置核对不同映射的 GetCurrentComMode、最低模式发布、去重、初始 NO 和保持计时）：SWS_ComM_00176、00663 |
 | 版本 API | 不适用（配置：ECUC_ComM_00622）：SWS_ComM_00370 |
 | 开发错误检测 | 不适用（配置：ECUC_ComM_00555）：SWS_ComM_00234、00858 |
 | Nm 回调与 BusSM_BusSleepMode | 不适用（配置：ECUC_ComM_00568）：SWS_ComM_00383–00392、00792、91000 |

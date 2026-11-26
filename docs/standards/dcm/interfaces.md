@@ -47,6 +47,7 @@ C/S 表内的写入、条件检查、缩放及异步操作逐项受配置约束�
 | Dcm_TpRxIndication | 已核对（dcm_contract.c admission_and_copy：E_NOT_OK 丢弃，E_OK 发布请求）：SWS_Dcm_00093 |
 | Dcm_CopyTxData | 已核对（diagnostic_contract.c：CONFPENDING／DATACONF／DATARETRY 与 E_BUSY）：SWS_Dcm_00092 |
 | Dcm_TpTxConfirmation | 已核对（dcm_contract.c sessions_and_keepalive：E_OK 提交会话，E_NOT_OK 丢弃）：SWS_Dcm_00351 |
+| 通信通道绑定 | 已核对（生成配置：DcmDslProtocolComMChannelRef 解析为 DcmConfig 的 NetworkId；校验所引用通道与请求、响应的物理通道使用同一 CanIf controller，生成器只为该 ComM 通道安装 Dcm 模式回调）：DcmDslProtocolComMChannelRef |
 | Dcm_ComM_NoComModeEntered | 已核对（dcm_contract.c gates_and_reentrancy：NoCom 拒收，未配置通道被忽略）：SWS_Dcm_00356 |
 | Dcm_ComM_SilentComModeEntered | 已核对（dcm_contract.c gates_and_reentrancy：Silent 可收不发）：SWS_Dcm_00358 |
 | Dcm_ComM_FullComModeEntered | 已核对（dcm_contract.c gates_and_reentrancy：Full 放行发送）：SWS_Dcm_00360 |

@@ -32,7 +32,6 @@ Can／Com／host 消费者承担验证，实际执行及源码身份集中 PR。
 
 | 规则 | 精确范围 | 映射及消费／控制 | 原授权 |
 | --- | --- | --- | --- |
-| MISRA C:2012 Rule 8.9 | `runtime/bsw/src/Can.c` 中 `host_tx_completed_through` | VAR_CLEARED_UNSPECIFIED；Can_InternalHostCompleteTransmit 保留已观察的完成 token，Init 不回退。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/bsw/src/Com.c` 中 `publishing` | VAR_CLEARED_UNSPECIFIED；Com_Publish 的在途通知边界，Init 不清除。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/host/src/Det_Host.c` 中 `reporting_development` | VAR_CLEARED_8／TLS；Det_HostEnterDevelopmentReport 的每线程递归状态。 | 维护者 原用户决定，ADR 0023 |
 | MISRA C:2012 Rule 8.9 | `runtime/os/src/Os_Backend.c` 中 `trace_length` | VAR_CLEARED_32；Os_TargetTrace 的调用方串行化长度，配合既有 trace 缓冲。 | 维护者 原用户决定，ADR 0023 |

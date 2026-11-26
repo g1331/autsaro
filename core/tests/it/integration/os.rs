@@ -438,14 +438,16 @@ fn schedule_table_rejections() {
 /// processing before transmission, SWS_Rte_07800 position ordering).
 #[test]
 fn handle_width_and_schedule_order() {
-    // The selected host CAN driver keeps 8-bit CanIf PDU handles.
+    // 256 fits the configured UINT16 PduIdType but leaves a gap.
     let mut wide = single_component_sources();
     parameter(&mut wide, "TxValue", "CanIfTxPduId", "256");
-    rejects_in_both(&wide, "CANIF_HANDLE_WIDTH");
+    rejects_in_both(&wide, "CANIF_HANDLE_SEQUENCE");
     let issues = build(&wide).err().unwrap();
     assert!(
-        issues.iter().any(|issue| issue.code == "CANIF_HANDLE_WIDTH"
-            && issue.object.as_deref() == Some("/Configuration/CanIf/Config/TxValue")),
+        issues
+            .iter()
+            .any(|issue| issue.code == "CANIF_HANDLE_SEQUENCE"
+                && issue.object.as_deref() == Some("/Configuration/CanIf/Config/TxValue")),
         "{issues:?}"
     );
     let mut reordered = single_component_sources();

@@ -205,8 +205,20 @@ export type BuildReport = {
 /**  Output identity, independent of the operating system running the workbench. */
 export type BuildTarget = 'windows-x64-controlled-v1' | 'linux-x64-controlled-v1';
 
+export type CanHardwareContract = {
+  path: string;
+  handle: number;
+  controller: string;
+  receive: boolean;
+  idType: string;
+  fdPadding: number;
+};
+
 export type CanRuntimeContract = {
   physicalChannel: string;
+  network: string;
+  connector: string;
+  canIfController: string;
   controller: string;
   controllerId: number;
   canIfControllerId: number;
@@ -323,6 +335,8 @@ export type CommunicationRuntimeContract = {
   pduIdType: CommunicationIntegerType;
   pduLengthType: CommunicationIntegerType;
   can: CanRuntimeContract;
+  channels: CanRuntimeContract[];
+  hardware: CanHardwareContract[];
   partition: PartitionRuntimeContract;
 };
 
@@ -783,6 +797,15 @@ export type ModeMachine = {
   variable: string;
 };
 
+export type ModeChannel = {
+  channel: string;
+  channelHandle: number;
+  canIfController: string;
+  mainSymbol: string;
+  periodMs: number;
+  input: string;
+};
+
 export type ModePort = {
   port: string;
   prototype: string;
@@ -792,6 +815,7 @@ export type ModePort = {
 
 export type ModeRule = {
   path: string;
+  channel: string;
   mode: number;
   condition: string;
   expression: string;
@@ -801,18 +825,14 @@ export type ModeRule = {
 };
 
 export type ModeRuntimeContract = {
-  channel: string;
-  channelHandle: number;
-  mainSymbol: string;
-  periodMs: number;
+  channels: ModeChannel[];
   minimumFullMs: number;
   busPrefix: string;
   users: ModeUser[];
   bswmConfiguration: string;
-  input: string;
   include: string;
   rules: ModeRule[];
-  dcmConnections: string[];
+  dcmConnections: { [key in string]: string };
 };
 
 export type ModeUser = {

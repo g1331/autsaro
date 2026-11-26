@@ -208,7 +208,8 @@ ticket、批次原子拒绝、write／flush 后确认和静止点收据沿用现
 - 输出：保留现有 `OUT epoch=… sequence=… ticket=… pdu=…`，随后固定为
   `channel=… format=… fd=… id=… length=… data=…`，data 同输入规则。
   length 记录驱动填充后的线帧长度，逐字节观察实际 padding；pdu 为 CanIf Tx PDU handle。
-- controller 模式与故障控制记录显式携带 channel，经同一映射定位；批次 epoch 继续全局唯一。
+- `MODE <channel> <STOPPED|OFFLINE|BUS_OFF|STARTED>` 与 Rx 在批次输入阶段按记录顺序生效。
+  controller 模式与故障控制记录经同一映射定位，批次 epoch 继续全局唯一。
   `verification-inputs-v2` 同时保存 endpoint 的 module／direction／handle、channel 路径映射、
   format、fd policy、ID、逻辑长度、预期 wire length 和 payload；oracle 比较完整输出集合及确认。
 

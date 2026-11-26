@@ -65,7 +65,8 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached);
  *
  * Ownership: No pointer is retained.
  */
-RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc);
+RTE_Ecu_CODE boolean Ecu_StackCanIfController(uint8 channel, uint8 *controller);
+RTE_Ecu_CODE int Ecu_StackFrameShape(uint8 channel, uint32 id, uint8 dlc);
 #define RTE_Ecu_STOP_SEC_CODE
 #include "Rte_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */

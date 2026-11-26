@@ -108,7 +108,7 @@ fn comm_two_users_keep_distinct_handles_publishers_and_mapping_relations() {
     assert!(
         mode.users
             .iter()
-            .all(|user| user.channels == [mode.channel.clone()])
+            .all(|user| user.channels == [mode.channels[0].channel.clone()])
     );
     let machines: Vec<_> = plan
         .description()
@@ -284,10 +284,10 @@ fn comm_multichannel_configuration_is_rejected_at_the_added_channel() {
 fn mode_configuration_preserves_channel_users_rules_and_static_callouts() {
     let plan = build(&inputs()).unwrap();
     let mode = plan.description().mode_runtime.as_ref().unwrap();
-    assert_eq!(mode.channel, "/Configuration/ComM/Config/Host");
-    assert_eq!(mode.channel_handle, 0);
-    assert_eq!(mode.main_symbol, "ComM_MainFunction_Host");
-    assert_eq!((mode.period_ms, mode.minimum_full_ms), (1, 5));
+    assert_eq!(mode.channels[0].channel, "/Configuration/ComM/Config/Host");
+    assert_eq!(mode.channels[0].channel_handle, 0);
+    assert_eq!(mode.channels[0].main_symbol, "ComM_MainFunction_Host");
+    assert_eq!((mode.channels[0].period_ms, mode.minimum_full_ms), (1, 5));
     assert_eq!(mode.users.len(), 1);
     assert_eq!(mode.users[0].handle, 0);
     assert_eq!(mode.include, "Ecu_HostBusSM.h");
@@ -335,9 +335,12 @@ fn mode_configuration_preserves_channel_users_rules_and_static_callouts() {
     );
     let renamed = build(&sources).unwrap();
     let mode = renamed.description().mode_runtime.as_ref().unwrap();
-    assert_eq!(mode.channel, "/Configuration/ComM/Config/Vehicle");
-    assert_eq!(mode.main_symbol, "ComM_MainFunction_Vehicle");
-    assert_eq!(mode.channel_handle, 7);
+    assert_eq!(
+        mode.channels[0].channel,
+        "/Configuration/ComM/Config/Vehicle"
+    );
+    assert_eq!(mode.channels[0].main_symbol, "ComM_MainFunction_Vehicle");
+    assert_eq!(mode.channels[0].channel_handle, 7);
     assert_eq!(mode.users[0].handle, 19);
     assert!(normal_validation(&sources).diagnostics.is_empty());
 }

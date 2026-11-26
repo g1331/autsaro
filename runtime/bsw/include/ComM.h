@@ -76,7 +76,7 @@ typedef struct {
     const ComM_ChannelConfigType *channels; /**< Distinct configured channels. */
     uint16 channel_count;                   /**< Number of configured channels. */
     const ComM_UserModeConfigType *users;   /**< Users and their channel relations. */
-    uint16 user_count;                      /**< Number of distinct users, 1..32. */
+    uint16 user_count;                      /**< Number of distinct users. */
     ComM_BusRequestType request;            /**< CDD bus mode request (ComMCDDBusPrefix). */
     ComM_BusGetType current;                /**< CDD actual bus mode query (ComMCDDBusPrefix). */
 } ComM_ConfigType;

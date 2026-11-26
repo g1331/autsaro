@@ -68,10 +68,10 @@ static int write_output(const Ecu_OutputRecord *output,
         Os_HostTextField(&text, " sequence=", state->sequence);
         Os_HostTextField(&text, " ticket=", output->ticket);
         Os_HostTextField(&text, " pdu=", output->pdu);
+        Os_HostTextField(&text, " channel=", output->channel);
         Os_HostTextAppend(&text,
-                          ((output->can_id & CAN_ID_EXTENDED_FLAG) != 0u)
-                              ? " channel=0 format=EXTENDED"
-                              : " channel=0 format=STANDARD");
+                          ((output->can_id & CAN_ID_EXTENDED_FLAG) != 0u) ? " format=EXTENDED"
+                                                                          : " format=STANDARD");
         Os_HostTextField(&text, " fd=", ((output->can_id & CAN_ID_FD_FLAG) != 0u) ? 1u : 0u);
         Os_HostTextField(&text, " id=", output->can_id & CAN_ID_EXTENDED_MAX);
         Os_HostTextField(&text, " length=", output->dlc);

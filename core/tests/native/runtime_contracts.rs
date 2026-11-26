@@ -364,6 +364,15 @@ fn strict_consumer(scratch: &Path, module: &str, fixture: &str, flags: &[&str]) 
         command.arg("-I").arg(scratch);
         command.arg(root.join("runtime/host/src/SchM_Diagnostic_Host.c"));
     }
+    if module == "Can" {
+        command
+            .arg("-I")
+            .arg(root.join("runtime/ecu/src"))
+            .arg("-I")
+            .arg(root.join("runtime/ecu/include"))
+            .arg(root.join("runtime/bsw/src/CanIf.c"))
+            .arg(root.join("runtime/host/src/Can_Host.c"));
+    }
     if matches!(module, "ComM" | "BswM") {
         command.arg(root.join("runtime/host/src/SchM_Mode_Host.c"));
     }
@@ -722,6 +731,37 @@ fn com_periodic_transmission_executes_real_lower_modules_and_can_busy() {
         "{:?}",
         output
     );
+}
+
+#[test]
+fn can_and_canif_preserve_channel_across_faults_and_confirmations() {
+    for channel_count in [2, 3, 4, 6] {
+        let scratch = Scratch::new();
+        let channels = format!("-DCAN_TEST_CHANNELS={channel_count}u");
+        let capacity = format!("-DCAN_CONTROLLER_CAPACITY={channel_count}u");
+        let hardware = format!("-DCAN_HOH_CAPACITY={}u", 2 * channel_count);
+        let if_capacity = format!("-DCANIF_CONTROLLER_CAPACITY={channel_count}u");
+        let executable = strict_consumer(
+            &scratch.0,
+            "Can",
+            "can_multichannel.c",
+            &[
+                &channels,
+                &capacity,
+                &hardware,
+                &if_capacity,
+                "-DCAN_HOST_QUEUED_COMPLETION=1",
+                "-DCAN_RX_POLLING=1",
+                "-DCAN_TX_POLLING=1",
+                "-DCAN_BUSOFF_POLLING=1",
+            ],
+        );
+        let output = Command::new(executable).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{channel_count} channels: {output:?}"
+        );
+    }
 }
 
 #[test]

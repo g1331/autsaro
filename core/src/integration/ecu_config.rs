@@ -250,6 +250,59 @@ fn periods(value_ms: u32, period_ms: u32, object: &str) -> Result<u32, Vec<PlanD
         .ok_or_else(|| PlanDiagnostic::plan_premise(object))
 }
 
+fn configured_reference<'a>(
+    description: &'a super::PlanDescription,
+    path: &str,
+    name: &str,
+) -> Result<&'a str, Vec<PlanDiagnostic>> {
+    description
+        .configuration
+        .iter()
+        .find(|record| record.path == path)
+        .and_then(|record| {
+            record
+                .references
+                .iter()
+                .find(|(id, _)| super::short_name(id) == name)
+        })
+        .and_then(|(_, targets)| targets.first())
+        .map(String::as_str)
+        .ok_or_else(|| PlanDiagnostic::plan_premise(path))
+}
+
+fn can_if_route(
+    description: &super::PlanDescription,
+    pdu: &str,
+    receive: bool,
+) -> Result<(String, String), Vec<PlanDiagnostic>> {
+    let (handle, controller_ref, object_ref) = if receive {
+        (
+            configured_reference(description, pdu, "CanIfRxPduHrhIdRef")?,
+            "CanIfHrhCanCtrlIdRef",
+            "CanIfHrhIdSymRef",
+        )
+    } else {
+        let buffer = configured_reference(description, pdu, "CanIfTxPduBufferRef")?;
+        (
+            configured_reference(description, buffer, "CanIfBufferHthRef")?,
+            "CanIfHthCanCtrlIdRef",
+            "CanIfHthIdSymRef",
+        )
+    };
+    Ok((
+        name(
+            "CanIf",
+            "CanIfCtrlCfg",
+            configured_reference(description, handle, controller_ref)?,
+        ),
+        name(
+            "Can",
+            "CanHardwareObject",
+            configured_reference(description, handle, object_ref)?,
+        ),
+    ))
+}
+
 pub(super) fn files(
     plan: &ValidatedIntegrationPlan,
     target: BuildTarget,
@@ -259,7 +312,6 @@ pub(super) fn files(
     let com = description.ecu_com()?;
     let authentication_group = composition.authentication_modes()?.group.as_ref();
     let communication = description.ecu_communication()?;
-    let can = &communication.can;
     let mode = description.ecu_mode()?;
     let symbolic = symbolic_names::Names::new(description)?;
     let mut outputs = super::outputs::EcuOutputs::new(target)?;
@@ -427,15 +479,20 @@ pub(super) fn files(
     )?;
     outputs.emit_rendered(super::outputs::OS, super::ecu::ECU_CONFIG, os_config)?;
     outputs.emit_all(ECU, super::can_runtime::type_headers(communication))?;
-    let comm_channel_count = description
-        .configuration
-        .iter()
-        .filter(|record| super::short_name(&record.definition) == "ComMChannel")
-        .count();
+    let configured_count = |kind| {
+        description
+            .configuration
+            .iter()
+            .filter(|record| super::short_name(&record.definition) == kind)
+            .count()
+    };
+    let can_if_counts = ["CanIfCtrlCfg", "CanIfRxPduCfg", "CanIfTxPduCfg"].map(configured_count);
     let (path, bytes) = super::can_runtime::profile_header(
         communication,
-        symbolic.parameter("CanIfCtrlId")?,
-        comm_channel_count,
+        mode.channels.len(),
+        mode.users.len(),
+        description.signals.len(),
+        can_if_counts,
     );
     outputs.emit(ECU, path, bytes)?;
     for (module, definitions) in &symbolic.headers {
@@ -453,6 +510,16 @@ pub(super) fn files(
         )?;
     }
 
+    let diagnostic_channel = if description.diagnostic_transport.is_some() {
+        let mut connections = mode.dcm_connections.values();
+        let channel = connections
+            .next()
+            .filter(|_| connections.len() == 0)
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&mode.bswm_configuration))?;
+        Some(channel.as_str())
+    } else {
+        None
+    };
     for (module, area) in [
         ("CanIf", "CANIF"),
         ("ComM", "COMM"),
@@ -472,11 +539,17 @@ pub(super) fn files(
             ),
             "ComM" => code_prototypes(
                 module,
-                &main_prototype(
-                    "RTE_ComM_CODE",
-                    &mode.main_symbol,
-                    "Advance the selected channel hold timer and retry pending bus-mode requests.",
-                ),
+                &mode
+                    .channels
+                    .iter()
+                    .map(|channel| {
+                        main_prototype(
+                            "RTE_ComM_CODE",
+                            &channel.main_symbol,
+                            "Advance the channel hold timer and retry pending bus-mode requests.",
+                        )
+                    })
+                    .collect::<String>(),
             ),
             _ => String::new(),
         };
@@ -607,6 +680,7 @@ pub(super) fn files(
 #include "Ecu_Config.h"
 #include "Can_Host.h"
 #include "Can_Cfg.h"
+#include "Ecu_ProfileConfig.h"
 #include "CanIf.h"
 #include "CanIf_Cfg.h"
 #include "PduR_Cfg.h"
@@ -730,16 +804,54 @@ pub(super) fn files(
         "const EcuPolicyConfig Ecu_Policy",
         &values("ECU_TX_QUEUED"),
     );
+    let controllers = communication
+        .channels
+        .iter()
+        .map(|channel| {
+            row(&format!(
+                "{}, {}, {}u, {}u, {}",
+                name("Can", "CanController", &channel.controller),
+                name("CanIf", "CanIfCtrlCfg", &channel.can_if_controller),
+                channel.nominal_bitrate,
+                channel.data_bitrate.unwrap_or(0),
+                if channel.brs { "TRUE" } else { "FALSE" },
+            ))
+        })
+        .collect::<Vec<_>>();
+    config_data(
+        &mut config,
+        "Can",
+        "static const Can_ControllerConfigType can_controllers[]",
+        &controllers,
+    );
+    let hardware = communication
+        .hardware
+        .iter()
+        .map(|hoh| {
+            row(&format!(
+                "{}, {}, CAN_HOH_ID_{}, {}, {}u",
+                name("Can", "CanHardwareObject", &hoh.path),
+                name("Can", "CanController", &hoh.controller),
+                hoh.id_type,
+                if hoh.receive { "TRUE" } else { "FALSE" },
+                hoh.fd_padding,
+            ))
+        })
+        .collect::<Vec<_>>();
+    config_data(
+        &mut config,
+        "Can",
+        "static const Can_HohConfigType can_hardware[]",
+        &hardware,
+    );
     init_data(
         &mut config,
         "Can",
         "static const Can_ConfigType ecu_can_driver",
         &values(&format!(
-            "NULL_PTR, {}u, {}u, {}, {}u",
-            can.nominal_bitrate,
-            can.data_bitrate.unwrap_or(0),
-            if can.brs { "TRUE" } else { "FALSE" },
-            can.fd_padding,
+            "NULL_PTR, 0u, 0u, FALSE, 0u, can_controllers, {}u, can_hardware, {}u",
+            controllers.len(),
+            hardware.len(),
         )),
     );
     let routing_headers = r#"#include "Com_Cfg.h"
@@ -849,9 +961,10 @@ pub(super) fn files(
             if signal.receive { "TRUE" } else { "FALSE" },
             reception_timeout
         )));
+        let (controller, hoh) = can_if_route(description, &signal.can_if_pdu, signal.receive)?;
         if signal.receive {
             receive.push(row(&format!(
-                "{}u, {can_if}, 4u, {}",
+                "{}u, {can_if}, 4u, {}, {controller}, {hoh}",
                 signal.encoded_id(),
                 if signal.accepts_fd { "TRUE" } else { "FALSE" }
             )));
@@ -860,7 +973,10 @@ pub(super) fn files(
             )));
             pd_rx.push(row(&format!("{source}, {pdu}, &Com_RxIndication")));
         } else {
-            transmit.push(row(&format!("{}u, {can_if}, 4u", signal.encoded_id())));
+            transmit.push(row(&format!(
+                "{}u, {can_if}, 4u, {controller}, {hoh}",
+                signal.encoded_id()
+            )));
             ls_tx.push(row(&format!(
                 "LSDUR_UP_PDUR, {ls_source}, {can_if}, &PduR_CanIfTxConfirmation, &PduR_CanIfTriggerTransmit"
             )));
@@ -907,11 +1023,16 @@ pub(super) fn files(
         let pd_tx_destination = name("PduR", "PduRDestPdu", &tx_route.destination);
         let ls_rx_source = name("LSduR", "LSduRPathSourcePdu", &rx_route.source);
         let ls_tx_source = name("LSduR", "LSduRPathSourcePdu", &tx_route.source);
+        let (rx_controller, hrh) = can_if_route(description, &tp.can_if_rx_pdu, true)?;
+        let (tx_controller, hth) = can_if_route(description, &tp.can_if_tx_pdu, false)?;
         receive.push(row(&format!(
-            "{}u, {can_rx}, 8u, FALSE",
+            "{}u, {can_rx}, 8u, FALSE, {rx_controller}, {hrh}",
             tp.encoded_request_id(),
         )));
-        transmit.push(row(&format!("{}u, {can_tx}, 8u", tp.encoded_response_id())));
+        transmit.push(row(&format!(
+            "{}u, {can_tx}, 8u, {tx_controller}, {hth}",
+            tp.encoded_response_id()
+        )));
         ls_rx.push(row(&format!(
             "{ls_rx_source}, {tp_rx}, &CanTp_RxIndication"
         )));
@@ -975,7 +1096,12 @@ pub(super) fn files(
             "static const Dcm_ConfigType dcm_config",
             &values(&format!(
                 "{dcm_rx}, {dcm_tx}, {}, {did}u, {read}, {}u, {}u, {}u, {}u, {}u, {pd_tx_source}, &Ecu_DcmAuthenticationMode, {}u",
-                name("ComM", "ComMChannel", &mode.channel),
+                name(
+                    "ComM",
+                    "ComMChannel",
+                    diagnostic_channel
+                        .ok_or_else(|| PlanDiagnostic::plan_premise(&mode.bswm_configuration))?
+                ),
                 ticks(tp.p2_ms)?,
                 tp.p2_ms,
                 tp.p2_star_ms,
@@ -1017,16 +1143,32 @@ pub(super) fn files(
         .filter(|signal| !signal.receive)
         .count()
         + usize::from(transport.is_some());
+    let controllers = description
+        .configuration
+        .iter()
+        .filter(|record| super::short_name(&record.definition) == "CanIfCtrlCfg")
+        .map(|record| {
+            let driver = configured_reference(description, &record.path, "CanIfCtrlCanCtrlRef")?;
+            Ok(row(&format!(
+                "{}, {}",
+                name("CanIf", "CanIfCtrlCfg", &record.path),
+                name("Can", "CanController", driver)
+            )))
+        })
+        .collect::<Result<Vec<_>, Vec<PlanDiagnostic>>>()?;
+    config_data(
+        &mut can_if_configuration,
+        "CanIf",
+        "static const CanIf_ControllerConfigType canif_bindings[]",
+        &controllers,
+    );
     config_data(
         &mut can_if_configuration,
         "CanIf",
         "const CanIf_ConfigType CanIf_Config",
         &values(&format!(
-            "can_rx, {rx_count}u, can_tx, {tx_count}u, &Ecu_HostBusSM_ControllerModeIndication, &Ecu_HostBusSM_ControllerBusOff, {}, {}, {}, {}",
-            symbolic.parameter("CanIfCtrlId")?,
-            name("Can", "CanController", &can.controller),
-            name("Can", "CanHardwareObject", &can.receive_hardware),
-            name("Can", "CanHardwareObject", &can.transmit_hardware)
+            "can_rx, {rx_count}u, can_tx, {tx_count}u, &Ecu_HostBusSM_ControllerModeIndication, &Ecu_HostBusSM_ControllerBusOff, canif_bindings, {}u",
+            controllers.len()
         )),
     );
     config_data(
@@ -1107,21 +1249,28 @@ pub(super) fn files(
         outputs.emit(ECU, format!("src/{module}_PBcfg.c"), source)?;
     }
 
+    let bus_rows = mode
+        .channels
+        .iter()
+        .map(|channel| {
+            row(&format!(
+                "{}, {}",
+                name("ComM", "ComMChannel", &channel.channel),
+                name("CanIf", "CanIfCtrlCfg", &channel.can_if_controller),
+            ))
+        })
+        .collect::<Vec<_>>();
     config_data(
         &mut config,
         "Ecu_HostBusSM",
         "static const Ecu_HostBusSM_ChannelConfigType bus_channels[]",
-        &[row(&format!(
-            "{}, {}",
-            name("ComM", "ComMChannel", &mode.channel),
-            symbolic.parameter("CanIfCtrlId")?
-        ))],
+        &bus_rows,
     );
     init_data(
         &mut config,
         "Ecu_HostBusSM",
         "static const Ecu_HostBusSM_ConfigType bus_config",
-        &values("bus_channels, 1u"),
+        &values(&format!("bus_channels, {}u", bus_rows.len())),
     );
     let mut user_modes = Vec::new();
     for user in &mode.users {
@@ -1180,53 +1329,80 @@ pub(super) fn files(
         "static const ComM_UserModeConfigType comm_user_modes[]",
         &user_modes,
     );
+    let comm_rows = mode.channels.iter().map(|channel| {
+        Ok(row(&format!(
+            "{}, {}u, {}",
+            name("ComM", "ComMChannel", &channel.channel),
+            periods(mode.minimum_full_ms, channel.period_ms, &channel.main_symbol)?,
+            if diagnostic_channel == Some(channel.channel.as_str()) {
+                "&Dcm_ComM_NoComModeEntered, &Dcm_ComM_SilentComModeEntered, &Dcm_ComM_FullComModeEntered"
+            } else {
+                "NULL_PTR, NULL_PTR, NULL_PTR"
+            },
+        )))
+    }).collect::<Result<Vec<_>, Vec<PlanDiagnostic>>>()?;
     config_data(
         &mut config,
         "ComM",
         "static const ComM_ChannelConfigType comm_channel_config[]",
-        &[row(&format!(
-            "{}, {}u, {}",
-            name("ComM", "ComMChannel", &mode.channel),
-            periods(mode.minimum_full_ms, mode.period_ms, &mode.main_symbol)?,
-            if transport.is_some() {
-                "&Dcm_ComM_NoComModeEntered, &Dcm_ComM_SilentComModeEntered, &Dcm_ComM_FullComModeEntered"
-            } else {
-                "NULL_PTR, NULL_PTR, NULL_PTR"
-            }
-        ))],
+        &comm_rows,
     );
     init_data(
         &mut config,
         "ComM",
         "static const ComM_ConfigType comm_config",
         &values(&format!(
-            "comm_channel_config, 1u, comm_user_modes, {}u, &Ecu_HostBusSM_RequestComMode, &Ecu_HostBusSM_GetCurrentComMode",
-            mode.users.len()
+            "comm_channel_config, {}u, comm_user_modes, {}u, &Ecu_HostBusSM_RequestComMode, &Ecu_HostBusSM_GetCurrentComMode",
+            comm_rows.len(),
+            mode.users.len(),
         )),
     );
-    let comm_main = format!(
-        "(void)ComM_RunChannel({});",
-        name("ComM", "ComMChannel", &mode.channel)
-    );
+    let bswm_channels = mode
+        .channels
+        .iter()
+        .map(|channel| Item::Value(name("ComM", "ComMChannel", &channel.channel)))
+        .collect::<Vec<_>>();
     config_data(
         &mut config,
         "BswM",
         "static const NetworkHandleType bswm_comm_channels[]",
-        &[Item::Value(name("ComM", "ComMChannel", &mode.channel))],
+        &bswm_channels,
     );
     init_data(
         &mut config,
         "BswM",
         "static const BswM_ConfigType bswm_config",
-        &values("bswm_comm_channels, 1u, &Ecu_BswMAction"),
+        &values(&format!(
+            "bswm_comm_channels, {}u, &Ecu_BswMAction",
+            bswm_channels.len()
+        )),
     );
-    for (symbol, scope, body) in [
-        (&com.receive_main.symbol, "Com", "Ecu_ComMainFunctionRx();"),
-        (&com.transmit_main.symbol, "Com", "Ecu_ComMainFunctionTx();"),
-        (&mode.main_symbol, "ComM", comm_main.as_str()),
-    ] {
+    let main_functions = [
+        (
+            &com.receive_main.symbol,
+            "Com",
+            "Ecu_ComMainFunctionRx();".to_owned(),
+        ),
+        (
+            &com.transmit_main.symbol,
+            "Com",
+            "Ecu_ComMainFunctionTx();".to_owned(),
+        ),
+    ]
+    .into_iter()
+    .chain(mode.channels.iter().map(|channel| {
+        (
+            &channel.main_symbol,
+            "ComM",
+            format!(
+                "(void)ComM_RunChannel({});",
+                name("ComM", "ComMChannel", &channel.channel),
+            ),
+        )
+    }));
+    for (symbol, scope, body) in main_functions {
         let function =
-            c_layout::short_function(&format!("RTE_{scope}_CODE void {symbol}(void)"), body);
+            c_layout::short_function(&format!("RTE_{scope}_CODE void {symbol}(void)"), &body);
         c_layout::begin_section(&mut config, &format!("RTE_{scope}"), "Rte", "CODE");
         config.push_str(&format!(
             r#"{function}
@@ -1249,41 +1425,78 @@ pub(super) fn files(
         &values("NULL_PTR, 0u, det_runtime_callouts, 1u"),
     );
     config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
-    // ECUC_BswM_00843: parameters are fixed by the configured complete call.
+    // The validator requires the same three direction actions for each channel.
+    // The controller argument is taken from their validated symbolic binding.
     config.push_str(
         r#"static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,
                                                   ComM_ModeType requested)
 {
-    Std_ReturnType result = E_OK;
-"#,
-    );
-    config.push_str(&format!(
-        r#"    if (channel != {}) {{
-        return E_NOT_OK;
-    }}
-    switch (requested) {{
-"#,
-        name("ComM", "ComMChannel", &mode.channel)
-    ));
-    for rule in &mode.rules {
-        let requested = [
-            "COMM_NO_COMMUNICATION",
-            "COMM_SILENT_COMMUNICATION",
-            "COMM_FULL_COMMUNICATION",
-        ][usize::from(rule.mode)];
-        let channel = name("ComM", "ComMChannel", &mode.channel);
-        config.push_str(&format!(
-            r#"        case {}u:
-            (void)Ecu_HostBusSM_ApplyMode({channel}, {requested});
+    Std_ReturnType result = E_NOT_OK;
+    switch (requested) {
+        case COMM_NO_COMMUNICATION:
+        case COMM_SILENT_COMMUNICATION:
+        case COMM_FULL_COMMUNICATION:
+            for (uint16 index = 0u; index < COMM_CHANNEL_CAPACITY; ++index) {
+                if (bus_channels[index].channel == channel) {
+                    (void)Ecu_HostBusSM_ApplyControllerMode(channel, bus_channels[index].controller,
+                                                           requested);
+                    result = E_OK;
+                    break;
+                }
+            }
             break;
-"#,
-            rule.mode
-        ));
-    }
-    config.push_str(
-        r#"        default:
+        default:
             result = E_NOT_OK;
             break;
+    }
+    return result;
+}
+"#,
+    );
+    config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", false));
+    let mut startup_users = std::collections::BTreeSet::new();
+    for channel in &mode.channels {
+        let user = mode
+            .users
+            .iter()
+            .find(|user| user.channels.contains(&channel.channel))
+            .ok_or_else(|| PlanDiagnostic::plan_premise(&channel.channel))?;
+        startup_users.insert(user.path.as_str());
+    }
+    let users = startup_users
+        .into_iter()
+        .map(|user| Item::Value(name("ComM", "ComMUser", user)))
+        .collect::<Vec<_>>();
+    config_data(
+        &mut config,
+        "Ecu",
+        "static const ComM_UserHandleType starter_users[]",
+        &users,
+    );
+    config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
+    config.push_str(
+        r#"static RTE_Ecu_CODE Std_ReturnType Ecu_StartCommunication(void)
+{
+    Std_ReturnType result = E_OK;
+    for (uint16 i = 0u; i < COMM_CHANNEL_CAPACITY; ++i) {
+        ComM_CommunicationAllowed(bus_channels[i].channel, TRUE);
+    }
+    for (uint16 i = 0u; (i < (sizeof(starter_users) / sizeof(starter_users[0]))) && (result == E_OK);
+         ++i) {
+        result = ComM_RequestComMode(starter_users[i], COMM_FULL_COMMUNICATION);
+    }
+    if (result == E_OK) {
+        for (uint16 i = 0u; i < COMM_CHANNEL_CAPACITY; ++i) {
+            (void)ComM_RunChannel(bus_channels[i].channel);
+        }
+        Can_MainFunction_Mode();
+        for (uint16 i = 0u; (i < COMM_CHANNEL_CAPACITY) && (result == E_OK); ++i) {
+            Can_ControllerStateType actual = CAN_CS_UNINIT;
+            result = CanIf_GetControllerMode(bus_channels[i].controller, &actual);
+            if (actual != CAN_CS_STARTED) {
+                result = E_NOT_OK;
+            }
+        }
     }
     return result;
 }
@@ -1310,7 +1523,6 @@ pub(super) fn files(
         config.push_str(
             r#"RTE_Ecu_CODE Std_ReturnType Ecu_StackBootstrap(uint8 *reached)
 {
-    Can_ControllerStateType actual;
     if ((reached == NULL_PTR) || (Ecu_TargetCheckLifecycleContext(TRUE) != E_OK)) {
         return E_NOT_OK;
     }
@@ -1364,34 +1576,16 @@ pub(super) fn files(
 "#,
             );
         }
-        let first_user = mode
-            .users
-            .first()
-            .ok_or_else(|| PlanDiagnostic::plan_premise(&mode.channel))?;
         config.push_str(&stage(8));
-        config.push_str(&format!(
-            r#"    if (Rte_Start() != E_OK) {{
+        config.push_str(
+            r#"    if ((Rte_Start() != E_OK) || (Ecu_StartCommunication() != E_OK)) {
         return E_NOT_OK;
-    }}
-    ComM_CommunicationAllowed({}, TRUE);
-    if (ComM_RequestComMode({}, COMM_FULL_COMMUNICATION) != E_OK) {{
-        return E_NOT_OK;
-    }}
-    {}();
-    Can_MainFunction_Mode();
-    if ((CanIf_GetControllerMode({}, &actual) != E_OK) ||
-        (actual != CAN_CS_STARTED)) {{
-        return E_NOT_OK;
-    }}
+    }
     SchM_StartTiming();
     return Ecu_SchMTimingActive() ? E_OK : E_NOT_OK;
-}}
+}
 "#,
-            name("ComM", "ComMChannel", &mode.channel),
-            name("ComM", "ComMUser", &first_user.path),
-            mode.main_symbol,
-            symbolic.parameter("CanIfCtrlId")?
-        ));
+        );
         config.push_str(
             r#"RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events)
 {
@@ -1454,14 +1648,14 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
         ));
         retired.push((
             3,
-            format!(
-                r#"(void)Can_SetControllerMode({}, CAN_CS_STOPPED);
+            r#"Can_MainFunction_BusOff();
+        for (uint16 i = 0u; i < CAN_CONTROLLER_CAPACITY; ++i) {
+            (void)Can_SetControllerMode(can_controllers[i].controller, CAN_CS_STOPPED);
+        }
         Can_MainFunction_Mode();
-        Can_MainFunction_BusOff();
         Can_DeInit();
-"#,
-                name("Can", "CanController", &can.controller)
-            ),
+"#
+            .to_owned(),
         ));
         retired.push((1, "SchM_Deinit();\n".to_owned()));
         for (number, body) in retired {
@@ -1485,56 +1679,87 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
         config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", false));
     }
     config.push_str("#endif\n");
-    config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
-    config.push_str(
-        r#"RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc)
-{
-    if ((!Can_IsValidId(id)) || (!Can_IsWireLength(id, dlc)) ||
-        (((id & CAN_ID_FD_FLAG) != 0u) && (ecu_can_driver.data_bitrate == 0u))) {
-        return 0;
-    }
-"#,
-    );
-    for signal in &description.signals {
-        let id = signal.encoded_id();
-        let condition = if signal.receive && signal.accepts_fd {
-            format!("(id & ~CAN_ID_FD_FLAG) == {id}u")
-        } else {
-            format!("id == {id}u")
-        };
-        config.push_str(&format!(
-            r#"    if ({condition}) {{
-        return {};
-    }}
-"#,
-            if signal.receive {
-                if signal.accepts_fd {
-                    "((id & CAN_ID_FD_FLAG) != 0u) ? (dlc >= 4u) : (dlc == 4u)"
-                } else if signal.fd {
-                    "dlc >= 4u"
-                } else {
-                    "dlc == 4u"
-                }
-            } else {
-                "0"
-            }
-        ));
+    let channel_name = |physical: &str| {
+        communication
+            .channels
+            .iter()
+            .find(|channel| channel.physical_channel == physical)
+            .map(|channel| name("Can", "CanController", &channel.controller))
+            .ok_or_else(|| PlanDiagnostic::plan_premise(physical))
+    };
+    let mut frame_policies = Vec::new();
+    for endpoint in &composition.network_endpoints {
+        let signal = &endpoint.transport;
+        let channel = channel_name(&endpoint.channel)?;
+        frame_policies.push(row(&format!(
+            "{}u, {channel}, {}u, {}, {}",
+            signal.encoded_id(),
+            signal.dlc,
+            if signal.receive { "TRUE" } else { "FALSE" },
+            if signal.accepts_fd { "TRUE" } else { "FALSE" },
+        )));
     }
     if let Some(tp) = transport {
-        config.push_str(&format!(
-            r#"    if (id == {}u) {{
-        return dlc == 8u;
-    }}
-    if (id == {}u) {{
-        return 0;
-    }}
-"#,
-            tp.encoded_request_id(),
+        let channel = channel_name(&tp.physical_channel)?;
+        frame_policies.push(row(&format!(
+            "{}u, {channel}, 8u, TRUE, FALSE",
+            tp.encoded_request_id()
+        )));
+        frame_policies.push(row(&format!(
+            "{}u, {channel}, 8u, FALSE, FALSE",
             tp.encoded_response_id()
-        ));
+        )));
     }
     config.push_str(
-        r#"    return 1;
+        r#"typedef struct {
+    Can_IdType id;     /**< Encoded configured identifier. */
+    uint8 channel;     /**< Driver controller for this endpoint. */
+    uint8 length;      /**< Configured payload length. */
+    boolean receive;   /**< TRUE for an admissible Rx endpoint. */
+    boolean dual;      /**< TRUE for Classical and FD with the same format. */
+} Ecu_HostFramePolicyType;
+
+"#,
+    );
+    config_data(
+        &mut config,
+        "Ecu",
+        "static const Ecu_HostFramePolicyType frame_policies[]",
+        &frame_policies,
+    );
+    config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
+    config.push_str(
+        r#"RTE_Ecu_CODE boolean Ecu_StackCanIfController(uint8 channel, uint8 *controller)
+{
+    const uint16 index = channel;
+    const boolean valid = (index < CAN_CONTROLLER_CAPACITY) && (controller != NULL_PTR);
+    if (valid) {
+        *controller = can_controllers[index].can_if;
+    }
+    return valid;
+}
+
+RTE_Ecu_CODE int Ecu_StackFrameShape(uint8 channel, uint32 id, uint8 dlc)
+{
+    int result = 0;
+    const uint16 controller = channel;
+    const boolean fd = (id & CAN_ID_FD_FLAG) != 0u;
+    if ((controller < CAN_CONTROLLER_CAPACITY) && Can_IsValidId(id) && Can_IsWireLength(id, dlc) &&
+        ((!fd) || (can_controllers[controller].data_bitrate != 0u))) {
+        result = 1;
+        for (uint32 i = 0u; i < (sizeof(frame_policies) / sizeof(frame_policies[0])); ++i) {
+            const Ecu_HostFramePolicyType *frame = &frame_policies[i];
+            if ((frame->channel == channel) &&
+                ((frame->id == id) || (frame->dual && (frame->id == (id & ~CAN_ID_FD_FLAG))))) {
+                result = 0;
+                if (frame->receive) {
+                    result = fd ? (dlc >= frame->length) : (dlc == frame->length);
+                    break;
+                }
+            }
+        }
+    }
+    return result;
 }
 "#,
     );
@@ -1625,13 +1850,19 @@ The [module manuals](generated/descriptions/MODULES.md) describe delivered BSW i
 {}"#,
         target.spec().id,
         crate::generator::delivery::native_build_prerequisites(target),
-        if verification.is_empty() {
-            ""
-        } else {
+        if super::handoff::reference_shape(plan).is_some() {
             r#"
 ## Reference behaviour verification
 
 This configuration has one 32-bit CAN receive signal, one 32-bit CAN transmit signal and an application DID, so `meta/verification-inputs.json` records their configured endpoints. `python tools/ecu-tool.py verify --project . --build-directory <another-new-empty-external-directory>` builds HostBatch and the normal 20-tick probe, parses and saves COM diagnostics from both, and checks the reference echo application: the transmit signal repeats the last received value, the DID returns it big-endian, one/two-DID reads, DID capacity refusal, N_Cr timeout/recovery and malformed admission. Other application behaviour fails this check by design; it does not establish full SC1, MCU, hard-real-time, ASIL or official certification.
+"#
+        } else if verification.is_empty() {
+            ""
+        } else {
+            r#"
+## Configured CAN endpoints
+
+`meta/verification-inputs.json` records each configured endpoint's channel, CAN ID, frame format and length. Use those values in HostBatchV2 scripts with expectations from the application under test. Each channel number maps to its full physical channel path in the same file.
 "#
         }
     );

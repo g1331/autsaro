@@ -77,7 +77,8 @@ static boolean decode_frame(const Ecu_BatchTokenType tokens[7], Ecu_BatchFrame *
     boolean fd = equals(tokens[3], "1", 1u) != 0;
     uint64_t id;
     uint64_t length;
-    boolean valid = (equals(tokens[1], "0", 1u) != 0) &&
+    uint64_t channel;
+    boolean valid = number(tokens[1], UINT8_MAX, &channel) &&
                     (fd || (equals(tokens[3], "0", 1u) != 0)) &&
                     (extended || (equals(tokens[2], "STANDARD", 8u) != 0));
     if (valid) {
@@ -90,7 +91,29 @@ static boolean decode_frame(const Ecu_BatchTokenType tokens[7], Ecu_BatchFrame *
         frame->id =
             (uint32_t)id | (extended ? CAN_ID_EXTENDED_FLAG : 0u) | (fd ? CAN_ID_FD_FLAG : 0u);
         frame->dlc = (uint8_t)length;
+        frame->channel = (uint8_t)channel;
         valid = Can_IsWireLength(frame->id, frame->dlc) && decode_payload(tokens[6], frame);
+    }
+    return valid;
+}
+
+static boolean decode_mode(const Ecu_BatchTokenType tokens[7], Ecu_BatchFrame *frame)
+{
+    uint64_t channel;
+    boolean valid = number(tokens[1], UINT8_MAX, &channel);
+    if (valid) {
+        frame->channel = (uint8_t)channel;
+        if (equals(tokens[2], "STOPPED", 7u) != 0) {
+            frame->kind = ECU_BATCH_STOPPED;
+        } else if (equals(tokens[2], "OFFLINE", 7u) != 0) {
+            frame->kind = ECU_BATCH_OFFLINE;
+        } else if (equals(tokens[2], "BUS_OFF", 7u) != 0) {
+            frame->kind = ECU_BATCH_BUS_OFF;
+        } else if (equals(tokens[2], "STARTED", 7u) != 0) {
+            frame->kind = ECU_BATCH_STARTED;
+        } else {
+            valid = FALSE;
+        }
     }
     return valid;
 }
@@ -179,9 +202,10 @@ static StatusType commit_batch(Ecu_HostBatch *batch, unsigned count, Ecu_BatchCo
     return status;
 }
 
-static StatusType stage_frame(Ecu_HostBatch *batch,
+static StatusType stage_input(Ecu_HostBatch *batch,
                               unsigned count,
                               const Ecu_BatchTokenType tokens[7],
+                              Ecu_BatchCommand kind,
                               Ecu_BatchCommand *command)
 {
     Ecu_BatchFrame frame = {0};
@@ -193,14 +217,13 @@ static StatusType stage_frame(Ecu_HostBatch *batch,
     } else if (batch->count >= ECU_BATCH_CAPACITY) {
         status = reject(batch, E_OS_LIMIT);
     } else {
-        boolean valid = count == 7u;
-        if (valid) {
-            valid = decode_frame(tokens, &frame);
-        }
+        const boolean valid = (kind == ECU_BATCH_RX)
+                                  ? ((count == 7u) && decode_frame(tokens, &frame))
+                                  : ((count == 3u) && decode_mode(tokens, &frame));
         if (valid) {
             batch->frames[batch->count] = frame;
             ++batch->count;
-            *command = ECU_BATCH_RX;
+            *command = kind;
             status = E_OK;
         } else {
             status = reject(batch, E_OS_VALUE);
@@ -229,7 +252,9 @@ static StatusType dispatch_batch_command(Ecu_HostBatch *batch,
     } else if (equals(tokens[0], "COMMIT", 6u) != 0) {
         status = commit_batch(batch, count, command);
     } else if (equals(tokens[0], "RX", 2u) != 0) {
-        status = stage_frame(batch, count, tokens, command);
+        status = stage_input(batch, count, tokens, ECU_BATCH_RX, command);
+    } else if (equals(tokens[0], "MODE", 4u) != 0) {
+        status = stage_input(batch, count, tokens, ECU_BATCH_MODE, command);
     } else {
         status = reject(batch, E_OS_VALUE);
     }

@@ -60,7 +60,7 @@ typedef void (*Com_TxRejectionType)(PduIdType id, Std_ReturnType result);
  * validated COM/PduR plan, not independent ECUC parameters. */
 typedef struct {
     const Com_PduConfigType *pdus; /**< Immutable PDU table; must be non-NULL. */
-    uint16 pdu_count;              /**< PDU count, 1..32. */
+    uint16 pdu_count;              /**< Configured PDU count. */
     Com_IpduGroupIdType
         receive_group; /**< The configured ComIPduGroup handle; contains Rx PDUs only. */
     Com_NotificationType
@@ -72,7 +72,7 @@ typedef struct {
 } Com_ConfigType;
 
 /** Reset COM state and install the selected UINT32 configuration (SWS_Com_00432).
- * @param[in] config Immutable configuration, 1 to 32 PDUs and one Rx group; invalid or NULL leaves
+ * @param[in] config Immutable configuration of PDUs and one Rx group; invalid or NULL leaves
  * COM_UNINIT.
  * @par Return
  * None.

@@ -58,9 +58,10 @@ static void busoff(uint8 controller) {
     ++busoffs;
 }
 static const Can_ConfigType can = {.sink = sink};
-static const CanIf_RxPduConfigType rx[] = {{0x320u, 21u, 0u, FALSE}};
-static const CanIf_TxPduConfigType tx[] = {{0x321u, 51u, 4u}};
-static const CanIf_ConfigType canif = {rx, 1u, tx, 1u, mode, busoff, 0u, 0u, 0u, 1u};
+static const CanIf_RxPduConfigType rx[] = {{0x320u, 21u, 0u, FALSE, 0u, 0u}};
+static const CanIf_TxPduConfigType tx[] = {{0x321u, 51u, 4u, 0u, 1u}};
+static const CanIf_ControllerConfigType canif_controllers[] = {{0u, 0u}};
+static const CanIf_ConfigType canif = {rx, 1u, tx, 1u, mode, busoff, canif_controllers, 1u};
 static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, NULL_PTR}};

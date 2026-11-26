@@ -870,12 +870,12 @@ fn configuration_rejections_keep_identifier_width_and_order() {
         "/Configuration/CanTp/Config/PhysicalChannel/DiagRequest",
     );
 
-    // The delivered ComStack_Types.h defines PduIdType as uint8_t.
+    // The configured UINT16 PduIdType fits 256 but the handles must be consecutive.
     let mut wide = single_component_sources();
     parameter(&mut wide, "TxValue", "CanIfTxPduId", "256");
     rejected_at(
         &wide,
-        "CANIF_HANDLE_WIDTH",
+        "CANIF_HANDLE_SEQUENCE",
         "ecuc.arxml",
         "/Configuration/CanIf/Config/TxValue",
     );

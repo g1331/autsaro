@@ -24,6 +24,8 @@ def verify(project: Path, build_directory: Path) -> None:
     inputs = json.loads((project / "meta/verification-inputs.json").read_text(encoding="utf-8"))
     if inputs.get("format") != "autosar-ecu-test-inputs-v2":
         raise ValueError("Unsupported independent verification input format")
+    if "configuredEndpoints" in inputs and "endpoints" not in inputs:
+        raise ValueError("This project supplies configured endpoints for independent scenarios. The reference echo oracle does not apply.")
     required = ("periodMs", "did", "initialReceiveValue", "receiveTimeoutMs")
     if any(type(inputs.get(name)) is not int for name in required):
         raise ValueError("Actual endpoint/configuration inputs are incomplete")
@@ -33,29 +35,38 @@ def verify(project: Path, build_directory: Path) -> None:
     can_fd = inputs.get("canFd")
     if type(can_fd) is not bool:
         raise ValueError("Verification input lacks its CAN frame capability. Regenerate from the original ARXML.")
-    fd_timing = inputs.get("fdTiming")
-    if can_fd and (not isinstance(fd_timing, dict)
-                   or type(fd_timing.get("brs")) is not bool
-                   or any(type(fd_timing.get(name)) is not int or fd_timing[name] <= 0
-                          for name in ("nominalBitrate", "dataBitrate"))):
-        raise ValueError("Configured FD controller timing is incomplete")
     channels = inputs.get("channels")
     endpoints = inputs.get("endpoints")
     roles = {"receive": ("RX", 4), "transmit": ("TX", 4),
              "request": ("RX", 8), "response": ("TX", 8)}
-    if (not isinstance(channels, dict) or set(channels) != {"0"}
-            or not isinstance(channels["0"], str) or not channels["0"].startswith("/")
+    if (not isinstance(channels, dict) or not 1 <= len(channels) <= 256
+            or set(channels) != {str(index) for index in range(len(channels))}
+            or any(not isinstance(path, str) or not path.startswith("/") for path in channels.values())
+            or len(set(channels.values())) != len(channels)
             or not isinstance(endpoints, dict) or endpoints.keys() != roles.keys()):
         raise ValueError("Actual endpoint/configuration inputs are incomplete")
+    fd_timing = inputs.get("fdTimingByChannel")
+    if fd_timing is None and len(channels) == 1:
+        fd_timing = {"0": inputs.get("fdTiming")} if can_fd else {}
+    if (not isinstance(fd_timing, dict) or bool(fd_timing) != can_fd
+            or any(channel not in channels or not isinstance(timing, dict)
+                   or type(timing.get("brs")) is not bool
+                   or any(type(timing.get(name)) is not int or timing[name] <= 0
+                          for name in ("nominalBitrate", "dataBitrate"))
+                   for channel, timing in fd_timing.items())):
+        raise ValueError("Configured FD controller timing is incomplete")
     for role, (direction, length) in roles.items():
         endpoint = endpoints[role]
+        if not isinstance(endpoint, dict) or type(endpoint.get("channel")) is not int:
+            raise ValueError(f"Invalid configured endpoint: {role}")
+        channel = str(endpoint["channel"])
         policies = {"CLASSICAL"}
         if role == "receive":
             policies.add("CLASSICAL_OR_FD")
-        if can_fd and role in ("receive", "transmit"):
+        if channel in fd_timing and role in ("receive", "transmit"):
             policies.add("FD")
-        if (not isinstance(endpoint, dict) or endpoint.get("module") != "CanIf"
-                or endpoint.get("direction") != direction or endpoint.get("channel") != 0
+        if (endpoint.get("module") != "CanIf"
+                or endpoint.get("direction") != direction or channel not in channels
                 or endpoint.get("fdPolicy") not in policies
                 or endpoint.get("format") not in ("STANDARD", "EXTENDED")
                 or type(endpoint.get("id")) is not int
@@ -67,7 +78,7 @@ def verify(project: Path, build_directory: Path) -> None:
     def receive_frame(role: str, data: str, fd: int | None = None) -> str:
         ep = endpoints[role]
         if fd is None:
-            fd = int(ep["fdPolicy"] == "FD" or (can_fd and ep["fdPolicy"] == "CLASSICAL_OR_FD"))
+            fd = int(ep["fdPolicy"] == "FD" or (str(ep["channel"]) in fd_timing and ep["fdPolicy"] == "CLASSICAL_OR_FD"))
         return f"RX {ep['channel']} {ep['format']} {fd} {ep['id']} {ep['wireLength']} {data}"
 
     def expected_frame(at: int, role: str, data: str) -> tuple[int, int, int, str, int, int, int, str]:
@@ -210,7 +221,7 @@ def verify(project: Path, build_directory: Path) -> None:
         (recovery, [rx], "78563412", [], False),
         (recovery + 1, [rx, diagnostic(request)], "78563412", [response], False),
     ])
-    if can_fd:
+    if str(endpoints["receive"]["channel"]) in fd_timing:
         policy = endpoints["receive"]["fdPolicy"]
         actor("can-fd-policy", [
             (period, [receive_frame("receive", "78563412", 0)],
@@ -231,14 +242,16 @@ def verify(project: Path, build_directory: Path) -> None:
             or not any(line.startswith("lifecycle=Closed state=Ready reason=0 ") for line in probe_lines)):
         raise AssertionError(f"Normal probe did not complete: {probe_output}")
     if transmit["fdPolicy"] == "FD":
-        brs = fd_timing["brs"]
-        rate = fd_timing["dataBitrate" if brs else "nominalBitrate"]
+        timing = fd_timing[str(transmit["channel"])]
+        brs = timing["brs"]
+        rate = timing["dataBitrate" if brs else "nominalBitrate"]
         can_id = transmit["id"] | 0x40000000
         if transmit["format"] == "EXTENDED":
             can_id |= 0x80000000
         prefix = f" pdu={transmit['handle']} id={can_id} dlc={transmit['wireLength']}"
         observations = [line for line in probe_lines
-                        if line.startswith("ecu_output ") and prefix + " " in line]
+                        if line.startswith("ecu_output ") and prefix + " " in line
+                        and f" channel={transmit['channel']} " in line]
         if (len(observations) != ticks // period
                 or any(not line.endswith(f" brs={int(brs)} data_bitrate={rate}") for line in observations)):
             raise AssertionError(f"FD output bitrate switch or data phase rate differs: {probe_output}")

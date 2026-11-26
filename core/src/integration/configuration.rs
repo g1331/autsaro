@@ -138,31 +138,32 @@ fn reference(graph: &Graph, index: usize, parameter: &str) -> Result<usize, Vec<
         })
 }
 
-fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanDiagnostic>> {
-    let controller = one(graph, context, "CanController")?;
-    let can_if_controller = one(graph, controller, "CanIfCtrlCfg")?;
-    if reference(graph, can_if_controller, "CanIfCtrlCanCtrlRef")? != controller
-        || value(graph, controller, "CanControllerId", false)
-            .and_then(|value| value.parse::<u8>().ok())
-            .is_none()
-        || value(graph, can_if_controller, "CanIfCtrlId", false)
-            .and_then(|value| value.parse::<u8>().ok())
-            .is_none()
+fn physical(graph: &Graph, context: usize) -> Result<(), Vec<PlanDiagnostic>> {
+    let general = one(graph, context, "CanGeneral")?;
+    let driver = one(graph, general, "CanIfCtrlDrvCfg")?;
+    let mut used = BTreeSet::new();
+    for abstract_controller in graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, "CanIfCtrlCfg"))
     {
-        return Err(reject(
-            graph,
-            can_if_controller,
-            "CONTROLLER_MAPPING",
-            crate::product_message!(
-                "backend.integration.configuration.canif_controller_binding_required"
-            ),
-        ));
+        let controller = reference(graph, abstract_controller, "CanIfCtrlCanCtrlRef")?;
+        if !graph.within(abstract_controller, driver)
+            || !definition_is(graph, controller, "CanController")
+            || !used.insert(controller)
+        {
+            return Err(reject(
+                graph,
+                abstract_controller,
+                "CONTROLLER_MAPPING",
+                crate::product_message!(
+                    "backend.integration.configuration.canif_controller_binding_required"
+                ),
+            ));
+        }
     }
-    let driver = one(graph, can_if_controller, "CanIfCtrlDrvCfg")?;
-    let general = one(graph, controller, "CanGeneral")?;
     let handles = reference(graph, driver, "CanIfCtrlDrvInitHohConfigRef")?;
-    if !graph.within(can_if_controller, driver)
-        || reference(graph, driver, "CanIfCtrlDrvNameRef")? != general
+    if reference(graph, driver, "CanIfCtrlDrvNameRef")? != general
         || !definition_is(graph, handles, "CanIfInitHohCfg")
     {
         return Err(reject(
@@ -176,7 +177,7 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
     }
     // No CanSM: both controller notifications go to the host CDD BusSM by name
     // (SWS_CANIF_00560, SWS_CANIF_00692).
-    let dispatch = one(graph, can_if_controller, "CanIfDispatchCfg")?;
+    let dispatch = one(graph, driver, "CanIfDispatchCfg")?;
     for (user, name, function) in [
         (
             "CanIfDispatchUserCtrlBusOffUL",
@@ -202,63 +203,6 @@ fn physical(graph: &Graph, context: usize, native: bool) -> Result<(), Vec<PlanD
             ));
         }
     }
-    let baudrate = reference(graph, controller, "CanControllerDefaultBaudrate")?;
-    if !definition_is(graph, baudrate, "CanControllerBaudrateConfig")
-        || !graph.within(baudrate, controller)
-    {
-        return Err(reject(
-            graph,
-            controller,
-            "CONTROLLER_MAPPING",
-            crate::product_message!(
-                "backend.integration.configuration.default_baudrate_controller_mismatch"
-            ),
-        ));
-    }
-    let rate = value(graph, baudrate, "CanControllerBaudRate", false)
-        .and_then(|value| {
-            if native {
-                super::native_configuration::baudrate_kbit(value)
-            } else {
-                value.parse::<u32>().ok()
-            }
-        })
-        .and_then(|value| value.checked_mul(1000))
-        .filter(|value| *value != 0);
-    let ecus = graph.of_kind("ECU-INSTANCE");
-    if ecus.len() != 1 {
-        return Err(reject(
-            graph,
-            controller,
-            "CONTROLLER_MAPPING",
-            crate::product_message!(
-                "backend.integration.configuration.single_selected_ecu_instance_required"
-            ),
-        ));
-    }
-    let channel = super::component::selected_channel(graph, ecus[0])?;
-    let cluster = graph.ancestor(channel, "CAN-CLUSTER").ok_or_else(|| {
-        reject(
-            graph,
-            channel,
-            "CONTROLLER_MAPPING",
-            crate::product_message!("backend.integration.composition.contract_invalid", "code" => "CONTROLLER_MAPPING"),
-        )
-    })?;
-    let rates = graph.descendants(cluster, "BAUDRATE");
-    if rates.len() != 1 || graph.elements[rates[0]].text.parse::<u32>().ok() != rate {
-        return Err(reject(
-            graph,
-            baudrate,
-            "BAUDRATE_CONFLICT",
-            crate::product_message!(
-                "backend.integration.configuration.controller_cluster_bitrate_mismatch"
-            ),
-        ));
-    }
-    // The current driver profile still emits one RX and one TX hardware object.
-    one(graph, controller, "CanIfHrhCfg")?;
-    one(graph, controller, "CanIfHthCfg")?;
     canif_hardware(graph, handles)
 }
 
@@ -442,7 +386,7 @@ fn inspect_with_catalog(
         ));
     }
     let context = graph.context()?;
-    physical(graph, context, catalog.is_some())?;
+    physical(graph, context)?;
     let mut selected = Vec::new();
     for module in MODULES {
         let definition = format!("/AUTOSAR/EcucDefs/{module}");

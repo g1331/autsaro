@@ -94,18 +94,17 @@ static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, CanTp_RxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_CANTP, 41u, 51u, CanTp_TxConfirmation, NULL_PTR}};
 static const LSduR_PBConfigType ls = {29u, ls_rx, 1u, ls_tx, 1u};
-static const CanIf_RxPduConfigType canif_rx[] = {{0x700u, 21u, 8u, FALSE}};
-static const CanIf_TxPduConfigType canif_tx[] = {{0x708u, 51u, 8u}};
+static const CanIf_RxPduConfigType canif_rx[] = {{0x700u, 21u, 8u, FALSE, 0u, 0u}};
+static const CanIf_TxPduConfigType canif_tx[] = {{0x708u, 51u, 8u, 0u, 0u}};
+static const CanIf_ControllerConfigType canif_controllers[] = {{0u, 0u}};
 static const CanIf_ConfigType canif = {canif_rx,
                                        1u,
                                        canif_tx,
                                        1u,
                                        Ecu_HostBusSM_ControllerModeIndication,
                                        Ecu_HostBusSM_ControllerBusOff,
-                                       0u,
-                                       0u,
-                                       0u,
-                                       0u};
+                                       canif_controllers,
+                                       1u};
 static const Can_ConfigType can = {.sink = sink};
 static const NetworkHandleType user_channels[] = {7u};
 static const ComM_UserModeConfigType users[] = {{43u, user_channels, 1u, NULL_PTR}};

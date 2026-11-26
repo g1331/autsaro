@@ -12,6 +12,52 @@ typedef enum {
     CAN_SLEEP = 3    /**< Logical sleep state for the virtual controller. */
 } CanMode;
 
+/** Set the virtual mode of a configured driver controller.
+ * @param[in] controller Configured driver identifier.
+ * @param[in] mode Requested host controller mode.
+ * @par Return
+ * None.
+ * Preconditions: Driver initialized and supported transition; invalid requests have no effect.
+ * Context: Host control, outside exclusive areas.
+ * Reentrancy: Different controllers have independent state and indications.
+ * Ownership: No pointer retained.
+ */
+CAN_CODE void Can_HostSetControllerMode(uint8 controller, CanMode mode);
+/** Inject a wire frame on the specified driver controller's channel.
+ * @param[in] controller Configured driver identifier.
+ * @param[in] id Encoded CAN identifier.
+ * @param[in] dlc Number of valid payload bytes.
+ * @param[in] data Frame payload, borrowed only until it is copied.
+ * @return Successful admission or host controller, frame or slot status.
+ * Preconditions: Initialized started controller and valid wire frame.
+ * Context: Host reception, outside exclusive areas.
+ * Reentrancy: Reentrant for different controllers.
+ * Ownership: Copies the payload before returning and retains no pointer.
+ */
+CAN_CODE EcuStatus Can_HostInjectChannel(uint8 controller, uint32 id, uint8 dlc, const uint8 *data);
+/** Capture the queued token during this controller's output callback.
+ * @param[in] controller Driver identifier supplied with the actual output.
+ * @return Nonzero token for the current queued transmission, zero otherwise.
+ * Preconditions: A queued output callback is active for this controller.
+ * Context: Host sink callback, outside exclusive areas.
+ * Reentrancy: Reentrant read serialized by CAN_STATE.
+ * Ownership: Returns the token by value.
+ */
+CAN_CODE uint64 Can_HostTransmitTokenFor(uint8 controller);
+/** Report physical completion using the controller and token stored with the output.
+ * @param[in] controller Actual driver identifier from the output.
+ * @param[in] handle Actual software PDU handle from the same output.
+ * @param[in] token Token captured during that output's driver flush.
+ * @return E_OK, CAN_BUSY for an occupied confirmation slot, or E_NOT_OK for an invalid token.
+ * Preconditions: Confirmed physical write and matching output ticket and identity.
+ * Context: Queued completion owner, outside exclusive areas.
+ * Reentrancy: Reentrant for different controllers.
+ * Ownership: Copies scalar identity into the controller's matching confirmation slot.
+ */
+CAN_CODE Std_ReturnType Can_HostCompleteTransmitFor(uint8 controller,
+                                                    PduIdType handle,
+                                                    uint64 token);
+
 /* Private driver operations used by the typed host forwarding definitions. */
 /** @brief Driver implementation: Change the virtual controller state.
  * @param[in] mode New controller state.

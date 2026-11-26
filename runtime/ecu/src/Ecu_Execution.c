@@ -2,6 +2,7 @@
 #include "Ecu_Execution.h"
 #include "Ecu_Target.h"
 EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink,
+                                uint8 controller,
                                 PduIdType handle,
                                 uint32_t id,
                                 uint8_t dlc,
@@ -10,5 +11,5 @@ EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink,
                                 uint32 data_phase_bitrate)
 {
     (void)sink;
-    return Ecu_TargetEnqueueTransmit(handle, id, dlc, data, brs, data_phase_bitrate);
+    return Ecu_TargetEnqueueTransmit(controller, handle, id, dlc, data, brs, data_phase_bitrate);
 }

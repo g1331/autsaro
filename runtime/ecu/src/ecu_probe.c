@@ -54,6 +54,7 @@ static void write_probe_output(const Ecu_OutputRecord *output)
     Os_HostTextField(&text, " pdu=", output->pdu);
     Os_HostTextField(&text, " id=", output->can_id);
     Os_HostTextField(&text, " dlc=", output->dlc);
+    Os_HostTextField(&text, " channel=", output->channel);
     if (output->data_phase_bitrate != 0u) {
         Os_HostTextField(&text, " brs=", output->brs ? 1u : 0u);
         Os_HostTextField(&text, " data_bitrate=", output->data_phase_bitrate);

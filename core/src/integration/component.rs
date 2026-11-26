@@ -212,8 +212,8 @@ pub(super) fn implementation(
     Ok(implementation)
 }
 
-pub(super) fn selected_channel(graph: &Graph, ecu: usize) -> Result<usize, Vec<PlanDiagnostic>> {
-    let channels = graph
+pub(super) fn selected_channels(graph: &Graph, ecu: usize) -> Vec<usize> {
+    graph
         .of_kind("CAN-PHYSICAL-CHANNEL")
         .into_iter()
         .filter(|channel| {
@@ -227,6 +227,5 @@ pub(super) fn selected_channel(graph: &Graph, ecu: usize) -> Result<usize, Vec<P
                         .is_some_and(|connector| graph.within(*connector, ecu))
                 })
         })
-        .collect();
-    one(graph, ecu, channels, "TARGET_NOT_UNIQUE")
+        .collect()
 }

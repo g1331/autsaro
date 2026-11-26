@@ -49,7 +49,9 @@ mod schedule;
 mod signals;
 mod symbolic_names;
 
-pub use can_runtime::{CanRuntimeContract, CommunicationIntegerType, CommunicationRuntimeContract};
+pub use can_runtime::{
+    CanHardwareContract, CanRuntimeContract, CommunicationIntegerType, CommunicationRuntimeContract,
+};
 pub use catalog::{ContractArgument, SymbolContract};
 pub use com::{ComMainFunction, ComReception, ComRuntimeContract, ComRxGroup};
 pub(crate) use component::milliseconds;
@@ -64,7 +66,7 @@ pub use diagnostic::DiagnosticContract;
 pub use ecu::EcuIntegrationFiles;
 pub use editor::{IntegrationEdit, IntegrationInspection};
 pub use handoff::{build_ecu_project, verify_ecu_project};
-pub use mode::{ModeRule, ModeRuntimeContract, ModeUser};
+pub use mode::{ModeChannel, ModeRule, ModeRuntimeContract, ModeUser};
 pub use outputs::INTEGRATION_PATH;
 #[cfg(test)]
 pub(crate) use outputs::template_of;
