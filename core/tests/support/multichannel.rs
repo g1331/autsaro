@@ -326,6 +326,9 @@ fn extend_bsw(input: &str, count: usize) -> String {
     let mut edits = Edits::new();
     for original in doc.descendants().filter(|node| {
         text(*node, "SHORT-NAME").is_some_and(|name| name.starts_with("ComM_MainFunction_Host"))
+            || (node.has_tag_name("BSW-MODULE-ENTRY-REF-CONDITIONAL")
+                && text(*node, "BSW-MODULE-ENTRY-REF")
+                    == Some("/AUTOSAR_ComM/BswModuleEntrys/ComM_MainFunction_Host"))
     }) {
         for channel in 1..count {
             add(
