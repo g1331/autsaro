@@ -6,12 +6,12 @@
 
 | 条款 | 义务要点 |
 | --- | --- |
-| `SWS_CANDriver` 全部 368 条（含 CONSTR、NA 与 `ECUC_Can`）逐条处置：适用条目由测试以 `Verifies:` 标注，其余条目的已核对、不适用与差距见下表 | 主机虚拟控制器只有一个，所有事件都轮询；`Can.h` 只声明标准服务，使用 AUTOSAR 类型；驱动 controller ID 与 CanIf controller ID 是两个命名空间，回调只携带后者；Init 后为 STOPPED，STARTED 只能从 STOPPED 进入，STOPPED 可从任何已初始化状态进入（含 STOPPED 自环），SLEEP 是逻辑睡眠，只能从 STOPPED 或 SLEEP 进入、只能经 STOPPED 退出；模式变化由 `Can_MainFunction_Mode`（及 `Can_MainFunction_Wakeup`）通知；STOPPED 与 bus-off 取消待发报文，bus-off 后不自动恢复；`Can_Write` 拷贝 0–8 字节 Classical 或 0–64 字节 FD 负载、不阻塞，发送槽占用时返回 `CAN_BUSY`。FD controller 保存格式位并按 DLC 向上补齐，Classical controller 忽略 ≤8 字节请求的 FD 位；接收与确认分别由 `Can_MainFunction_Read`／`Write` 轮询，已接收帧被覆盖时报告运行时错误 `CAN_E_DATALOST` |
+| `SWS_CANDriver` 全部 368 条（含 CONSTR、NA 与 `ECUC_Can`）逐条处置：适用条目由测试以 `Verifies:` 标注，其余条目的已核对、不适用与差距见下表 | 一个虚拟驱动包含配置选定的 controller 和 HOH，所有事件都轮询；`Can.h` 只声明标准服务，使用 AUTOSAR 类型；驱动 controller ID 与 CanIf controller ID 是两个命名空间，回调只携带后者；Init 后为 STOPPED，STARTED 只能从 STOPPED 进入，STOPPED 可从任何已初始化状态进入（含 STOPPED 自环），SLEEP 是逻辑睡眠，只能从 STOPPED 或 SLEEP 进入、只能经 STOPPED 退出；模式变化由 `Can_MainFunction_Mode`（及 `Can_MainFunction_Wakeup`）通知；STOPPED 与 bus-off 取消待发报文，bus-off 后不自动恢复；`Can_Write` 拷贝 0–8 字节 Classical 或 0–64 字节 FD 负载、不阻塞，发送槽占用时返回 `CAN_BUSY`。FD controller 保存格式位并按 DLC 向上补齐，Classical controller 忽略 ≤8 字节请求的 FD 位；接收与确认分别由 `Can_MainFunction_Read`／`Write` 轮询，已接收帧被覆盖时报告运行时错误 `CAN_E_DATALOST` |
 
 ## 主机 CAN FD 交付
 
 `Can_PduType`、`Can_IdType`、`Can_HwType` 与标准 API 签名沿用 R24-11。
-`Can_ConfigType` 的末尾新增波特率、BRS 和发送 HOH 填充值，随 ECU 配置一起生成。
+`Can_ConfigType` 包含静态生成的 controller 和 HOH 表。每个 controller 独立保存收发、模式及确认状态，波特率和 BRS 随 controller 配置，FD 填充值随 HTH 配置。
 驱动收发快照容纳 64 字节，HostBatchV2 的 `length` 表示线帧字节数，`fd` 取自编码标识符。
 主机输出记录附带 BRS 和 bit/s 速率供 probe 观察。目标元数据的 `canFrameProfile` 标记这一交付能力。旧包需从原 ARXML 重新生成，
 包内工具及验证输入由生成包的封存清单绑定。
@@ -44,7 +44,7 @@
 | 共享寄存器 | 不适用（归属：Mcu）：SWS_Can_00240 |
 | 轮询与主函数 | 已核对（源码：所有事件配置为 POLLING，四个轮询主函数都是实际函数而非空定义，彼此不要求执行顺序）：SWS_Can_00007、00099、00280、00110、00178、00180、00183、00185 |
 | 接收缓冲 | 已核对（源码：接收帧先拷贝到影子缓冲再交给 CanIf，`Can_MainFunction_Read` 以处理标志防止自身重入，字节顺序即 AUTOSAR 定义）：SWS_Can_00012、00299、00300、00427 |
-| 发送 | 已核对（源码：唯一 HTH 由 CanIf 作为参数传入；只有发送槽占用时返回 `CAN_BUSY`，被抢占的调用同样如此；驱动不处理远程帧，也不因远程帧发送）：SWS_Can_00100、00214、00237 |
+| 发送 | 已核对（源码：CanIf 传入配置的 HTH，驱动按 HOH 找到所属 controller；只有该 controller 的发送槽占用时返回 `CAN_BUSY`，被抢占的调用同样如此；驱动不处理远程帧，也不因远程帧发送）：SWS_Can_00100、00214、00237 |
 | 中断禁用计数 | 已核对（源码：`Can_DisableControllerInterrupts` 嵌套计数，未禁用时 `Can_EnableControllerInterrupts` 不动作）：SWS_Can_00202、00208 |
 | 模块结构与依赖 | 已核对（源码：驱动只与 CanIf、Det 和 SchM 交互，不使用其他驱动的服务；只有一种控制器类型，沿用不带厂商扩展的标准命名）：SWS_Can_00058、00077、00238、00242、00244、00284、00385、00386 |
 | 配置生成 | 已核对（配置模型：工作台按所选控制器生成配置并在生成前校验；硬件相关取值由目标控制器决定）：SWS_Can_00022、00024 |

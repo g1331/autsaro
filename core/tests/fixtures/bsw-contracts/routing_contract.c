@@ -14,6 +14,7 @@
 #include "LSduR_CanIf.h"
 #include "Ecu_Config.h"
 #include <assert.h>
+#include <string.h>
 
 /* Standard signatures over the imported ComStack types, in order (Verifies: SWS_PduR_00334,
  * 00341, 00615, 00617, 00406, 00362, 00365, 00369, 00507, 00512, 00375, 00518, 00381;
@@ -168,7 +169,6 @@ static const LSduR_RxRouteType ls_rx[] = {{5u, 25u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 35u, 5u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit},
     {LSDUR_UP_CANTP, 5u, 6u, cantp_conf, NULL_PTR}};
-static const LSduR_PBConfigType ls = {29u, ls_rx, 1u, ls_tx, 2u};
 static const PduR_RxRouteType pdur_rx[] = {{25u, 5u, com_rx}};
 /* The CanTp route comes first: IF callbacks must skip it although its lower ID matches. */
 static const PduR_TxRouteType pdur_tx[] = {
@@ -307,6 +307,45 @@ static void reject_pdur_configurations(void)
     reject_pdur_transport_configurations();
 }
 
+static void install_large_route_tables(void)
+{
+    static LSduR_RxRouteType lsdur_receive[33];
+    static LSduR_TxRouteType lsdur_transmit[34];
+    static PduR_RxRouteType pdur_receive[33];
+    static PduR_TxRouteType pdur_transmit[35];
+    static PduR_TpRouteType pdur_transport[33];
+    static const LSduR_PBConfigType lsdur_config = {29u, lsdur_receive, 33u, lsdur_transmit, 34u};
+    static const PduR_PBConfigType pdur_config = {
+        23u, pdur_receive, 33u, pdur_transmit, 35u, pdur_transport, 33u};
+    memcpy(lsdur_receive, ls_rx, sizeof(ls_rx));
+    memcpy(lsdur_transmit, ls_tx, sizeof(ls_tx));
+    memcpy(pdur_receive, pdur_rx, sizeof(pdur_rx));
+    memcpy(pdur_transmit, pdur_tx, sizeof(pdur_tx));
+    memcpy(pdur_transport, tp_routes, sizeof(tp_routes));
+    for (unsigned index = 0u; index < 32u; ++index) {
+        const PduIdType handle = (PduIdType)(100u + index);
+        const PduIdType lower = (PduIdType)(150u + index);
+        lsdur_receive[index + 1u] = (LSduR_RxRouteType){handle, lower, PduR_CanIfRxIndication};
+        lsdur_transmit[index + 2u] =
+            (LSduR_TxRouteType){LSDUR_UP_CANTP, handle, lower, cantp_conf, NULL_PTR};
+        pdur_receive[index + 1u] = (PduR_RxRouteType){lower, handle, com_rx};
+        pdur_transmit[index + 3u] = (PduR_TxRouteType){
+            PDUR_UP_DCM, handle, PDUR_LO_CANTP, lower, cantp_transmit, NULL_PTR, NULL_PTR};
+        pdur_transport[index + 1u] = (PduR_TpRouteType){
+            handle, lower, handle, lower, start, copy_rx, tp_rx, copy_tx, tp_conf};
+    }
+    lsdur_init(&lsdur_config);
+    pdur_init(&pdur_config);
+    lsdur_rx(131u, &info);
+    once(COM_RX, 131u);
+    assert(lsdur_cantp(131u, &info) == E_OK);
+    once(CANIF_TX, 181u);
+    assert(pdur_dcm(131u, &info) == E_OK);
+    once(CANTP_TX, 181u);
+    pdur_tp_rx(131u, E_OK);
+    once(TP_RX, 181u);
+}
+
 int main(void)
 {
     PduInfoType pdu = info;
@@ -324,8 +363,7 @@ int main(void)
     /* A valid Init makes the router ONLINE and identifies its configuration
      * (Verifies: SWS_PduR_00326, 00280; Verifies: CP_SWS_LSduR_00029, 00036;
      * Verifies[PduR]: SWS_BSW_00071; Verifies[LSduR]: SWS_BSW_00071). */
-    lsdur_init(&ls);
-    pdur_init(&pdur);
+    install_large_route_tables();
     assert(PduR_GetConfigurationId() == 23u && LSduR_GetConfigurationId() == 29u);
     /* No ONLINE -> ONLINE transition: a second Init keeps the published configuration. */
     PduR_Init(&other);

@@ -4,6 +4,7 @@
 #include "Ecu_Config.h"
 #include "Can_Host.h"
 EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink,
+                                uint8 controller,
                                 PduIdType handle,
                                 uint32_t id,
                                 uint8_t dlc,

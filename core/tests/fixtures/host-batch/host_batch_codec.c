@@ -65,9 +65,10 @@ static void verify_v2_identity(void)
     assert(line("PROTOCOL HostBatchV2") == E_OK);
     assert(line("BEGIN 0") == E_OK);
     assert(line("RX 0 STANDARD 0 2047 0 -") == E_OK);
-    assert(line("RX 0 EXTENDED 0 536870911 1 af") == E_OK);
+    assert(line("RX 255 EXTENDED 0 536870911 1 af") == E_OK);
     assert(batch.frames[0].id == 0x7ffu && batch.frames[0].dlc == 0u);
-    assert(batch.frames[1].id == 0x9fffffffu && batch.frames[1].data[0] == 0xafu);
+    assert(batch.frames[1].channel == UINT8_MAX && batch.frames[1].id == 0x9fffffffu &&
+           batch.frames[1].data[0] == 0xafu);
     static const char wire[] = "RX 0 EXTENDED 1 536870911 64 "
                                "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
                                "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f";
@@ -76,6 +77,8 @@ static void verify_v2_identity(void)
     for (uint8_t byte = 0u; byte < 64u; ++byte) {
         assert(batch.frames[2].data[byte] == byte);
     }
+    assert(line("MODE 5 BUS_OFF") == E_OK);
+    assert(batch.frames[3].channel == 5u && batch.frames[3].kind == ECU_BATCH_BUS_OFF);
     assert(line("COMMIT") == E_OK);
     assert(Ecu_HostBatchComplete(&batch) == E_OK);
 }
@@ -103,6 +106,9 @@ int main(void)
         "RX 0 STANDARD 0 800 4.0 78563412",
         "RX 0 STANDARD 0 18446744073709551616 4 78563412",
         "RX 0 STANDARD 0 800 -4 78563412",
+        "RX 256 STANDARD 0 800 4 78563412",
+        "MODE 0 WAIT",
+        "MODE 256 STARTED",
         "UNKNOWN",
         "BEGIN 1",
     };

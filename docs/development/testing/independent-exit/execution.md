@@ -35,7 +35,7 @@ export AUTOSAR_C_ANALYSIS_SAMPLES="$ROOT/samples"
   "$AUTOSAR_GIT" --version
   sha256sum "$AUTOSAR_CC" "$AUTOSAR_OBJDUMP" "$AUTOSAR_NM"
 } > "$ROOT/results/identity.txt"
-cargo test --locked -p autosar-config-core --test it -- c_analysis:: \
+cargo test --locked -p autosar-config-core --test c_analysis \
   2>&1 | tee "$ROOT/results/A1-generate.log"
 ```
 
@@ -94,7 +94,7 @@ $env:AUTOSAR_C_ANALYSIS_SAMPLES = "$Root/samples"
     & $env:AUTOSAR_GIT --version
     Get-FileHash $env:AUTOSAR_CC, $env:AUTOSAR_OBJDUMP, $env:AUTOSAR_NM
 } > "$Root/results/identity.txt"
-cargo test --locked -p autosar-config-core --test it -- c_analysis:: 2>&1 |
+cargo test --locked -p autosar-config-core --test c_analysis 2>&1 |
     Tee-Object "$Root/results/A1-generate.log"
 ```
 
@@ -130,7 +130,7 @@ Save-Check A3-delivery cargo @('test','--locked','-p','autosar-config-core','--t
 
 ## A1–A3 的观察结果
 
-- **A1 配置往返与生成。** `c_analysis::` 生成 `standard-ecu`、`user-application`、`component-pipeline` 和 `no-diagnostic`。
+- **A1 配置往返与生成。** `c_analysis` 测试目标 生成 `standard-ecu`、`user-application`、`component-pipeline` 和 `no-diagnostic`。
   保留四个 `meta/files.sha256`、`meta/integration.json`、`target.json`。再执行 B3 的配置编辑、保存重开和真实生成，
   继续执行[编辑后交付复验](edited-handoff.md)，把单／多 SWC 保存重开后的实际导出交给两个生产 main。固定样本另做回归。
 - **A2 独立行为。** 每个封存样本的 HostBatch 与 probe 分别从新目录构建。probe 完成 20 ticks，合法批次有 COMMIT 回执。

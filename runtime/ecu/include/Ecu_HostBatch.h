@@ -15,11 +15,22 @@
 #define ECU_BATCH_MAX_SPAN      UINT64_C(1000) /**< Maximum batch time advance, ms. */
 #define ECU_BATCH_LINE_CAPACITY 160u           /**< Maximum command length in bytes. */
 
-/** One copied CAN input staged before automotive admission. */
+/** Operation staged for the ECU owner. */
+typedef enum {
+    ECU_BATCH_FRAME = 0, /**< Receive a CAN frame. */
+    ECU_BATCH_STOPPED,   /**< Stop the selected driver controller. */
+    ECU_BATCH_OFFLINE,   /**< Disable the selected CanIf PDU channel. */
+    ECU_BATCH_BUS_OFF,   /**< Simulate a physical bus-off on the selected controller. */
+    ECU_BATCH_STARTED    /**< Explicitly restart the selected driver controller. */
+} Ecu_BatchInputType;
+
+/** One copied CAN input or channel action staged before automotive admission. */
 typedef struct {
-    uint32_t id;      /**< Encoded CAN identifier on channel 0. */
-    uint8_t dlc;      /**< Payload length in bytes, 0..64. */
-    uint8_t data[64]; /**< Copied payload; bytes beyond dlc are ignored. */
+    uint32_t id;             /**< Encoded CAN identifier. */
+    uint8_t dlc;             /**< Payload length in bytes, 0..64. */
+    uint8_t data[64];        /**< Copied payload; bytes beyond dlc are ignored. */
+    uint8_t channel;         /**< Configured host channel, using the driver identifier. */
+    Ecu_BatchInputType kind; /**< Operation to run in the batch input phase. */
 } Ecu_BatchFrame;
 
 /** HostBatchV2 command accepted by the bounded ASCII codec. */
@@ -27,6 +38,7 @@ typedef enum {
     ECU_BATCH_NEGOTIATE, /**< Accept the exact protocol version. */
     ECU_BATCH_BEGIN,     /**< Open a batch at an explicit logical epoch. */
     ECU_BATCH_RX,        /**< Append one copied input frame. */
+    ECU_BATCH_MODE,      /**< Append one channel mode change. */
     ECU_BATCH_COMMIT     /**< Close staging and request whole-batch execution. */
 } Ecu_BatchCommand;
 

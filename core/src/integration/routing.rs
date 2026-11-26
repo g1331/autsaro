@@ -69,6 +69,7 @@ fn inspect_endpoints(
     let mut routes = Vec::new();
     let mut source_handles = BTreeSet::new();
     let mut destination_handles = BTreeSet::new();
+    let mut direction_counts = [0u16; 2];
     for (pdu_path, receive, transport) in selected {
         let context = graph.index(pdu_path)?;
         let sources: Vec<_> = graph
@@ -170,6 +171,15 @@ fn inspect_endpoints(
                 crate::product_message!("backend.integration.routing.endpoint_handle_conflict"),
             ));
         }
+        let count = &mut direction_counts[usize::from(receive)];
+        *count = count.checked_add(1).ok_or_else(|| {
+            reject(
+                graph,
+                paths[0],
+                "PDU_ROUTE_HANDLE",
+                crate::product_message!("backend.integration.routing.endpoint_handle_conflict"),
+            )
+        })?;
         routes.push(PduRoute {
             path: graph.elements[paths[0]].object.clone(),
             pdu: pdu_path.into(),

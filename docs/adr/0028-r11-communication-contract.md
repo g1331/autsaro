@@ -64,10 +64,13 @@ signals、diagnostic trigger 查找与 plan 判重；#487 按实际连接接收 
 
 ## 2. 首批主机拓扑与模式归属
 
-**决定。** 单 driver，每条物理通道连接一个 controller；N＝2、3、4 分别验收，
+**决定。** 单 driver，每条物理通道连接一个 controller；N＝2、3、4、6 分别验收，
 保留单通道回归。首批每个网络对应一条物理通道。多 driver、一网络多 controller 的配置
 在生成前按源引用明确拒绝。计划仍保留 network、physical channel、connector、CanIf
 abstract controller 与 driver controller 的独立路径，以便以后按新决定扩展拓扑。
+
+controller、通道及 HOH 的运行时表容量由实际配置静态生成。controller 和通道受
+`uint8` 标识范围约束，HOH 受其标准句柄范围约束，容量不设 4 路或 6 路上限。
 
 driver 内 controller 从 0 连续；HRH／HTH 共用从 0 连续的 driver 级对象编号。
 CanIf controller 自 0 起，经 CanIfCtrlCanCtrlRef 显式引用 driver controller。
@@ -79,6 +82,7 @@ CanIf controller 自 0 起，经 CanIfCtrlCanCtrlRef 显式引用 driver control
 | 2 | 0→1，1→0 | (2,3)，(0,1) |
 | 3 | 0→2，1→1，2→0 | (4,5)，(2,3)，(0,1) |
 | 4 | 0→3，1→2，2→1，3→0 | (6,7)，(4,5)，(2,3)，(0,1) |
+| 6 | 0→5，1→4，2→3，3→2，4→1，5→0 | (10,11)，(8,9)，(6,7)，(4,5)，(2,3)，(0,1) |
 
 ComM NetworkHandle、用户映射、BswM 动作、BusSM 与 DcmDslProtocolComMChannelRef
 均由显式引用连接。请求、保持计时、controller／PDU mode、bus-off、恢复及通知按通道归属；
@@ -204,7 +208,8 @@ ticket、批次原子拒绝、write／flush 后确认和静止点收据沿用现
 - 输出：保留现有 `OUT epoch=… sequence=… ticket=… pdu=…`，随后固定为
   `channel=… format=… fd=… id=… length=… data=…`，data 同输入规则。
   length 记录驱动填充后的线帧长度，逐字节观察实际 padding；pdu 为 CanIf Tx PDU handle。
-- controller 模式与故障控制记录显式携带 channel，经同一映射定位；批次 epoch 继续全局唯一。
+- `MODE <channel> <STOPPED|OFFLINE|BUS_OFF|STARTED>` 与 Rx 在批次输入阶段按记录顺序生效。
+  controller 模式与故障控制记录经同一映射定位，批次 epoch 继续全局唯一。
   `verification-inputs-v2` 同时保存 endpoint 的 module／direction／handle、channel 路径映射、
   format、fd policy、ID、逻辑长度、预期 wire length 和 payload；oracle 比较完整输出集合及确认。
 

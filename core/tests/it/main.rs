@@ -8,7 +8,6 @@ mod support;
 use support::*;
 use support::{mainline::*, os_variants::*, workspace::Scratch};
 
-mod c_analysis;
 mod definitions;
 mod delivery;
 mod integration;

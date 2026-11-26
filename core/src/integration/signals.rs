@@ -104,7 +104,7 @@ pub(super) fn check_trigger(
     pdu: usize,
     signal: Option<usize>,
     receive: bool,
-) -> Result<(), Vec<PlanDiagnostic>> {
+) -> Result<usize, Vec<PlanDiagnostic>> {
     let direction = if receive { "IN" } else { "OUT" };
     let channel = graph
         .ancestor(trigger, "CAN-PHYSICAL-CHANNEL")
@@ -233,7 +233,7 @@ pub(super) fn check_trigger(
             ),
         ));
     }
-    Ok(())
+    Ok(channel)
 }
 
 pub(super) fn inspect_ports(
@@ -257,6 +257,7 @@ pub(super) fn inspect_ports(
         ));
     };
     let mut channels = Vec::new();
+    let mut frame_identities = std::collections::BTreeMap::new();
     for port in ports {
         let context = graph.index(&port.path)?;
         let mapping = one(
@@ -442,7 +443,7 @@ pub(super) fn inspect_ports(
                 .collect(),
             "SIGNAL_MAPPING",
         )?;
-        check_trigger(graph, trigger, pdu, Some(signal), port.read)?;
+        let physical_channel = check_trigger(graph, trigger, pdu, Some(signal), port.read)?;
         let can_id = super::can_id::trigger_id(graph, trigger).ok_or_else(|| {
             reject(
                 graph,
@@ -455,6 +456,19 @@ pub(super) fn inspect_ports(
         })?;
         if !super::can_id::wire_length(can_id, dlc) {
             return Err(field(graph, frame, "LENGTH_CONFLICT", "FRAME-LENGTH"));
+        }
+        if frame_identities
+            .insert((physical_channel, port.read, can_id), trigger)
+            .is_some_and(|previous| previous != trigger)
+        {
+            return Err(reject(
+                graph,
+                trigger,
+                "CAN_ID_CONFLICT",
+                crate::product_message!(
+                    "backend.integration.communication.sr_channels_physical_can_identifier_conflict"
+                ),
+            ));
         }
         let frame_port_ref = one(
             graph,
@@ -573,6 +587,18 @@ pub(super) fn inspect_ports(
                 "LENGTH_CONFLICT",
                 crate::product_message!(
                     "backend.integration.communication.canonical_ecuc_pdu_length_mismatch"
+                ),
+            ));
+        }
+        if super::can_id::pdu_trigger_reference(graph, global_pdu)?
+            .is_some_and(|reference| !super::can_id::trigger_references(graph, trigger, reference))
+        {
+            return Err(reject(
+                graph,
+                global_pdu,
+                "SIGNAL_MAPPING",
+                crate::product_message!(
+                    "backend.integration.communication.frame_trigger_pdu_or_channel_mismatch"
                 ),
             ));
         }

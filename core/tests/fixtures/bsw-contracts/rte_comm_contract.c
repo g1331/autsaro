@@ -76,7 +76,7 @@ Std_ReturnType __wrap_SchM_Switch_ComM_UM_HostUser(Rte_ModeType_ComMMode mode)
         const Std_ReturnType result = __real_SchM_Switch_ComM_UM_HostUser(mode);
         if (reenter == TRUE) {
             reenter = FALSE;
-            ComM_BusSM_ModeIndication(comm_config.channel, COMM_NO_COMMUNICATION);
+            ComM_BusSM_ModeIndication(comm_config.channels[0].channel, COMM_NO_COMMUNICATION);
         }
         return result;
     }
@@ -102,7 +102,7 @@ int main(void)
     CHECK(Rte_Call_Observe_HostUser_GetCurrentComMode(&value) == E_NOT_OK && value == 99u);
     ComM_Init(&comm_config);
     CHECK(host_notifications == 0u && second_notifications == 0u);
-    ComM_BusSM_ModeIndication(comm_config.channel, COMM_NO_COMMUNICATION);
+    ComM_BusSM_ModeIndication(comm_config.channels[0].channel, COMM_NO_COMMUNICATION);
     CHECK(host_notifications == 0u && second_notifications == 0u);
     CHECK(Rte_Mode_Observe_ModeHostUser_currentMode() == 1u);
     CHECK(Rte_Mode_Observe_ModeSecondUser_currentMode() == 1u);
@@ -119,11 +119,11 @@ int main(void)
         ComM_ConfigType rejected = comm_config;
         ComM_UserModeConfigType bad = comm_user_modes[0];
         bad.user = COMM_NOT_USED_USER_ID;
-        rejected.user_modes = &bad;
-        rejected.user_mode_count = 1u;
+        rejected.users = &bad;
+        rejected.user_count = 1u;
         ComM_Init(&rejected);
         CHECK(Rte_Call_Observe_HostUser_GetRequestedComMode(&value) == E_OK && value == 2u);
-        rejected.user_mode_count = 3u;
+        rejected.user_count = 33u;
         ComM_Init(&rejected);
         CHECK(Rte_Call_Observe_HostUser_GetRequestedComMode(&value) == E_OK && value == 2u);
     }
@@ -142,19 +142,19 @@ int main(void)
     CHECK(Rte_Call_Observe_HostUser_GetCurrentComMode(&value) == E_OK && value == 1u);
     for (ComM_ModeType mode = 0u; mode <= COMM_FULL_COMMUNICATION; ++mode) {
         static const uint8 expected[] = {1u, 2u, 0u};
-        ComM_BusSM_ModeIndication(comm_config.channel, mode);
+        ComM_BusSM_ModeIndication(comm_config.channels[0].channel, mode);
         CHECK(Rte_Mode_Observe_ModeHostUser_currentMode() == expected[mode]);
         CHECK(Rte_Mode_Observe_ModeSecondUser_currentMode() == expected[mode]);
     }
     CHECK(host_notifications == 2u && second_notifications == 2u);
-    ComM_BusSM_ModeIndication(comm_config.channel, COMM_FULL_COMMUNICATION);
+    ComM_BusSM_ModeIndication(comm_config.channels[0].channel, COMM_FULL_COMMUNICATION);
     CHECK(host_notifications == 2u && second_notifications == 2u);
     actual = COMM_NO_COMMUNICATION;
-    ComM_BusSM_ModeIndication(comm_config.channel, actual);
+    ComM_BusSM_ModeIndication(comm_config.channels[0].channel, actual);
     CHECK(Rte_Mode_Observe_ModeHostUser_currentMode() == 1u);
     CHECK(host_notifications == 3u && second_notifications == 3u);
     reenter = TRUE;
-    ComM_BusSM_ModeIndication(comm_config.channel, COMM_FULL_COMMUNICATION);
+    ComM_BusSM_ModeIndication(comm_config.channels[0].channel, COMM_FULL_COMMUNICATION);
     CHECK(Rte_Mode_Observe_ModeHostUser_currentMode() == 1u);
     CHECK(Rte_Mode_Observe_ModeSecondUser_currentMode() == 1u);
     CHECK(host_notifications == 5u && second_notifications == 5u);

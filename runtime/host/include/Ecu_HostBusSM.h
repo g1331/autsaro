@@ -1,4 +1,4 @@
-/** @file Explicit CDD provider for one controlled-host CAN channel.
+/** @file Explicit CDD provider for configured controlled-host CAN channels.
  * Full completion requires actual STARTED indication and ONLINE PDU mode.
  * Bus-off cannot be recovered by an ordinary ComM request. The normal host
  * CAN mode command remains the explicit recovery boundary.
@@ -21,13 +21,18 @@
 #endif
 #define ECU_HOSTBUSSM_START_SEC_CODE
 #include "Ecu_HostBusSM_MemMap.h"
-/** Generated immutable bus_config: the ComM channel and its CanIf controller. */
+/** One immutable ComM channel to CanIf controller mapping. */
 typedef struct {
     NetworkHandleType channel; /**< ComM channel (ComMChannelId). */
     uint8 controller;          /**< CanIf controller (CanIfCtrlId). */
+} Ecu_HostBusSM_ChannelConfigType;
+/** Generated immutable BusSM channels. */
+typedef struct {
+    const Ecu_HostBusSM_ChannelConfigType *channels; /**< Channel-to-controller mappings. */
+    uint16 channel_count;                            /**< Number of mappings. */
 } Ecu_HostBusSM_ConfigType;
-/** Start the provider in requested NO.
- * @param[in] ConfigPtr Configuration whose controller CanIf knows; otherwise no action.
+/** Start each configured channel in requested NO.
+ * @param[in] ConfigPtr Configuration whose controllers CanIf knows; otherwise no action.
  * @par Return
  * None.
  * Preconditions: CanIf initialized.
@@ -94,7 +99,8 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Chan
  */
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ConfirmMode(NetworkHandleType Channel,
                                                             ComM_ModeType ComMode);
-/** Schedule a fresh observation after BswM cannot apply its direction action.
+/** Schedule a fresh observation after a BswM action fails.
+ * @param[in] Channel Channel to observe again.
  * @par Return
  * None.
  * Preconditions: initialized; otherwise no action.
@@ -102,7 +108,7 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ConfirmMode(NetworkHandleType Ch
  * Reentrancy: reentrant.
  * Ownership: None.
  */
-ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_QueueModePublication(void);
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_QueueModePublication(NetworkHandleType Channel);
 /** Publish a queued actual mode to ComM, once per observation if readable.
  * @par Return
  * None.
@@ -112,6 +118,28 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_QueueModePublication(void);
  * Ownership: None.
  */
 ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_PublishPendingMode(void);
+/** Confirm the actual mode for an explicitly bound channel and CanIf controller.
+ * @param[in] Channel Indicated channel.
+ * @param[in] ControllerId Expected CanIf controller for Channel.
+ * @param[in] ComMode Indicated NO, SILENT or FULL mode.
+ * @return E_OK if the binding and actual mode match. E_NOT_OK otherwise.
+ * Preconditions: initialized; otherwise E_NOT_OK.
+ * Context: BswM user callout; outside exclusive areas.
+ * Reentrancy: reentrant.
+ * Ownership: None.
+ */
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ConfirmControllerMode(NetworkHandleType Channel,
+                                                                      uint8 ControllerId,
+                                                                      ComM_ModeType ComMode);
+/** Put the selected CanIf PDU channel offline and publish its resulting mode.
+ * @param[in] ControllerId Initialized CanIf controller bound to this provider.
+ * @return E_OK on transition, E_NOT_OK if the controller refuses it.
+ * Preconditions: Provider initialized and selected controller started.
+ * Context: Owner executing an admitted HostBatch mode input.
+ * Reentrancy: Reentrant for different channels.
+ * Ownership: No pointer retained.
+ */
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_HostOffline(uint8 ControllerId);
 /** CanIf controller mode indication (CanIfDispatchUserCtrlModeIndicationName): applies
  * the requested directions on STARTED and indicates the completed mode to ComM.
  * @param[in] ControllerId Configured controller; others are ignored.

@@ -2,6 +2,135 @@
 use super::*;
 
 #[test]
+fn multichannel_topologies_preserve_controller_and_mode_bindings() {
+    for count in [2, 3, 4, 6] {
+        let sources = crate::support::multichannel::multichannel_sources(count);
+        let plan = build(&sources).unwrap_or_else(|issues| panic!("{count}: {issues:#?}"));
+        let description = plan.description();
+        let communication = description.communication_runtime.as_ref().unwrap();
+        assert_eq!(communication.channels.len(), count);
+        assert_eq!(communication.hardware.len(), 2 * count);
+        for (driver, channel) in communication.channels.iter().enumerate() {
+            assert_eq!(usize::from(channel.controller_id), driver);
+            assert_eq!(
+                usize::from(channel.can_if_controller_id),
+                count - 1 - driver
+            );
+        }
+        let mode = description.mode_runtime.as_ref().unwrap();
+        assert_eq!(mode.channels.len(), count);
+        assert_eq!(mode.users[0].channels.len(), count);
+        assert_eq!(mode.rules.len(), 3 * count);
+        assert!(
+            mode.dcm_connections
+                .values()
+                .all(|channel| channel.ends_with("/Host"))
+        );
+    }
+}
+
+#[test]
+fn diagnostic_npdu_keeps_its_network_when_another_channel_reuses_its_id() {
+    let mut sources = crate::support::multichannel::multichannel_sources(2);
+    xml_edit(
+        &mut sources,
+        "extract.arxml",
+        |node| named(node, "CAN-FRAME-TRIGGERING", "RxValue1Trigger"),
+        |xml| {
+            xml.replace(
+                "<IDENTIFIER>800</IDENTIFIER>",
+                "<IDENTIFIER>1792</IDENTIFIER>",
+            )
+        },
+    );
+    parameter(&mut sources, "RxValue1", "CanIfRxPduCanId", "1792");
+    let plan = build(&sources).unwrap();
+    let config = plan.description();
+    let transport = config.diagnostic_transport.as_ref().unwrap();
+    assert_eq!(transport.request_can_id, 1792);
+    let ids = config
+        .signals
+        .iter()
+        .filter(|signal| signal.receive && signal.can_id == 1792)
+        .count();
+    assert_eq!(ids, 1);
+}
+
+#[test]
+fn multichannel_invalid_routes_are_rejected_at_configuration_objects() {
+    use super::single_component::rejected_at;
+    let sources = crate::support::multichannel::multichannel_sources(2);
+    let mut mapping = sources.clone();
+    xml_edit(
+        &mut mapping,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "Controller1")
+                && node.children().any(|child| {
+                    child
+                        .text()
+                        .is_some_and(|value| value.ends_with("/CanIfCtrlCfg"))
+                })
+        },
+        |xml| xml.replace("/Can/Config/Controller1<", "/Can/Config/Controller<"),
+    );
+    rejected_at(
+        &mapping,
+        "CONTROLLER_MAPPING",
+        "ecuc.arxml",
+        "/Configuration/CanIf/Controller/Controller1",
+    );
+
+    let mut wrong_direction = sources.clone();
+    xml_edit(
+        &mut wrong_direction,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", "TransmitBuffer1"),
+        |xml| xml.replace("/Handles/Transmit1<", "/Handles/Receive1<"),
+    );
+    let issues = build(&wrong_direction)
+        .err()
+        .expect("HRH accepted as an HTH");
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.object.as_deref().is_some_and(|object| object
+                == "/Configuration/CanIf/Config/TransmitBuffer1"
+                || object == "/Configuration/CanIf/Config/TxValue1")),
+        "{issues:#?}"
+    );
+
+    let mut gap = sources.clone();
+    parameter(&mut gap, "Transmit", "CanObjectId", "99");
+    rejected_at(
+        &gap,
+        "CAN_HARDWARE_HANDLES",
+        "ecuc.arxml",
+        "/Configuration/Can/Config/Transmit",
+    );
+
+    let mut duplicate = sources;
+    parameter(&mut duplicate, "DiagRequest", "CanIfRxPduCanId", "800");
+    xml_edit(
+        &mut duplicate,
+        "extract.arxml",
+        |node| named(node, "CAN-FRAME-TRIGGERING", "DiagRequestTrigger"),
+        |xml| {
+            xml.replace(
+                "<IDENTIFIER>1792</IDENTIFIER>",
+                "<IDENTIFIER>800</IDENTIFIER>",
+            )
+        },
+    );
+    rejected_at(
+        &duplicate,
+        "CAN_ID_CONFLICT",
+        "ecuc.arxml",
+        "/Configuration/CanIf/Config/DiagRequest",
+    );
+}
+
+#[test]
 fn com_plan_keeps_real_group_timebase_and_notification_identity() {
     let plan = build(&inputs()).unwrap();
     let com = plan.description().com_runtime.as_ref().unwrap();

@@ -118,10 +118,11 @@ static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit}};
 static const LSduR_PBConfigType ls_config = {29u, ls_rx, 1u, ls_tx, 1u};
-static const CanIf_RxPduConfigType canif_rx[] = {{0x123u, 21u, 4u, FALSE, 0u, 0u}};
-static const CanIf_TxPduConfigType canif_tx[] = {{0x456u, 51u, 4u, 0u, 0u}};
+static const CanIf_RxPduConfigType canif_rx[] = {{0x123u, 21u, 4u, FALSE, 0u, 0u, 0u, 0u}};
+static const CanIf_TxPduConfigType canif_tx[] = {{0x456u, 51u, 4u, 0u, 0u, 0u, 0u}};
+static const CanIf_ControllerConfigType canif_controllers[] = {{0u, 0u}};
 static const CanIf_ConfigType canif_config = {
-    canif_rx, 1u, canif_tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u};
+    canif_rx, 1u, canif_tx, 1u, mode, bus_off, canif_controllers, 1u};
 static const Can_ConfigType can_config = {.sink = sink};
 int main(void)
 {

@@ -51,21 +51,6 @@ RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events);
  * Ownership: No pointer is retained.
  */
 RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached);
-/** Validate a host frame against the generated CAN routes.
- * @param[in] id Encoded CAN identifier.
- * @param[in] dlc Wire payload length, 0..64 bytes.
- * @return Nonzero for allowed Rx shapes or unknown IDs; zero for invalid ranges, Tx IDs or wrong
- * known Rx lengths.
- *
- * Preconditions: None.
- *
- * Context: Any context, including inside exclusive areas.
- *
- * Reentrancy: reentrant; configuration is immutable.
- *
- * Ownership: No pointer is retained.
- */
-RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc);
 #define RTE_Ecu_STOP_SEC_CODE
 #include "Rte_MemMap.h"
 /* SWS_BSW_00036: imported AUTOSAR major/minor release. */

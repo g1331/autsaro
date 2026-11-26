@@ -94,33 +94,30 @@ static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, CanTp_RxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_CANTP, 41u, 51u, CanTp_TxConfirmation, NULL_PTR}};
 static const LSduR_PBConfigType ls = {29u, ls_rx, 1u, ls_tx, 1u};
-static const CanIf_RxPduConfigType canif_rx[] = {{0x700u, 21u, 8u, FALSE, 0u, 0u}};
-static const CanIf_TxPduConfigType canif_tx[] = {{0x708u, 51u, 8u, 0u, 0u}};
+static const CanIf_RxPduConfigType canif_rx[] = {{0x700u, 21u, 8u, FALSE, 0u, 0u, 0u, 0u}};
+static const CanIf_TxPduConfigType canif_tx[] = {{0x708u, 51u, 8u, 0u, 0u, 0u, 0u}};
+static const CanIf_ControllerConfigType canif_controllers[] = {{0u, 0u}};
 static const CanIf_ConfigType canif = {canif_rx,
                                        1u,
                                        canif_tx,
                                        1u,
                                        Ecu_HostBusSM_ControllerModeIndication,
                                        Ecu_HostBusSM_ControllerBusOff,
-                                       0u,
-                                       0u,
-                                       0u,
-                                       0u};
+                                       canif_controllers,
+                                       1u};
 static const Can_ConfigType can = {.sink = sink};
-static const ComM_UserHandleType users[] = {43u};
-static const ComM_ConfigType comm = {7u,
-                                     users,
-                                     1u,
-                                     3u,
-                                     Ecu_HostBusSM_RequestComMode,
-                                     Ecu_HostBusSM_GetCurrentComMode,
-                                     Dcm_ComM_NoComModeEntered,
-                                     Dcm_ComM_SilentComModeEntered,
-                                     Dcm_ComM_FullComModeEntered,
-                                     NULL_PTR,
-                                     0u};
-static const Ecu_HostBusSM_ConfigType cdd = {7u, 0u};
-static const BswM_ConfigType bswm = {7u, &Ecu_HostBusSM_ApplyMode, NULL_PTR};
+static const NetworkHandleType user_channels[] = {7u};
+static const ComM_UserModeConfigType users[] = {{43u, user_channels, 1u, NULL_PTR}};
+static const ComM_ChannelConfigType channels[] = {{7u,
+                                                   3u,
+                                                   Dcm_ComM_NoComModeEntered,
+                                                   Dcm_ComM_SilentComModeEntered,
+                                                   Dcm_ComM_FullComModeEntered}};
+static const ComM_ConfigType comm = {
+    channels, 1u, users, 1u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode};
+static const Ecu_HostBusSM_ChannelConfigType bus_channels[] = {{7u, 0u}};
+static const Ecu_HostBusSM_ConfigType cdd = {bus_channels, 1u};
+static const BswM_ConfigType bswm = {user_channels, 1u, &Ecu_HostBusSM_ConfirmMode, NULL_PTR};
 static uint8 authentication_mode = 255u;
 static void publish_authentication(uint8 state) { authentication_mode = state; }
 static const Dcm_ConfigType dcm = {
@@ -294,7 +291,7 @@ int main(void)
     rx_done(17u, E_OK);
     assert(ComM_RequestComMode(43u, COMM_NO_COMMUNICATION) == E_OK);
     for (i = 0u; i < 4u; ++i) {
-        assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+        assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
     }
     Dcm_ComM_SilentComModeEntered(7u);
     Dcm_MainFunction();
@@ -311,7 +308,7 @@ int main(void)
     assert(start_rx(17u, NULL_PTR, 3u, &available) == BUFREQ_E_NOT_OK);
     flush();
     assert(count == 1u);
-    assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_READY_SLEEP);
     assert(ComM_RequestComMode(43u, COMM_FULL_COMMUNICATION) == E_OK);
     {
         const uint8 expected[8] = {7u, 0x62u, 0x12u, 0x34u, 0x12u, 0x34u, 0x56u, 0x78u};
@@ -470,14 +467,14 @@ int main(void)
         assert(published_session() == 2u && security_get(&security_value) == E_OK &&
                security_value == 0u);
         for (i = 0u; i < 4u; ++i) {
-            assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+            assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
         }
         for (i = 0u; i < 19u; ++i) {
             Dcm_MainFunction();
         }
-        assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+        assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
         Dcm_MainFunction();
-        assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+        assert(ComM_RunChannel(7u) == COMM_FULL_COM_READY_SLEEP);
         assert(session_get(&session_value) == E_OK && session_value == 1u);
         assert(published_session() == 0u);
     }

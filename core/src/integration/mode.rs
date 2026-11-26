@@ -1,10 +1,10 @@
-//! Source-backed single CDD channel and immediate, static BswM user callouts.
+//! Source-backed CDD channels and immediate, static BswM user callouts.
 use super::component::milliseconds;
 use super::graph::Graph;
 use super::schedule::{ScheduleContract, definition_is, value, values};
 use super::{DiagnosticCategory, PlanDiagnostic};
 use serde::Serialize;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,6 +19,7 @@ pub struct ModeUser {
 #[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct ModeRule {
     pub path: String,
+    pub channel: String,
     pub mode: u8,
     pub condition: String,
     pub expression: String,
@@ -29,19 +30,27 @@ pub struct ModeRule {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ipc-types", derive(specta::Type))]
-pub struct ModeRuntimeContract {
+pub struct ModeChannel {
     pub channel: String,
     pub channel_handle: u8,
+    pub can_if_controller: String,
     pub main_symbol: String,
     pub period_ms: u32,
+    pub input: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
+pub struct ModeRuntimeContract {
+    pub channels: Vec<ModeChannel>,
     pub minimum_full_ms: u32,
     pub bus_prefix: String,
     pub users: Vec<ModeUser>,
     pub bswm_configuration: String,
-    pub input: String,
     pub include: String,
     pub rules: Vec<ModeRule>,
-    pub dcm_connections: Vec<String>,
+    pub dcm_connections: BTreeMap<String, String>,
 }
 fn fail(graph: &Graph, index: usize, code: &str) -> Vec<PlanDiagnostic> {
     vec![graph.diagnostic(
@@ -113,6 +122,8 @@ fn mode(text: Option<&str>) -> Option<u8> {
 pub(super) fn inspect(
     graph: &Graph,
     schedule: &ScheduleContract,
+    communication: &super::can_runtime::CommunicationRuntimeContract,
+    transport: Option<&super::diagnostic::DiagnosticTransportContract>,
 ) -> Result<ModeRuntimeContract, Vec<PlanDiagnostic>> {
     let general = one(graph, "ComMGeneral")?;
     disabled(
@@ -128,46 +139,82 @@ pub(super) fn inspect(
         .and_then(milliseconds)
         .filter(|duration| (1..=65000).contains(duration))
         .ok_or_else(|| fail(graph, general, "MODE_TIMEBASE"))?;
-    let channel = one(graph, "ComMChannel")?;
-    if value(graph, channel, "ComMBusType", false) != Some("COMM_BUS_TYPE_CDD")
-        || value(graph, channel, "ComMCDDBusPrefix", false) != Some("Ecu_HostBusSM")
-    {
-        return Err(fail(graph, channel, "MODE_BUS_PROVIDER"));
+    let channel_objects = containers(graph, "ComMChannel");
+    if channel_objects.len() != communication.channels.len() {
+        let source = channel_objects
+            .get(communication.channels.len())
+            .copied()
+            .unwrap_or(general);
+        return Err(fail(graph, source, "MODE_CONFIGURATION"));
     }
-    disabled(
-        graph,
-        channel,
-        "ComMFullCommRequestNotificationEnabled ComMNoCom ComMNoWakeup ComMNoWakeUpInhibitionNvmStorage",
-    )?;
-    let management = child(graph, channel, "ComMNetworkManagement")?;
-    if value(graph, management, "ComMNmVariant", false) != Some("NONE") {
-        return Err(fail(graph, management, "MODE_NM_VARIANT"));
-    }
-    let channel_handle = value(graph, channel, "ComMChannelId", false)
-        .and_then(|text| text.parse::<u8>().ok())
-        .ok_or_else(|| fail(graph, channel, "MODE_HANDLE"))?;
-    let period_ms = value(graph, channel, "ComMMainFunctionPeriod", false)
-        .and_then(milliseconds)
-        .filter(|period| *period == schedule.counter_tick_ms)
-        .ok_or_else(|| fail(graph, channel, "MODE_TIMEBASE"))?;
-    let name = graph.text(channel, "SHORT-NAME").unwrap_or("");
-    if !super::catalog::c_identifier(name) {
-        return Err(fail(graph, channel, "MODE_MAIN_SYMBOL"));
+    let mut channels = BTreeMap::new();
+    let mut handles = BTreeSet::new();
+    for channel in channel_objects {
+        if value(graph, channel, "ComMBusType", false) != Some("COMM_BUS_TYPE_CDD")
+            || value(graph, channel, "ComMCDDBusPrefix", false) != Some("Ecu_HostBusSM")
+        {
+            return Err(fail(graph, channel, "MODE_BUS_PROVIDER"));
+        }
+        disabled(
+            graph,
+            channel,
+            "ComMFullCommRequestNotificationEnabled ComMNoCom ComMNoWakeup ComMNoWakeUpInhibitionNvmStorage",
+        )?;
+        let management = child(graph, channel, "ComMNetworkManagement")?;
+        if value(graph, management, "ComMNmVariant", false) != Some("NONE") {
+            return Err(fail(graph, management, "MODE_NM_VARIANT"));
+        }
+        let channel_handle = value(graph, channel, "ComMChannelId", false)
+            .and_then(|text| text.parse::<u8>().ok())
+            .ok_or_else(|| fail(graph, channel, "MODE_HANDLE"))?;
+        let period_ms = value(graph, channel, "ComMMainFunctionPeriod", false)
+            .and_then(milliseconds)
+            .filter(|period| *period == schedule.counter_tick_ms)
+            .ok_or_else(|| fail(graph, channel, "MODE_TIMEBASE"))?;
+        let name = graph.text(channel, "SHORT-NAME").unwrap_or("");
+        if !super::catalog::c_identifier(name) {
+            return Err(fail(graph, channel, "MODE_MAIN_SYMBOL"));
+        }
+        let main_symbol = format!("ComM_MainFunction_{name}");
+        if !handles.insert(channel_handle) {
+            return Err(fail(graph, channel, "MODE_HANDLE"));
+        }
+        if !schedule.entities.iter().any(|entity| {
+            !entity.application && entity.symbol == main_symbol && entity.period_ms == period_ms
+        }) {
+            return Err(fail(graph, channel, "MODE_TIMEBASE"));
+        }
+        channels.insert(
+            channel,
+            ModeChannel {
+                channel: graph.elements[channel].object.clone(),
+                channel_handle,
+                can_if_controller: String::new(),
+                main_symbol,
+                period_ms,
+                input: String::new(),
+            },
+        );
     }
     let configured_users = containers(graph, "ComMUser");
-    let mappings = containers(graph, "ComMUserPerChannel");
-    if configured_users.is_empty()
-        || configured_users.len() > 32
-        || mappings.len() != configured_users.len()
-    {
-        return Err(fail(graph, channel, "MODE_USER_MAPPING"));
+    if configured_users.is_empty() || configured_users.len() > usize::from(u16::MAX) {
+        return Err(fail(graph, general, "MODE_USER_MAPPING"));
     }
-    let mut mapped = BTreeSet::new();
-    for mapping in mappings {
+    let mut mapped = BTreeMap::<usize, BTreeSet<usize>>::new();
+    let mut covered = BTreeSet::new();
+    for mapping in containers(graph, "ComMUserPerChannel") {
         let user = reference(graph, mapping, "ComMUserChannel", "ComMUser")?;
-        if !graph.within(mapping, channel) || !mapped.insert(user) {
+        let channel = graph
+            .ancestor(mapping, "ECUC-CONTAINER-VALUE")
+            .filter(|channel| channels.contains_key(channel))
+            .ok_or_else(|| fail(graph, mapping, "MODE_USER_MAPPING"))?;
+        if !mapped.entry(user).or_default().insert(channel) {
             return Err(fail(graph, mapping, "MODE_USER_MAPPING"));
         }
+        covered.insert(channel);
+    }
+    if covered.len() != channels.len() {
+        return Err(fail(graph, general, "MODE_USER_MAPPING"));
     }
     let mut users = Vec::new();
     let mut handles = BTreeSet::new();
@@ -176,20 +223,16 @@ pub(super) fn inspect(
             .and_then(|text| text.parse::<u16>().ok())
             .filter(|handle| *handle != u16::MAX)
             .ok_or_else(|| fail(graph, user, "MODE_HANDLE"))?;
-        if !mapped.contains(&user) || !handles.insert(handle) {
-            return Err(fail(graph, user, "MODE_USER_MAPPING"));
-        }
+        let user_channels = mapped
+            .get(&user)
+            .filter(|_| handles.insert(handle))
+            .ok_or_else(|| fail(graph, user, "MODE_USER_MAPPING"))?;
         users.push(ModeUser {
             path: graph.elements[user].object.clone(),
             handle,
-            channels: containers(graph, "ComMUserPerChannel")
-                .into_iter()
-                .filter(|mapping| {
-                    value(graph, *mapping, "ComMUserChannel", true)
-                        == Some(graph.elements[user].object.as_str())
-                })
-                .filter_map(|mapping| graph.ancestor(mapping, "ECUC-CONTAINER-VALUE"))
-                .map(|channel| graph.elements[channel].object.clone())
+            channels: user_channels
+                .iter()
+                .map(|channel| channels[channel].channel.clone())
                 .collect(),
         });
     }
@@ -213,19 +256,28 @@ pub(super) fn inspect(
     let config = one(graph, "BswMConfig")?;
     let arbitration = child(graph, config, "BswMArbitration")?;
     let control = child(graph, config, "BswMModeControl")?;
-    let input = one(graph, "BswMModeRequestPort")?;
-    if !graph.within(input, arbitration)
-        || value(graph, input, "BswMRequestProcessing", false) != Some("BSWM_IMMEDIATE")
-    {
-        return Err(fail(graph, input, "MODE_PROCESSING"));
+    let mut inputs = BTreeMap::new();
+    for input in containers(graph, "BswMModeRequestPort") {
+        if !graph.within(input, arbitration)
+            || value(graph, input, "BswMRequestProcessing", false) != Some("BSWM_IMMEDIATE")
+        {
+            return Err(fail(graph, input, "MODE_PROCESSING"));
+        }
+        let indication = child(graph, input, "BswMComMIndication")?;
+        let channel = reference(graph, indication, "BswMComMChannelRef", "ComMChannel")?;
+        let config = channels
+            .get_mut(&channel)
+            .filter(|config| config.input.is_empty())
+            .ok_or_else(|| fail(graph, indication, "MODE_REFERENCE"))?;
+        config.input = graph.elements[input].object.clone();
+        let initial = child(graph, input, "BswMModeInitValue")?;
+        if mode(value(graph, initial, "BswMBswModeInitValue", false)) != Some(0) {
+            return Err(fail(graph, initial, "MODE_INITIAL_VALUE"));
+        }
+        inputs.insert(input, channel);
     }
-    let indication = child(graph, input, "BswMComMIndication")?;
-    if reference(graph, indication, "BswMComMChannelRef", "ComMChannel")? != channel {
-        return Err(fail(graph, indication, "MODE_REFERENCE"));
-    }
-    let initial = child(graph, input, "BswMModeInitValue")?;
-    if mode(value(graph, initial, "BswMBswModeInitValue", false)) != Some(0) {
-        return Err(fail(graph, initial, "MODE_INITIAL_VALUE"));
+    if inputs.len() != channels.len() {
+        return Err(fail(graph, arbitration, "MODE_REFERENCE"));
     }
     let mut rules = Vec::new();
     let mut legacy_callouts = Vec::new();
@@ -259,10 +311,17 @@ pub(super) fn inspect(
         let condition = reference(graph, expression, "BswMArgumentRef", "BswMModeCondition")?;
         if !graph.within(condition, arbitration)
             || value(graph, condition, "BswMConditionType", false) != Some("BSWM_EQUALS")
-            || reference(graph, condition, "BswMConditionMode", "BswMModeRequestPort")? != input
         {
             return Err(fail(graph, condition, "MODE_RULE"));
         }
+        let input = reference(graph, condition, "BswMConditionMode", "BswMModeRequestPort")?;
+        let channel = inputs
+            .get(&input)
+            .ok_or_else(|| fail(graph, condition, "MODE_REFERENCE"))?;
+        let config = channels
+            .get_mut(channel)
+            .ok_or_else(|| fail(graph, condition, "MODE_REFERENCE"))?;
+        let channel_handle = config.channel_handle;
         let expected = child(graph, condition, "BswMBswMode")?;
         let mode = mode(value(graph, expected, "BswMBswRequestedMode", false))
             .ok_or_else(|| fail(graph, expected, "MODE_RULE"))?;
@@ -293,7 +352,7 @@ pub(super) fn inspect(
             "COMM_FULL_COMMUNICATION",
         ][usize::from(mode)];
         let expected = format!("Ecu_HostBusSM_ConfirmMode({channel_handle}u, {mode_name})");
-        if text == format!("Ecu_HostBusSM_ApplyMode({channel_handle}u, {mode_name})") {
+        let text = if text == format!("Ecu_HostBusSM_ApplyMode({channel_handle}u, {mode_name})") {
             legacy_callouts.push(graph.diagnostic(
                 callout,
                 DiagnosticCategory::Input,
@@ -301,13 +360,42 @@ pub(super) fn inspect(
                 crate::product_message!("backend.integration.mode.legacy_callout"),
                 crate::product_message!(
                     "backend.integration.mode.replace_callout",
-                    "callout" => expected
+                    "callout" => expected.clone()
                 ),
             ));
-        } else if text != expected {
-            return Err(fail(graph, callout, "MODE_STATIC_CALLOUT"));
+            expected.as_str()
+        } else {
+            text
+        };
+        // ECUC_BswM_00843 carries a complete static C call. The symbolic CanIf
+        // handle is resolved against the configured CanIfCtrlCanCtrlRef entries.
+        let controller = communication
+            .channels
+            .iter()
+            .find(|controller| {
+                let symbol = super::symbolic_names::name(
+                    "CanIf",
+                    "CanIfCtrlCfg",
+                    &controller.can_if_controller,
+                );
+                text == format!(
+                    "Ecu_HostBusSM_ConfirmControllerMode({channel_handle}u, {symbol}, {mode_name})"
+                )
+            })
+            .or_else(|| {
+                (communication.channels.len() == 1 && text == expected)
+                    .then(|| &communication.channels[0])
+            })
+            .ok_or_else(|| fail(graph, callout, "MODE_STATIC_CALLOUT"))?;
+        if !config.can_if_controller.is_empty()
+            && config.can_if_controller != controller.can_if_controller
+        {
+            return Err(fail(graph, callout, "MODE_REFERENCE"));
         }
-        if !modes.insert(mode)
+        config
+            .can_if_controller
+            .clone_from(&controller.can_if_controller);
+        if !modes.insert((*channel, mode))
             || !conditions.insert(condition)
             || !expressions.insert(expression)
             || !lists.insert(list)
@@ -317,6 +405,7 @@ pub(super) fn inspect(
         }
         rules.push(ModeRule {
             path: graph.elements[rule].object.clone(),
+            channel: config.channel.clone(),
             mode,
             condition: graph.elements[condition].object.clone(),
             expression: graph.elements[expression].object.clone(),
@@ -325,7 +414,7 @@ pub(super) fn inspect(
             callout: text.into(),
         });
     }
-    if modes != BTreeSet::from([0, 1, 2])
+    if modes.len() != channels.len() * 3
         || containers(graph, "BswMModeCondition").len() != conditions.len()
         || containers(graph, "BswMLogicalExpression").len() != expressions.len()
         || containers(graph, "BswMActionList").len() != lists.len()
@@ -336,38 +425,47 @@ pub(super) fn inspect(
     if !legacy_callouts.is_empty() {
         return Err(legacy_callouts);
     }
-    rules.sort_by_key(|rule| rule.mode);
-    let mut dcm_connections = Vec::new();
+    let mut bound = BTreeSet::new();
+    for (source, channel) in &channels {
+        if !bound.insert(&channel.can_if_controller) {
+            return Err(fail(graph, *source, "MODE_REFERENCE"));
+        }
+    }
+    rules.sort_by(|left, right| (&left.channel, left.mode).cmp(&(&right.channel, right.mode)));
+    let mut dcm_connections = BTreeMap::new();
     for connection in containers(graph, "DcmDslMainConnection") {
-        if reference(
+        let channel = reference(
             graph,
             connection,
             "DcmDslProtocolComMChannelRef",
             "ComMChannel",
-        )? != channel
-        {
-            return Err(fail(graph, connection, "MODE_REFERENCE"));
+        )?;
+        let configured = channels
+            .get(&channel)
+            .ok_or_else(|| fail(graph, connection, "MODE_REFERENCE"))?;
+        if let Some(transport) = transport {
+            let controller = communication
+                .channels
+                .iter()
+                .find(|entry| entry.physical_channel == transport.physical_channel)
+                .ok_or_else(|| fail(graph, connection, "MODE_REFERENCE"))?;
+            if configured.can_if_controller != controller.can_if_controller {
+                return Err(fail(graph, connection, "MODE_REFERENCE"));
+            }
         }
-        dcm_connections.push(graph.elements[connection].object.clone());
+        dcm_connections.insert(
+            graph.elements[connection].object.clone(),
+            configured.channel.clone(),
+        );
     }
-    dcm_connections.sort();
-    if !schedule.entities.iter().any(|entity| {
-        !entity.application
-            && entity.symbol == format!("ComM_MainFunction_{name}")
-            && entity.period_ms == period_ms
-    }) {
-        return Err(fail(graph, channel, "MODE_TIMEBASE"));
-    }
+    let mut channels = channels.into_values().collect::<Vec<_>>();
+    channels.sort_by_key(|channel| channel.channel_handle);
     Ok(ModeRuntimeContract {
-        channel: graph.elements[channel].object.clone(),
-        channel_handle,
-        main_symbol: format!("ComM_MainFunction_{name}"),
-        period_ms,
+        channels,
         minimum_full_ms,
         bus_prefix: "Ecu_HostBusSM".into(),
         users,
         bswm_configuration: graph.elements[config].object.clone(),
-        input: graph.elements[input].object.clone(),
         include: "Ecu_HostBusSM.h".into(),
         rules,
         dcm_connections,

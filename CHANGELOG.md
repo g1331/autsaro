@@ -4,6 +4,10 @@
 
 ### Breaking
 
+- Regenerate ECU packages for configured CAN controller and HOH tables, channel-scoped CanIf routes and confirmations, and ComM/BswM/Dcm channel bindings. Update direct initializers of `Can_ConfigType`, `CanIf_ConfigType` and its route types for the controller, HOH and PDU-to-frame mapping. HostBatchV2 uses the configured driver channel in frame and mode records, and the probe reports the channel with each output. PduR and LSduR use the generated route counts (#486)
+
+- ComM, BswM and the host BusSM use immutable channel tables. ComM also stores each user's channel relations. Regenerate ECU packages and update direct initializers of `ComM_ConfigType`, `BswM_ConfigType` and `Ecu_HostBusSM_ConfigType` before rebuilding consumers (#464)
+
 - COM now packs and unpacks signed and unsigned fixed-width signals in Intel or Motorola order. Regenerate and rebuild COM and CanIf configurations for separate signal and PDU tables and byte-aligned PDU-to-frame mappings. (#665)
 
 - Host CAN supports standard and extended FD frames, explicit receive policies and driver padding through 64 wire bytes. Regenerate ECU packages from ARXML for the FD-capable HostBatchV2 tools. Rebuild native consumers and update private `Can_ConfigType` initializers for bitrates, BRS and HTH padding. Rebuild host output consumers for the probe’s FD timing fields. CanTp continues to use Classical CAN (#485)

@@ -504,12 +504,19 @@ def _det_r82_hook_type(summary: dict, project: Path, root: Path, metadata: dict,
             == "f6f0ec3467df710e95ff382bb269eecab45e2cfad47afecfeed0ee51cc086dd8")
 
 
+# The generated-source gate assesses both the first parent and current headers.
 _ANONYMOUS_ENUM_REPORTS = {
     "runtime/bsw/include/LSduR.h": (
-        14, "LSduR_StateType", "b2c75141cdd86173b27e18d5ef16dd3988b6411bdde15121b5332bd874b2961f",
+        14, "LSduR_StateType", (
+            "b2c75141cdd86173b27e18d5ef16dd3988b6411bdde15121b5332bd874b2961f",
+            "b012e85114f7984d298b8d4045f0e054c71704a6dfb57697b382aacd985b62d7",
+        ),
     ),
     "runtime/bsw/include/PduR.h": (
-        30, "PduR_StateType", "e82cb7e0ac64c8ef2d0fc63cb40efe8c95f31a4acced6c60a0563e9b56e48712",
+        30, "PduR_StateType", (
+            "e82cb7e0ac64c8ef2d0fc63cb40efe8c95f31a4acced6c60a0563e9b56e48712",
+            "345650a865f01f0eb0e162b62dbc82636ffc21645eaccb3d309d42b4023774ae",
+        ),
     ),
 }
 _R24_RECORD = {
@@ -523,11 +530,11 @@ def _anonymous_enum_report(summary: dict, diagnostic: dict, location: dict, root
     reviewed = _ANONYMOUS_ENUM_REPORTS.get(original)
     if reviewed is None:
         return None
-    line, entity, source_digest = reviewed
+    line, entity, source_digests = reviewed
     if (int(location["line"]) != line or int(location.get("column") or 0) != 14
             or diagnostic["locations"] != [location] or diagnostic.get("severity") != "style"
             or diagnostic.get("message") != "misra violation (use --rule-texts=<file> to get proper output)"
-            or hashlib.sha256(source.encode("utf-8")).hexdigest() != source_digest):
+            or hashlib.sha256(source.encode("utf-8")).hexdigest() not in source_digests):
         return None
     record_lines = (root / _R24_RECORD["file"]).read_text(encoding="utf-8").splitlines()
     if _R24_RECORD["text"] not in record_lines:

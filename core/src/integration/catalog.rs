@@ -223,8 +223,13 @@ pub(super) fn bsw_catalog(
     for (symbol, module) in [
         (&com.receive_main.symbol, "Com"),
         (&com.transmit_main.symbol, "Com"),
-        (&mode.main_symbol, "ComM"),
-    ] {
+    ]
+    .into_iter()
+    .chain(
+        mode.channels
+            .iter()
+            .map(|channel| (&channel.main_symbol, "ComM")),
+    ) {
         add(
             symbol,
             module,

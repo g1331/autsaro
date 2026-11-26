@@ -83,6 +83,153 @@ fn host_batch_project() -> Built {
     }
 }
 
+#[test]
+fn generated_host_batch_keeps_configured_channels_isolated() {
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    // The 17-channel case also exercises the PduR and LSduR tables above 32 Rx routes.
+    for count in [2, 3, 4, 6, 17] {
+        let scratch = super::Scratch::new();
+        let sources = crate::support::multichannel::multichannel_sources(count);
+        let plan = super::mainline::build(&sources)
+            .unwrap_or_else(|issues| panic!("{count} channels: {issues:#?}"));
+        let fixture = fs::read_to_string(
+            root().join("core/tests/fixtures/component-pipeline/applications/Ingress.c"),
+        )
+        .unwrap();
+        let application = scratch.0.join("Ingress.c");
+        let echo = (0..count)
+            .map(|index| {
+                let suffix = if index == 0 { String::new() } else { index.to_string() };
+                let commit = if index == 0 { "        ingress_committed = value;\n" } else { "" };
+                format!(
+                    "    if ((Rte_Read_RxValue{suffix}_Value(&standard) == E_OK) &&\n        (Rte_Read_RxExtended{suffix}_Value(&extended) == E_OK)) {{\n        const uint32 value = standard | (extended << 8u);\n{commit}        (void)Rte_Write_TxValue{suffix}_Value(value);\n    }}\n",
+                )
+            })
+            .collect::<String>();
+        let (before, periodic) = fixture
+            .split_once("    (void)Ingress_RecordActor();\n")
+            .unwrap();
+        let (_, after) = periodic.split_once("\n}\n/* MR12 RULE 8.7").unwrap();
+        fs::write(
+            &application,
+            format!("{before}    (void)Ingress_RecordActor();\n    uint32 standard = 0u;\n    uint32 extended = 0u;\n{echo}}}\n/* MR12 RULE 8.7{after}"),
+        )
+        .unwrap();
+        let project = scratch.0.join("project");
+        prepare_ecu_project_with_applications(
+            &plan,
+            super::tooling::native_target(),
+            &[ApplicationSource {
+                component_instance: "/Application/Pipeline/IngressInstance".into(),
+                path: application,
+            }],
+        )
+        .unwrap_or_else(|issues| panic!("{count} channels: {issues:#?}"))
+        .generate(&project)
+        .unwrap();
+        let metadata: Value = serde_json::from_slice(
+            &fs::read(project.join("meta/verification-inputs.json")).unwrap(),
+        )
+        .unwrap();
+        let endpoints = metadata["configuredEndpoints"].as_object().unwrap();
+        assert_eq!(endpoints.len(), 3 * count + 2);
+        for channel in 0..count {
+            assert!(metadata["channels"][channel.to_string()].as_str().is_some());
+            let matching = endpoints
+                .values()
+                .filter(|endpoint| {
+                    endpoint["channel"] == channel
+                        && endpoint["direction"] == "RX"
+                        && endpoint["id"] == RECEIVE
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(matching.len(), 2);
+            assert_ne!(matching[0]["format"], matching[1]["format"]);
+        }
+        let binary =
+            super::sealed_builds::host_batch(&project, &scratch.0.join("host-batch-build"));
+        let diagnostic = count - 1;
+        let mut script = String::new();
+        let mut expected = Vec::new();
+        for (step, mode) in [
+            None,
+            Some("STOPPED"),
+            Some("STARTED"),
+            Some("OFFLINE"),
+            Some("STARTED"),
+            Some("BUS_OFF"),
+            Some("STARTED"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let epoch = 10 * (step + 1);
+            script.push_str(&format!("BEGIN {epoch}\n"));
+            if let Some(mode) = mode {
+                script.push_str(&format!("MODE 0 {mode}\n"));
+            }
+            for channel in 0..count {
+                if channel == 0 && step % 2 != 0 {
+                    continue;
+                }
+                let example = (step * 16) + channel + 1;
+                let companion = channel + 16;
+                script.push_str(&format!(
+                    "RX {channel} STANDARD 0 {RECEIVE} 4 {example:02x}000000\n"
+                ));
+                script.push_str(&format!(
+                    "RX {channel} EXTENDED 0 {RECEIVE} 4 {companion:02x}000000\n"
+                ));
+                let data = format!("{example:02x}{companion:02x}0000");
+                expected.push((epoch, channel, "STANDARD".to_owned(), TRANSMIT, data));
+            }
+            if step % 2 != 0 {
+                script.push_str(&format!("RX {diagnostic} STANDARD 0 {REQUEST} 8 {READ}\n"));
+                let primary = (step * 16) + diagnostic + 1;
+                let companion = diagnostic + 16;
+                expected.push((
+                    epoch,
+                    diagnostic,
+                    "STANDARD".into(),
+                    RESPONSE,
+                    format!("076212340000{companion:02x}{primary:02x}"),
+                ));
+            }
+            script.push_str("COMMIT\n");
+        }
+        script.push_str(&format!(
+            "BEGIN 71\nRX {diagnostic} STANDARD 0 {REQUEST} 8 {READ}\nCOMMIT\n",
+        ));
+        let did_data = format!("076212340000{:02x}{:02x}", 16 + diagnostic, 97 + diagnostic);
+        expected.push((71, diagnostic, "STANDARD".into(), RESPONSE, did_data));
+        let observed = run(&binary, &scratch.0.join("multichannel"), script.as_bytes());
+        let mut frames = observed
+            .lines()
+            .filter(|line| line.starts_with("OUT "))
+            .map(|line| {
+                (
+                    field(line, "epoch=").parse().unwrap(),
+                    field(line, "channel=").parse().unwrap(),
+                    field(line, "format=").to_owned(),
+                    field(line, "id=").parse().unwrap(),
+                    field(line, "data=").to_owned(),
+                )
+            })
+            .collect::<Vec<_>>();
+        frames.sort();
+        expected.sort();
+        assert_eq!(frames, expected, "{count} channels: {observed}");
+        assert_eq!(
+            observed
+                .lines()
+                .filter(|line| line.starts_with("COMMIT_OK"))
+                .count(),
+            8,
+            "{observed}"
+        );
+    }
+}
+
 /// Verifies: SWS_CANIF_00281
 /// Verifies: SWS_Can_00423
 #[test]

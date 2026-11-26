@@ -48,6 +48,8 @@ typedef struct {
     PduIdType pdu;        /**< CanIf Rx handle (CanIfRxPduId), passed to LSduR. */
     uint8 minimum_length; /**< Minimum accepted payload bytes, 0..64 (CanIfRxPduDataLength). */
     boolean accepts_fd;   /**< TRUE accepts both formats with this width and ID. */
+    uint8 controller;     /**< Abstract controller owning the receive route. */
+    Can_HwHandleType hoh; /**< Driver HRH for this route. */
     uint8 frame_offset;   /**< Byte offset of the logical PDU within the frame. */
     uint8 frame_length;   /**< Mapped frame length, or 0 for an identity mapping. */
 } CanIf_RxPduConfigType;
@@ -57,6 +59,8 @@ typedef struct {
     PduIdType pdu;        /**< CanIf Tx handle (CanIfTxPduId), used for confirmations. */
     uint8 maximum_length; /**< Maximum logical payload bytes, 1..64, from the referenced PDU length.
                            */
+    uint8 controller;     /**< Abstract controller owning the transmit route. */
+    Can_HwHandleType hoh; /**< Driver HTH for this route. */
     uint8 frame_offset;   /**< Byte offset of the logical PDU within the frame. */
     uint8 frame_length;   /**< Mapped frame length, or 0 for an identity mapping. */
 } CanIf_TxPduConfigType;
@@ -66,24 +70,26 @@ typedef void (*CanIf_ModeNotificationType)(uint8 controller, Can_ControllerState
 /** Generated bus-off dispatch callback; called outside CANIF_STATE with the abstract controller ID.
  */
 typedef void (*CanIf_BusOffNotificationType)(uint8 controller);
+/** Explicit CanIfCtrlCanCtrlRef binding. */
+typedef struct {
+    uint8 controller;        /**< Abstract CanIfCtrlId. */
+    uint8 driver_controller; /**< Lower CanControllerId. */
+} CanIf_ControllerConfigType;
 /** Implementation-owned configuration (SWS_CANIF_00144). Route counts and callback pointers are
  * derived from the validated plan, not independent ECUC parameters. All storage is immutable while
  * published. */
 typedef struct {
     const CanIf_RxPduConfigType *receive;  /**< Rx routes; NULL only when receive_count is zero. */
-    uint16 receive_count;                  /**< Rx route count, 0..32. */
+    uint16 receive_count;                  /**< Configured Rx route count. */
     const CanIf_TxPduConfigType *transmit; /**< Tx routes; NULL only when transmit_count is zero. */
-    uint16 transmit_count;                 /**< Tx route count, 0..32. */
+    uint16 transmit_count;                 /**< Configured Tx route count. */
     CanIf_ModeNotificationType
         controller_mode; /**< Required CanIfDispatchUserCtrlModeIndication callback. */
     CanIf_BusOffNotificationType bus_off; /**< Required CanIfDispatchUserCtrlBusOff callback. */
-    uint8 controller;                     /**< Abstract controller ID (CanIfCtrlId). */
-    uint8 driver_controller;              /**< Mapped driver ID (CanControllerId). */
-    Can_HwHandleType receive_hoh; /**< Driver receive object (CanObjectId via CanIfHrhIdSymRef). */
-    Can_HwHandleType
-        transmit_hoh; /**< Driver transmit object (CanObjectId via CanIfHthIdSymRef). */
+    const CanIf_ControllerConfigType *controllers; /**< Immutable controller mappings. */
+    uint16 controller_count;                       /**< Number of controller mappings. */
 } CanIf_ConfigType;
-/** Initialize the one controller and reset all pending results (SWS_CANIF_00001).
+/** Initialize the configured controllers and reset all pending results (SWS_CANIF_00001).
  * @param[in] ConfigPtr Generated immutable configuration; invalid or NULL sets CanIf to UNINIT.
  * @par Return
  * None.
@@ -116,7 +122,7 @@ CANIF_CODE void CanIf_DeInit(void);
  */
 CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *PduInfoPtr);
 /** Request the mapped driver mode transition (SWS_CANIF_00003).
- * @param[in] ControllerId The single configured abstract CanIf controller; other IDs are rejected.
+ * @param[in] ControllerId A configured abstract CanIf controller.
  * @param[in] ControllerMode CAN_CS_STARTED, CAN_CS_STOPPED or CAN_CS_SLEEP, subject to the driver
  * state machine.
  * @return E_OK if the driver accepts; E_NOT_OK otherwise. Completion is reported by
@@ -127,51 +133,51 @@ CANIF_CODE Std_ReturnType CanIf_Transmit(PduIdType TxPduId, const PduInfoType *P
 CANIF_CODE Std_ReturnType CanIf_SetControllerMode(uint8 ControllerId,
                                                   Can_ControllerStateType ControllerMode);
 /** Read the mapped driver mode (SWS_CANIF_00229).
- * @param[in] ControllerId The single configured abstract CanIf controller; other IDs are rejected.
+ * @param[in] ControllerId A configured abstract CanIf controller.
  * @param[out] ControllerModePtr Non-NULL caller storage; written only when the driver returns E_OK.
  * @return E_OK with the queried value; E_NOT_OK for an unknown controller, NULL output or
  * unavailable driver value. Preconditions: CanIf initialized; otherwise E_NOT_OK with output
  * unchanged. Context: task or upper-layer callback; not inside an exclusive area. Reentrancy: not
- * reentrant for the same controller; only one controller is configured. Ownership: Output storage
+ * reentrant for the same controller. Ownership: Output storage
  * is borrowed for this call and never retained; refusal preserves it.
  */
 CANIF_CODE Std_ReturnType CanIf_GetControllerMode(uint8 ControllerId,
                                                   Can_ControllerStateType *ControllerModePtr);
 /** Read the mapped driver error state (SWS_CANIF_91001).
- * @param[in] ControllerId The single configured abstract CanIf controller; other IDs are rejected.
+ * @param[in] ControllerId A configured abstract CanIf controller.
  * @param[out] ErrorStatePtr Non-NULL caller storage; written only when the driver returns E_OK.
  * @return E_OK with the queried value; E_NOT_OK for an unknown controller, NULL output or
  * unavailable driver value. Preconditions: CanIf initialized; otherwise E_NOT_OK with output
  * unchanged. Context: task or upper-layer callback; not inside an exclusive area. Reentrancy: not
- * reentrant for the same controller; only one controller is configured. Ownership: Output storage
+ * reentrant for the same controller. Ownership: Output storage
  * is borrowed for this call and never retained; refusal preserves it.
  */
 CANIF_CODE Std_ReturnType CanIf_GetControllerErrorState(uint8 ControllerId,
                                                         Can_ErrorStateType *ErrorStatePtr);
 /** Read the mapped driver receive error count.
- * @param[in] ControllerId The single configured abstract CanIf controller; other IDs are rejected.
+ * @param[in] ControllerId A configured abstract CanIf controller.
  * @param[out] RxErrorCounterPtr Non-NULL caller storage; written only when the driver returns E_OK.
  * @return E_OK with the queried value; E_NOT_OK for an unknown controller, NULL output or
  * unavailable driver value. Preconditions: CanIf initialized; otherwise E_NOT_OK with output
  * unchanged. Context: task or upper-layer callback; not inside an exclusive area. Reentrancy: not
- * reentrant for the same controller; only one controller is configured. Ownership: Output storage
+ * reentrant for the same controller. Ownership: Output storage
  * is borrowed for this call and never retained; refusal preserves it.
  */
 CANIF_CODE Std_ReturnType CanIf_GetControllerRxErrorCounter(uint8 ControllerId,
                                                             uint8 *RxErrorCounterPtr);
 /** Read the mapped driver transmit error count.
- * @param[in] ControllerId The single configured abstract CanIf controller; other IDs are rejected.
+ * @param[in] ControllerId A configured abstract CanIf controller.
  * @param[out] TxErrorCounterPtr Non-NULL caller storage; written only when the driver returns E_OK.
  * @return E_OK with the queried value; E_NOT_OK for an unknown controller, NULL output or
  * unavailable driver value. Preconditions: CanIf initialized; otherwise E_NOT_OK with output
  * unchanged. Context: task or upper-layer callback; not inside an exclusive area. Reentrancy: not
- * reentrant for the same controller; only one controller is configured. Ownership: Output storage
+ * reentrant for the same controller. Ownership: Output storage
  * is borrowed for this call and never retained; refusal preserves it.
  */
 CANIF_CODE Std_ReturnType CanIf_GetControllerTxErrorCounter(uint8 ControllerId,
                                                             uint8 *TxErrorCounterPtr);
 /** Change PDU gating on the started controller (SWS_CANIF_00008).
- * @param[in] ControllerId The single configured abstract CanIf controller; other IDs are rejected.
+ * @param[in] ControllerId A configured abstract CanIf controller.
  * @param[in] PduModeRequest OFFLINE, TX_OFFLINE or ONLINE; TX_OFFLINE_ACTIVE is not selected.
  * @return E_OK when committed in this lifetime; E_NOT_OK for an invalid mode/controller,
  * uninitialized or non-started driver. Preconditions: Initialized and actual driver STARTED;
@@ -181,7 +187,7 @@ CANIF_CODE Std_ReturnType CanIf_GetControllerTxErrorCounter(uint8 ControllerId,
  */
 CANIF_CODE Std_ReturnType CanIf_SetPduMode(uint8 ControllerId, CanIf_PduModeType PduModeRequest);
 /** Read this controller's current PDU gating mode (SWS_CANIF_00009).
- * @param[in] ControllerId The single configured abstract CanIf controller; other IDs are rejected.
+ * @param[in] ControllerId A configured abstract CanIf controller.
  * @param[out] PduModePtr Non-NULL caller storage; written only on E_OK.
  * @return E_OK with the current mode; E_NOT_OK preserves output.
  * Preconditions: Initialized and a valid controller; otherwise E_NOT_OK.
@@ -214,7 +220,7 @@ CANIF_CODE void CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType 
  */
 CANIF_CODE void CanIf_TxConfirmation(PduIdType CanTxPduId);
 /** Publish a driver state transition and cancel stopped requests (SWS_CANIF_00699).
- * @param[in] ControllerId The single configured abstract CanIf controller; other IDs are rejected.
+ * @param[in] ControllerId A configured abstract CanIf controller.
  * @param[in] ControllerMode Completed STARTED, STOPPED or SLEEP transition; other modes are
  * ignored.
  * @par Return
@@ -227,7 +233,7 @@ CANIF_CODE void CanIf_TxConfirmation(PduIdType CanTxPduId);
 CANIF_CODE void CanIf_ControllerModeIndication(uint8 ControllerId,
                                                Can_ControllerStateType ControllerMode);
 /** Apply bus-off gating and publish the driver event (SWS_CANIF_00218).
- * @param[in] ControllerId The single configured abstract CanIf controller; other IDs are rejected.
+ * @param[in] ControllerId A configured abstract CanIf controller.
  * @par Return
  * None.
  * Preconditions: Initialized and configured controller; otherwise no action.

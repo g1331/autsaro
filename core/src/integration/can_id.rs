@@ -1,9 +1,45 @@
 //! CAN endpoint identity and CanIf receive policy.
-use super::{graph::Graph, schedule::value};
+use super::{
+    DiagnosticCategory, PlanDiagnostic,
+    graph::Graph,
+    schedule::{value, values},
+};
 
 pub(super) const EXTENDED: u32 = 0x8000_0000;
 pub(super) const FD: u32 = 0x4000_0000;
 pub(super) const EXTENDED_MAX: u32 = 0x1fff_ffff;
+
+/// ECUC_EcuC_00052/00054 link the global PDU to one System Template trigger.
+pub(super) fn pdu_trigger_reference(
+    graph: &Graph,
+    pdu: usize,
+) -> Result<Option<usize>, Vec<PlanDiagnostic>> {
+    let mut references = values(graph, pdu, "SysTPduToFrameTriggeringRef", true);
+    references.extend(values(graph, pdu, "SysTPduToPduTriggeringRef", true));
+    match references.as_slice() {
+        [] => Ok(None),
+        [path] => graph.index(path).map(Some),
+        _ => Err(vec![graph.diagnostic(
+            pdu,
+            DiagnosticCategory::Input,
+            "SIGNAL_MAPPING",
+            crate::product_message!(
+                "backend.integration.communication.communication_relationship_missing_or_ambiguous"
+            ),
+            crate::product_message!(
+                "backend.integration.communication.communication_relationship_correct"
+            ),
+        )]),
+    }
+}
+
+pub(super) fn trigger_references(graph: &Graph, frame: usize, target: usize) -> bool {
+    frame == target
+        || graph
+            .descendants(frame, "PDU-TRIGGERING-REF")
+            .into_iter()
+            .any(|reference| graph.elements[reference].text == graph.elements[target].object)
+}
 
 pub(super) fn trigger_id(graph: &Graph, trigger: usize) -> Option<u32> {
     let flag = match graph.text(trigger, "CAN-FD-FRAME-SUPPORT") {

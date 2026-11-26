@@ -30,9 +30,10 @@ typedef Std_ReturnType (*BswM_ModeActionType)(NetworkHandleType Network, ComM_Mo
  * as BSWM_FALSE; no rule is evaluated before the first indication.
  */
 typedef struct {
-    NetworkHandleType channel;   /**< Indicated channel (BswMComMChannelRef). */
-    BswM_ModeActionType action;  /**< Rule action lists (BswMRuleTrueActionList). */
-    void (*action_failed)(void); /**< Optional failure callout, run outside BSWM_STATE. */
+    const NetworkHandleType *channels; /**< Indicated channels (BswMComMChannelRef). */
+    uint16 channel_count;              /**< Number of entries in channels. */
+    BswM_ModeActionType action;        /**< Rule action lists (BswMRuleTrueActionList). */
+    void (*action_failed)(NetworkHandleType Network); /**< Optional channel failure callout. */
 } BswM_ConfigType;
 /** Start arbitrating ComM indications (SWS_BswM_00002).
  * @param[in] ConfigPtr Configuration with an action; otherwise BswM is unchanged.

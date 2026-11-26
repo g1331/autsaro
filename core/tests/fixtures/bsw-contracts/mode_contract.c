@@ -35,12 +35,14 @@ static unsigned action_depth;
 static boolean postpone;
 static Std_ReturnType action_result;
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
-static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
+static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8])
+{
     assert(id == 0x456u && length == 4u && data[0] == 42u && data[1] == 0u);
     ++frames;
     return ECU_OK;
 }
-static void receive(CbkHandleIdType handle) {
+static void receive(CbkHandleIdType handle)
+{
     assert(handle == 17u);
     ++receptions;
 }
@@ -57,7 +59,8 @@ static void indication(uint8 NetworkId, ComM_ModeType ComMode)
 static void no_entered(uint8 NetworkId) { indication(NetworkId, COMM_NO_COMMUNICATION); }
 static void silent_entered(uint8 NetworkId) { indication(NetworkId, COMM_SILENT_COMMUNICATION); }
 static void full_entered(uint8 NetworkId) { indication(NetworkId, COMM_FULL_COMMUNICATION); }
-static Std_ReturnType action(NetworkHandleType Network, ComM_ModeType Mode) {
+static Std_ReturnType action(NetworkHandleType Network, ComM_ModeType Mode)
+{
     last_action = Mode;
     ++action_depth;
     assert(action_depth == 1u); /* IMMEDIATE reentrant input is postponed, not recursive. */
@@ -70,7 +73,8 @@ static Std_ReturnType action(NetworkHandleType Network, ComM_ModeType Mode) {
     --action_depth;
     return action_result;
 }
-static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code) {
+static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code)
+{
     assert(module == 60u && instance == 0u && api == 0x49u && code == 70u);
     ++errors;
     return E_NOT_OK;
@@ -100,49 +104,38 @@ static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit}};
 static const LSduR_PBConfigType ls = {29u, ls_rx, 1u, ls_tx, 1u};
-static const CanIf_RxPduConfigType canif_rx[] = {{0x123u, 21u, 4u, FALSE, 0u, 0u}};
-static const CanIf_TxPduConfigType canif_tx[] = {{0x456u, 51u, 4u, 0u, 0u}};
+static const CanIf_RxPduConfigType canif_rx[] = {{0x123u, 21u, 4u, FALSE, 9u, 11u, 0u, 0u}};
+static const CanIf_TxPduConfigType canif_tx[] = {{0x456u, 51u, 4u, 9u, 17u, 0u, 0u}};
+static const CanIf_ControllerConfigType canif_controllers[] = {{9u, 7u}};
 static const CanIf_ConfigType canif = {canif_rx,
                                        1u,
                                        canif_tx,
                                        1u,
                                        Ecu_HostBusSM_ControllerModeIndication,
                                        Ecu_HostBusSM_ControllerBusOff,
-                                       9u,
-                                       7u,
-                                       11u,
-                                       17u};
+                                       canif_controllers,
+                                       1u};
 static const Can_ConfigType can = {.sink = sink};
-static const ComM_UserHandleType users[] = {17u, 43u};
-static const ComM_ConfigType comm = {7u,
-                                     users,
-                                     2u,
-                                     3u,
-                                     Ecu_HostBusSM_RequestComMode,
-                                     Ecu_HostBusSM_GetCurrentComMode,
-                                     no_entered,
-                                     silent_entered,
-                                     full_entered,
-                                     NULL_PTR,
-                                     0u};
-static const Ecu_HostBusSM_ConfigType cdd = {7u, 9u};
-static const BswM_ConfigType bswm = {7u, action, NULL_PTR};
+static const NetworkHandleType user_channels[] = {7u};
+static const ComM_UserModeConfigType users[] = {{17u, user_channels, 1u, NULL_PTR},
+                                                {43u, user_channels, 1u, NULL_PTR}};
+static const ComM_ChannelConfigType channels[] = {
+    {7u, 3u, no_entered, silent_entered, full_entered}};
+static const ComM_ConfigType comm = {
+    channels, 1u, users, 2u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode};
+static const Ecu_HostBusSM_ChannelConfigType bus_channels[] = {{7u, 9u}};
+static const Ecu_HostBusSM_ConfigType cdd = {bus_channels, 1u};
+static const BswM_ConfigType bswm = {user_channels, 1u, action, NULL_PTR};
 
 static void reject_bswm_configurations(void)
 {
-    const BswM_ConfigType missing_action = {7u, NULL_PTR, NULL_PTR};
+    const BswM_ConfigType missing_action = {user_channels, 1u, NULL_PTR, NULL_PTR};
     BswM_Init(NULL_PTR);
     BswM_ComM_CurrentMode(7u, COMM_FULL_COMMUNICATION);
     assert(actions == 0u);
     BswM_Init(&missing_action);
     BswM_ComM_CurrentMode(7u, COMM_FULL_COMMUNICATION);
     assert(actions == 0u);
-}
-
-static void unexpected_user_mode(ComM_ModeType mode)
-{
-    (void)mode;
-    assert(0);
 }
 
 static void reject_comm_configuration(const ComM_ConfigType *configuration)
@@ -154,56 +147,41 @@ static void reject_comm_configuration(const ComM_ConfigType *configuration)
     assert(ComM_GetCurrentComMode(17u, &mode) == E_NOT_OK && mode == 99u);
 }
 
-static void reject_comm_user_modes(void)
-{
-    static const NetworkHandleType channel[] = {7u};
-    static const NetworkHandleType wrong_channel[] = {8u};
-    const ComM_UserModeConfigType good = {17u, channel, 1u, unexpected_user_mode};
-    const ComM_UserModeConfigType bad_modes[] = {
-        {99u, channel, 1u, unexpected_user_mode},
-        {17u, channel, 1u, NULL_PTR},
-        {17u, NULL_PTR, 1u, unexpected_user_mode},
-        {17u, channel, 0u, unexpected_user_mode},
-        {17u, wrong_channel, 1u, unexpected_user_mode},
-    };
-    const ComM_UserModeConfigType duplicate[] = {good, good, good};
-    ComM_ConfigType invalid = comm;
-    invalid.user_mode_count = 1u;
-    reject_comm_configuration(&invalid);
-    for (unsigned index = 0u; index < sizeof(bad_modes) / sizeof(bad_modes[0]); ++index) {
-        invalid.user_modes = &bad_modes[index];
-        reject_comm_configuration(&invalid);
-    }
-    invalid.user_modes = duplicate;
-    invalid.user_mode_count = 2u;
-    reject_comm_configuration(&invalid);
-    invalid.user_mode_count = 3u;
-    reject_comm_configuration(&invalid);
-}
-
 static void reject_comm_configurations(void)
 {
-    const ComM_UserHandleType reserved[] = {17u, COMM_NOT_USED_USER_ID};
-    const ComM_UserHandleType duplicate[] = {17u, 17u};
-    ComM_UserHandleType too_many[33];
+    static const NetworkHandleType wrong_channel[] = {8u};
+    const ComM_UserModeConfigType bad_users[] = {
+        {COMM_NOT_USED_USER_ID, user_channels, 1u, NULL_PTR},
+        {17u, NULL_PTR, 1u, NULL_PTR},
+        {17u, user_channels, 0u, NULL_PTR},
+        {17u, wrong_channel, 1u, NULL_PTR},
+    };
+    const ComM_UserModeConfigType duplicate[] = {users[0], users[0]};
     ComM_ConfigType invalid = comm;
-    for (unsigned index = 0u; index < 33u; ++index) {
-        too_many[index] = (ComM_UserHandleType)index;
-    }
+    ComM_ChannelConfigType bad_channel = channels[0];
     reject_comm_configuration(NULL_PTR);
-    invalid.users = too_many;
-    invalid.user_count = 33u;
+    invalid.channel_count = 257u;
+    reject_comm_configuration(&invalid);
+    invalid.channel_count = 0u;
+    reject_comm_configuration(&invalid);
+    invalid = comm;
+    invalid.channels = NULL_PTR;
     reject_comm_configuration(&invalid);
     invalid = comm;
     invalid.user_count = 0u;
     reject_comm_configuration(&invalid);
+    invalid.user_count = 33u;
+    reject_comm_configuration(&invalid);
     invalid = comm;
     invalid.users = NULL_PTR;
     reject_comm_configuration(&invalid);
-    invalid.users = reserved;
-    reject_comm_configuration(&invalid);
     invalid.users = duplicate;
     reject_comm_configuration(&invalid);
+    invalid.user_count = 1u;
+    for (unsigned index = 0u; index < sizeof(bad_users) / sizeof(bad_users[0]); ++index) {
+        invalid.users = &bad_users[index];
+        reject_comm_configuration(&invalid);
+    }
     invalid = comm;
     invalid.request = NULL_PTR;
     reject_comm_configuration(&invalid);
@@ -211,25 +189,28 @@ static void reject_comm_configurations(void)
     invalid.current = NULL_PTR;
     reject_comm_configuration(&invalid);
     invalid = comm;
-    invalid.dcm_silent = NULL_PTR;
+    invalid.channels = &bad_channel;
+    bad_channel.dcm_silent = NULL_PTR;
     reject_comm_configuration(&invalid);
-    invalid = comm;
-    invalid.dcm_full = NULL_PTR;
+    bad_channel = channels[0];
+    bad_channel.dcm_full = NULL_PTR;
     reject_comm_configuration(&invalid);
-    reject_comm_user_modes();
 }
 
-static void current(ComM_ModeType expected) {
+static void current(ComM_ModeType expected)
+{
     ComM_ModeType value = 99u;
     assert(ComM_GetCurrentComMode(17u, &value) == E_OK && value == expected);
 }
-static void buffer(void) {
+static void buffer(void)
+{
     uint32 value = 0u;
     uint32 sent = 42u;
     assert(Com_ReceiveSignal(10u, &value) == E_OK && value == 42u);
     assert(Com_SendSignal(11u, &sent) == E_OK);
 }
-int main(void) {
+int main(void)
+{
     void (*init)(const ComM_ConfigType *) = ComM_Init;
     Std_ReturnType (*request)(ComM_UserHandleType, ComM_ModeType) = ComM_RequestComMode;
     void (*allowed)(NetworkHandleType, boolean) = ComM_CommunicationAllowed;
@@ -319,7 +300,8 @@ int main(void) {
     assert(CanIf_SetControllerMode(7u, CAN_CS_STARTED) == E_NOT_OK);
     assert(Can_SetControllerMode(0u, CAN_CS_STARTED) == E_NOT_OK);
     {
-        const Ecu_HostBusSM_ConfigType invalid_provider = {7u, 7u};
+        const Ecu_HostBusSM_ChannelConfigType invalid_mapping = {7u, 7u};
+        const Ecu_HostBusSM_ConfigType invalid_provider = {&invalid_mapping, 1u};
         Ecu_HostBusSM_Init(&invalid_provider);
         assert(bus_get(7u, &value) == E_NOT_OK && value == 99u);
     }
@@ -348,18 +330,18 @@ int main(void) {
     assert(ComM_GetRequestedComMode(17u, NULL_PTR) == E_NOT_OK);
     assert(ComM_GetMaxComMode(17u, &value) == E_OK && value == COMM_FULL_COMMUNICATION);
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_OK);
-    assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_REQUEST_PENDING);
     current(COMM_NO_COMMUNICATION);
     assert(indications[2] == 0u);
     assert(request(17u, COMM_NO_COMMUNICATION) == E_OK);
-    assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_NO_PENDING_REQUEST);
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_OK);
     allowed(99u, TRUE);
-    assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_REQUEST_PENDING);
     allowed(7u, TRUE);
     current(COMM_NO_COMMUNICATION); /* Real driver STARTED, but no PDU ONLINE indication yet. */
     assert(indications[2] == 0u && actions == 0u);
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED); /* minimum tick 1 of 3 */
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED); /* minimum tick 1 of 3 */
     assert(indications[2] == 0u);
     Can_MainFunction_Wakeup();
     current(COMM_FULL_COMMUNICATION);
@@ -390,24 +372,24 @@ int main(void) {
     active(7u);
     assert(request(43u, COMM_NO_COMMUNICATION) == E_OK);
     allowed(7u, FALSE); /* In FULL this cannot act as a stop command. */
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED); /* tick 2 */
-    assert(ComM_RunChannel() ==
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED); /* tick 2 */
+    assert(ComM_RunChannel(7u) ==
            COMM_FULL_COM_NETWORK_REQUESTED); /* tick 3, diagnosis still active */
     inactive(99u);                           /* Unknown channel cannot release mapped diagnosis. */
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
     inactive(7u);
-    assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_READY_SLEEP);
     for (i = 0u; i < 10u; ++i) {
-        assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+        assert(ComM_RunChannel(7u) == COMM_FULL_COM_READY_SLEEP);
         current(COMM_FULL_COMMUNICATION); /* NM NONE/CDD must not invent automatic shutdown. */
     }
     active(7u); /* Re-entering NETWORK_REQUESTED starts a fresh minimum timer. */
     inactive(7u);
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_OK); /* repeated FULL does not reset timer */
     assert(request(17u, COMM_NO_COMMUNICATION) == E_OK);
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
-    assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_READY_SLEEP);
     current(COMM_FULL_COMMUNICATION);
     ComM_DeInit();
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_INIT);
@@ -422,7 +404,7 @@ int main(void) {
     current(COMM_NO_COMMUNICATION);
     saved = indications[2];
     for (i = 0u; i < 10u; ++i) {
-        assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+        assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
         current(COMM_NO_COMMUNICATION);
         assert(Can_GetControllerErrorState(7u, &error_state) == E_OK &&
                error_state == CAN_ERRORSTATE_BUSOFF);
@@ -444,13 +426,13 @@ int main(void) {
     assert(bus_request(7u, COMM_NO_COMMUNICATION) == E_OK);
     current(COMM_NO_COMMUNICATION);
     assert(indications[0] == saved); /* No completion before real polling. */
-    assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_READY_SLEEP);
     Can_MainFunction_Wakeup();
     assert(indications[0] == saved + 1u && last_action == COMM_NO_COMMUNICATION);
     /* The actual NO reaches BswM and Dcm, but NM NONE has no bus-driven channel
      * transition (Figure 7.7): READY_SLEEP stays, and no FULL is re-requested. */
     for (i = 0u; i < 10u; ++i) {
-        assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+        assert(ComM_RunChannel(7u) == COMM_FULL_COM_READY_SLEEP);
         current(COMM_NO_COMMUNICATION);
         buffer();
     }
@@ -469,7 +451,7 @@ int main(void) {
     assert(indications[1] == 1u && last_action == COMM_SILENT_COMMUNICATION);
     /* READY_SLEEP -> NETWORK_REQUESTED stays in FULL: no new bus request. */
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_OK);
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
     current(COMM_SILENT_COMMUNICATION);
     saved = actions;
     bswm_mode(99u, COMM_NO_COMMUNICATION);
@@ -503,11 +485,11 @@ int main(void) {
     current(COMM_NO_COMMUNICATION);  /* Re-init requests actual NO, not inherited FULL. */
     assert(indications[0] == saved); /* Default NO is not a mode change notification. */
     assert(request(17u, COMM_FULL_COMMUNICATION) == E_OK);
-    assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_REQUEST_PENDING);
     allowed(7u, TRUE);
     current(COMM_NO_COMMUNICATION); /* Old STOP pending rejects the new START request. */
     Can_MainFunction_Wakeup();
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
     current(COMM_NO_COMMUNICATION);
     {
         const unsigned before = receptions;
@@ -516,7 +498,7 @@ int main(void) {
     }
     Can_MainFunction_Wakeup();
     current(COMM_FULL_COMMUNICATION);
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
     assert(request(17u, COMM_NO_COMMUNICATION) == E_OK);
     assert(bus_request(7u, COMM_NO_COMMUNICATION) == E_OK);
     Can_MainFunction_Wakeup();
@@ -528,7 +510,7 @@ int main(void) {
     assert(bus_request(7u, COMM_FULL_COMMUNICATION) == E_OK);
     Can_MainFunction_Wakeup();
     current(COMM_FULL_COMMUNICATION);
-    assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_NO_PENDING_REQUEST);
     ComM_DeInit();
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_INIT);
     assert(bus_request(7u, COMM_NO_COMMUNICATION) == E_OK);
@@ -554,24 +536,24 @@ int main(void) {
     init(&comm); /* A restart enters NO and clears every user request (SWS_ComM_00582). */
     assert(ComM_GetRequestedComMode(17u, &value) == E_OK && value == COMM_NO_COMMUNICATION);
     wake_up(99u);
-    assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_NO_PENDING_REQUEST);
     current(COMM_NO_COMMUNICATION);
     wake_up(7u);
     for (i = 0u; i < 3u; ++i) {
-        assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING);
+        assert(ComM_RunChannel(7u) == COMM_NO_COM_REQUEST_PENDING);
         current(COMM_NO_COMMUNICATION);
     }
     assert(ComM_GetRequestedComMode(17u, &value) == E_OK && value == COMM_NO_COMMUNICATION);
     assert(request(17u, COMM_NO_COMMUNICATION) == E_OK);
     inactive(7u);
-    assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_REQUEST_PENDING);
     ComM_DeInit();
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_INIT);
     init(&comm); /* Re-init discards the previous lifetime's wake-up request. */
-    assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_NO_PENDING_REQUEST);
     wake_up(7u);
     allowed(99u, TRUE);
-    assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_REQUEST_PENDING);
     bswm_main();
     assert(actions == saved); /* All-IMMEDIATE main does not rerun any action. */
     saved = indications[2];
@@ -581,12 +563,12 @@ int main(void) {
     Can_MainFunction_Mode();
     current(COMM_FULL_COMMUNICATION);
     assert(indications[2] == saved + 1u);
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED); /* minimum tick 1 */
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED); /* minimum tick 1 */
     wake_up(7u); /* A wake-up in FULL does not restart the selected timer. */
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED); /* minimum tick 2 */
-    assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);       /* minimum tick 3 */
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED); /* minimum tick 2 */
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_READY_SLEEP);       /* minimum tick 3 */
     for (i = 0u; i < 5u; ++i) {
-        assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+        assert(ComM_RunChannel(7u) == COMM_FULL_COM_READY_SLEEP);
         current(COMM_FULL_COMMUNICATION);
     }
     assert(bus_request(7u, COMM_NO_COMMUNICATION) == E_OK);
@@ -595,16 +577,16 @@ int main(void) {
     ComM_DeInit();
     init(&comm);
     allowed(7u, TRUE); /* Permission alone does not request FULL. */
-    assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_NO_PENDING_REQUEST);
     saved = indications[2];
     wake_up(7u);
     current(COMM_NO_COMMUNICATION);
     Can_MainFunction_Mode();
     current(COMM_FULL_COMMUNICATION);
     assert(indications[2] == saved + 1u);
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
-    assert(ComM_RunChannel() == COMM_FULL_COM_NETWORK_REQUESTED);
-    assert(ComM_RunChannel() == COMM_FULL_COM_READY_SLEEP);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_NETWORK_REQUESTED);
+    assert(ComM_RunChannel(7u) == COMM_FULL_COM_READY_SLEEP);
     assert(bus_request(7u, COMM_NO_COMMUNICATION) == E_OK);
     Can_MainFunction_Mode();
     init(&comm);

@@ -65,15 +65,17 @@ const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
 /* Observe actual native contention, so release cannot race a merely scheduled waiter. */
 #if defined(_WIN32)
 extern void(WINAPI *__real___imp_EnterCriticalSection)(LPCRITICAL_SECTION);
-static void WINAPI enter_native(LPCRITICAL_SECTION mutex) {
+static void WINAPI enter_native(LPCRITICAL_SECTION mutex)
+{
     if (mutex != &handshake) {
         int probe;
         lock();
         probe = paused && contend_thread();
         unlock();
         if (probe) {
-            if (TryEnterCriticalSection(mutex))
+            if (TryEnterCriticalSection(mutex)) {
                 return;
+            }
             lock();
             blocked = 1u;
             wake();
@@ -86,7 +88,8 @@ void(WINAPI *__wrap___imp_EnterCriticalSection)(LPCRITICAL_SECTION) = enter_nati
 #else
 #include <errno.h>
 int __real_pthread_mutex_lock(pthread_mutex_t *mutex);
-int __wrap_pthread_mutex_lock(pthread_mutex_t *mutex) {
+int __wrap_pthread_mutex_lock(pthread_mutex_t *mutex)
+{
     if (mutex != &handshake) {
         int probe;
         lock();
@@ -94,8 +97,9 @@ int __wrap_pthread_mutex_lock(pthread_mutex_t *mutex) {
         unlock();
         if (probe) {
             int result = pthread_mutex_trylock(mutex);
-            if (result != EBUSY)
+            if (result != EBUSY) {
                 return result;
+            }
             lock();
             blocked = 1u;
             wake();
@@ -112,61 +116,78 @@ void __real_CanIf_ControllerBusOff(uint8 ControllerId);
 void __real_CanIf_TxConfirmation(PduIdType CanTxPduId);
 void __real_CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr);
 /* Stop the dispatcher once per run, with no sleeps. */
-static void pause_dispatch(void) {
+static void pause_dispatch(void)
+{
     lock();
     if (armed && dispatch_thread()) {
         armed = 0u;
         paused = 1u;
         wake();
-        while (!released)
+        while (!released) {
             wait();
+        }
     }
     unlock();
 }
 /* Driver-to-CanIf operations stop after the driver exit, before the consumer. */
-void __wrap_CanIf_ControllerModeIndication(uint8 ControllerId, Can_ControllerStateType mode) {
-    if (operation < 5u)
+void __wrap_CanIf_ControllerModeIndication(uint8 ControllerId, Can_ControllerStateType mode)
+{
+    if (operation < 5u) {
         pause_dispatch();
+    }
     __real_CanIf_ControllerModeIndication(ControllerId, mode);
 }
-void __wrap_CanIf_ControllerBusOff(uint8 ControllerId) {
-    if (operation < 5u)
+void __wrap_CanIf_ControllerBusOff(uint8 ControllerId)
+{
+    if (operation < 5u) {
         pause_dispatch();
+    }
     __real_CanIf_ControllerBusOff(ControllerId);
 }
-void __wrap_CanIf_TxConfirmation(PduIdType CanTxPduId) {
-    if (operation < 5u)
+void __wrap_CanIf_TxConfirmation(PduIdType CanTxPduId)
+{
+    if (operation < 5u) {
         pause_dispatch();
+    }
     __real_CanIf_TxConfirmation(CanTxPduId);
 }
-void __wrap_CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr) {
-    if (operation < 5u)
+void __wrap_CanIf_RxIndication(const Can_HwType *Mailbox, const PduInfoType *PduInfoPtr)
+{
+    if (operation < 5u) {
         pause_dispatch();
+    }
     __real_CanIf_RxIndication(Mailbox, PduInfoPtr);
 }
 /* CanIf-to-driver operations stop after the driver exit, back in CanIf. */
-void __wrap_SchM_Exit_Can_CAN_STATE(void) {
+void __wrap_SchM_Exit_Can_CAN_STATE(void)
+{
     __real_SchM_Exit_Can_CAN_STATE();
-    if ((operation >= 5u) && (operation <= 10u))
+    if ((operation >= 5u) && (operation <= 10u)) {
         pause_dispatch();
+    }
 }
 /* CanIf Tx stops after its reservation (11) or after the driver accepted the frame and
  * before CanIf settles the request (12, 13). */
-Std_ReturnType __wrap_Can_Write(Can_HwHandleType hth, const Can_PduType *pdu) {
+Std_ReturnType __wrap_Can_Write(Can_HwHandleType hth, const Can_PduType *pdu)
+{
     Std_ReturnType result;
-    if (operation == 11u)
+    if (operation == 11u) {
         pause_dispatch();
+    }
     result = __real_Can_Write(hth, pdu);
-    if (operation > 11u)
+    if (operation > 11u) {
         pause_dispatch();
+    }
     return result;
 }
-static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
+static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8])
+{
     assert(id == 0x321u && length == 1u && data[0] == 42u);
     return ECU_OK;
 }
 static const Can_ConfigType can = {.sink = sink};
-static void observed(void) {
+static void observed(void)
+{
     if (reenter) {
         reenter = 0u;
         Can_SetMode(CAN_STOPPED);
@@ -176,22 +197,26 @@ static void observed(void) {
     }
 }
 /* The real bus state manager re-derives its mode from late events. */
-static void mode(uint8 id, Can_ControllerStateType value) {
+static void mode(uint8 id, Can_ControllerStateType value)
+{
     assert(id == 0u);
     last_mode = value;
     Ecu_HostBusSM_ControllerModeIndication(id, value);
     observed();
 }
-static void busoff(uint8 id) {
+static void busoff(uint8 id)
+{
     assert(id == 0u);
     Ecu_HostBusSM_ControllerBusOff(id);
     observed();
 }
-static void rx(PduIdType id, const PduInfoType *info) {
+static void rx(PduIdType id, const PduInfoType *info)
+{
     assert(id == 17u && info->SduLength == 1u && info->SduDataPtr[0] == 42u);
     observed();
 }
-static void tx(PduIdType id, Std_ReturnType status) {
+static void tx(PduIdType id, Std_ReturnType status)
+{
     assert(id == 18u);
     ++results;
     if (status == E_OK) {
@@ -199,9 +224,11 @@ static void tx(PduIdType id, Std_ReturnType status) {
         observed();
     }
 }
-static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u, FALSE, 0u, 0u}};
-static const CanIf_TxPduConfigType transmits[] = {{0x321u, 51u, 1u, 0u, 0u}};
-static const CanIf_ConfigType canif = {receives, 1u, transmits, 1u, mode, busoff, 0u, 0u, 0u, 0u};
+static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u, FALSE, 0u, 0u, 0u, 0u}};
+static const CanIf_TxPduConfigType transmits[] = {{0x321u, 51u, 1u, 0u, 0u, 0u, 0u}};
+static const CanIf_ControllerConfigType canif_controllers[] = {{0u, 0u}};
+static const CanIf_ConfigType canif = {
+    receives, 1u, transmits, 1u, mode, busoff, canif_controllers, 1u};
 static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, NULL_PTR}};
@@ -210,8 +237,10 @@ static const PduR_RxRouteType pdur_rx[] = {{31u, 17u, rx}};
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_COM, 18u, PDUR_LO_LSDUR, 41u, LSduR_PduRTransmit, tx, NULL_PTR}};
 static const PduR_PBConfigType pdur = {23u, pdur_rx, 1u, pdur_tx, 1u, NULL_PTR, 0u};
-static const Ecu_HostBusSM_ConfigType bussm = {0u, 0u};
-static void initialize(void) {
+static const Ecu_HostBusSM_ChannelConfigType bus_channels[] = {{0u, 0u}};
+static const Ecu_HostBusSM_ConfigType bussm = {bus_channels, 1u};
+static void initialize(void)
+{
     Can_Init(&can);
     CanIf_Init(&canif);
     LSduR_Init(&ls);
@@ -220,17 +249,18 @@ static void initialize(void) {
     Can_SetMode(CAN_STARTED);
     assert(Ecu_HostBusSM_RequestComMode(0u, COMM_FULL_COMMUNICATION) == E_OK);
 }
-static void dispatch(void) {
+static void dispatch(void)
+{
 #if defined(_WIN32)
     dispatcher = GetCurrentThreadId();
 #else
     dispatcher = pthread_self();
 #endif
-    if (operation == 0u)
+    if (operation == 0u) {
         Can_SetMode(CAN_STARTED);
-    else if (operation == 1u)
+    } else if (operation == 1u) {
         Can_MainFunction_Mode();
-    else if (operation == 2u) {
+    } else if (operation == 2u) {
 #if CAN_BUSOFF_POLLING == 1
         Can_MainFunction_BusOff();
 #else
@@ -256,7 +286,8 @@ static void dispatch(void) {
         transmitted = CanIf_Transmit(51u, &frame);
     }
 }
-static void cancel(void) {
+static void cancel(void)
+{
     Can_ControllerStateType actual;
 #if defined(_WIN32)
     contender = GetCurrentThreadId();
@@ -286,8 +317,9 @@ static void cancel(void) {
         /* The frame leaves and is confirmed before CanIf settles its request. */
         assert(Can_HostFlush() == ECU_OK);
         Can_MainFunction_Write();
-        if (cancellation)
+        if (cancellation) {
             Can_SetMode(CAN_STOPPED);
+        }
     } else {
         Can_SetMode(CAN_STOPPED);
         if (cancellation) {
@@ -298,12 +330,14 @@ static void cancel(void) {
     }
 }
 #if defined(_WIN32)
-static DWORD WINAPI run_dispatch(LPVOID arg) {
+static DWORD WINAPI run_dispatch(LPVOID arg)
+{
     (void)arg;
     dispatch();
     return 0u;
 }
-static DWORD WINAPI run_cancel(LPVOID arg) {
+static DWORD WINAPI run_cancel(LPVOID arg)
+{
     (void)arg;
     cancel();
     lock();
@@ -313,12 +347,14 @@ static DWORD WINAPI run_cancel(LPVOID arg) {
     return 0u;
 }
 #else
-static void *run_dispatch(void *arg) {
+static void *run_dispatch(void *arg)
+{
     (void)arg;
     dispatch();
     return NULL_PTR;
 }
-static void *run_cancel(void *arg) {
+static void *run_cancel(void *arg)
+{
     (void)arg;
     cancel();
     lock();
@@ -328,7 +364,8 @@ static void *run_cancel(void *arg) {
     return NULL_PTR;
 }
 #endif
-int main(void) {
+int main(void)
+{
     const PduInfoType info = {(uint8 *)bytes, NULL_PTR, 1u};
 #if defined(_WIN32)
     InitializeCriticalSection(&handshake);
@@ -370,8 +407,9 @@ int main(void) {
             assert(pthread_create(&first, NULL_PTR, run_dispatch, NULL_PTR) == 0);
 #endif
             lock();
-            while (!paused)
+            while (!paused) {
                 wait();
+            }
             unlock();
 #if defined(_WIN32)
             second = CreateThread(NULL, 0u, run_cancel, NULL, 0u, NULL);
@@ -381,8 +419,9 @@ int main(void) {
 #endif
             lock();
             /* The paused dispatcher holds no lock the contender needs. */
-            while (!finished && !blocked)
+            while (!finished && !blocked) {
                 wait();
+            }
             assert(finished && !blocked);
             unlock();
             /* Neither the dispatcher nor the contender owns the driver area; if one did,

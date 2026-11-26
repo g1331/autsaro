@@ -46,4 +46,4 @@ Rte_ComM_Type的唤醒常量由[生成接口精确保留](../rte/generated-reten
 
 ## 剩余差距
 
-当前生成前拒绝多通道配置；多通道用户的最低模式聚合、通道局部状态与上下层隔离由 [#464](https://github.com/g1331/autsaro/issues/464) 承接。MISRA 人工评估由 #58 跟踪。
+MISRA 人工评估由 #58 跟踪。

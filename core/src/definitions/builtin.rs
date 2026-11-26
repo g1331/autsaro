@@ -466,6 +466,20 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
     a.container(PDU, 0, None)?;
     a.integers(PDU, "PduLength", "0", U32, 1)?;
     a.booleans(PDU, "DynamicLength", 0)?;
+    a.foreign(
+        PDU,
+        "SysTPduToFrameTriggeringRef",
+        "CAN-FRAME-TRIGGERING",
+        0,
+        Some(1),
+    )?;
+    a.foreign(
+        PDU,
+        "SysTPduToPduTriggeringRef",
+        "PDU-TRIGGERING",
+        0,
+        Some(1),
+    )?;
     let collection = "EcuC/EcucConfigSet/EcucPduCollection";
     a.enumeration(collection, "PduIdTypeEnum", "UINT8 UINT16", 1)?;
     a.enumeration(collection, "PduLengthTypeEnum", "UINT8 UINT16 UINT32", 1)?;

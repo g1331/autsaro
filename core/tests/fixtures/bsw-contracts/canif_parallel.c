@@ -37,7 +37,8 @@ typedef struct {
     unsigned generation;
 } Barrier;
 static Barrier barrier;
-static void rendezvous(void) {
+static void rendezvous(void)
+{
     unsigned generation;
 #if defined(_WIN32)
     EnterCriticalSection(&barrier.lock);
@@ -85,11 +86,13 @@ static unsigned frames[2];
 static unsigned offline_errors;
 static unsigned mode_indications;
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
-static unsigned index_for(PduIdType id) {
+static unsigned index_for(PduIdType id)
+{
     assert(id == 1u || id == 2u);
     return (id == 1u) ? 0u : 1u;
 }
-static void confirmed(PduIdType id, Std_ReturnType result) {
+static void confirmed(PduIdType id, Std_ReturnType result)
+{
     const unsigned index = index_for(id);
     Com_TxConfirmation(id, result);
     if (result == E_OK) {
@@ -99,7 +102,8 @@ static void confirmed(PduIdType id, Std_ReturnType result) {
         ++failures[index];
     }
 }
-static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
+static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8])
+{
     unsigned index;
     CanIf_PduModeType mode = CANIF_OFFLINE;
     assert(id == 0x456u || id == 0x457u);
@@ -112,12 +116,14 @@ static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     ++frames[index];
     return ECU_OK;
 }
-static void mode(uint8 id, Can_ControllerStateType state) {
+static void mode(uint8 id, Can_ControllerStateType state)
+{
     assert(id == 0u && (state == CAN_CS_STARTED || state == CAN_CS_STOPPED));
     ++mode_indications;
 }
 static void bus_off(uint8 id) { assert(id == 0u); }
-static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code) {
+static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code)
+{
     assert(module == 60u && instance == 0u && api == 0x49u && code == 70u);
     ++offline_errors;
     return E_NOT_OK;
@@ -143,10 +149,13 @@ static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit},
     {LSDUR_UP_PDUR, 42u, 61u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit}};
 static const LSduR_PBConfigType ls = {29u, NULL_PTR, 0u, ls_tx, 2u};
-static const CanIf_TxPduConfigType tx[] = {{0x456u, 51u, 4u, 0u, 0u}, {0x457u, 61u, 4u, 0u, 0u}};
-static const CanIf_ConfigType canif = {NULL_PTR, 0u, tx, 2u, mode, bus_off, 0u, 0u, 0u, 0u};
+static const CanIf_TxPduConfigType tx[] = {{0x456u, 51u, 4u, 0u, 0u, 0u, 0u},
+                                           {0x457u, 61u, 4u, 0u, 0u, 0u, 0u}};
+static const CanIf_ControllerConfigType canif_controllers[] = {{0u, 0u}};
+static const CanIf_ConfigType canif = {NULL_PTR, 0u, tx, 2u, mode, bus_off, canif_controllers, 1u};
 static const Can_ConfigType can = {.sink = sink};
-static void produce(Worker *worker) {
+static void produce(Worker *worker)
+{
     unsigned round;
     uint8 bytes[4] = {(uint8)(worker->index + 1u), 0x5au, 0xa5u, 0xffu};
     const PduInfoType info = {bytes, NULL_PTR, 4u};
@@ -163,17 +172,20 @@ static void produce(Worker *worker) {
     }
 }
 #if defined(_WIN32)
-static DWORD WINAPI run(LPVOID argument) {
+static DWORD WINAPI run(LPVOID argument)
+{
     produce(argument);
     return 0u;
 }
 #else
-static void *run(void *argument) {
+static void *run(void *argument)
+{
     produce(argument);
     return NULL_PTR;
 }
 #endif
-int main(void) {
+int main(void)
+{
     unsigned round;
     unsigned index;
     unsigned previous_accepted = 0u;

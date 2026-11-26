@@ -95,6 +95,7 @@ fn symbolic_headers_and_consumers_preserve_provider_names_and_values() {
             .count(),
         2
     );
+    assert!(config.contains("ComMConf_ComMChannel_Host, CanIfConf_CanIfCtrlCfg_Controller"));
     assert!(config.contains("channel != ComMConf_ComMChannel_Host"));
     assert!(config.contains("PduRConf_PduRSrcPdu_TxValueSource"));
     let profile = text("generated/include/Ecu_ProfileConfig.h");

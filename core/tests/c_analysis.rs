@@ -1,5 +1,8 @@
 //! Generation of the static-analysis samples (no compiler or official archives).
-use super::*;
+#![allow(dead_code)]
+
+mod support;
+use support::{analysis_samples, mainline, workspace::Scratch};
 
 /// Writes the samples to `AUTOSAR_C_ANALYSIS_SAMPLES` when set, for CI and
 /// `c-check`; otherwise to a scratch directory that is removed afterwards.

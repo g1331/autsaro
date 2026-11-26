@@ -469,6 +469,49 @@ def _can_fd_baseline_plan(plan: dict) -> dict:
     }
 
 
+def _multichannel_baseline_plan(previous: dict, current: dict) -> dict:
+    """Expand the original single-channel plan using its sealed configuration."""
+    runtime = previous.get("communicationRuntime", {})
+    mode = previous.get("modeRuntime") or {}
+    if ("channels" in runtime or "channels" in mode or "channel" not in mode
+            or "channels" not in current.get("communicationRuntime", {})):
+        return previous
+
+    can = runtime["can"]
+    network = can["physicalChannel"].rpartition("/")[0]
+    ecu = previous["composition"]["ecu"]
+    connectors = [obj["path"] for obj in previous["objects"]
+                  if obj["kind"] == "CAN-COMMUNICATION-CONNECTOR"
+                  and obj["path"].rpartition("/")[0] == ecu]
+    controllers = [row["path"] for row in previous["configuration"]
+                   if row["references"].get(row["definition"] + "/CanIfCtrlCanCtrlRef")
+                   == [can["controller"]]]
+    if len(connectors) != 1 or len(controllers) != 1:
+        return previous
+
+    channel = {**can, "network": network, "connector": connectors[0],
+               "canIfController": controllers[0]}
+    hardware = [
+        {"path": can[direction + "Hardware"], "controller": can["controller"],
+         "handle": can[direction + "Handle"], "idType": can[direction + "IdType"],
+         "receive": direction == "receive", "fdPadding": can["fdPadding"] if direction == "transmit" else 0}
+        for direction in ("receive", "transmit")
+    ]
+    fields = {"channel", "channelHandle", "input", "mainSymbol", "periodMs"}
+    mode_channel = {key: mode[key] for key in fields}
+    mode_channel["canIfController"] = controllers[0]
+    return {
+        **previous,
+        "communicationRuntime": {**runtime, "can": channel, "channels": [channel], "hardware": hardware},
+        "modeRuntime": {
+            **{key: value for key, value in mode.items() if key not in fields},
+            "channels": [mode_channel],
+            "dcmConnections": dict.fromkeys(mode["dcmConnections"], mode["channel"]),
+            "rules": [{**rule, "channel": mode["channel"]} for rule in mode["rules"]],
+        },
+    }
+
+
 def _com_layout_predecessor(plan: dict, previous: dict) -> dict:
     """Project the explicit layout onto COM's original four-byte UINT32 profile."""
     layout = {
@@ -620,6 +663,8 @@ def compare(
             previous_plan = _r11_baseline_plan(previous_plan)
         if can_fd_transition:
             previous_plan = _can_fd_baseline_plan(previous_plan)
+        if source_tree:
+            previous_plan = _multichannel_baseline_plan(previous_plan, plan)
         output_plan = _configuration(output / "project", source_tree=source_tree)
         comparable_plan = normalized(plan)
         normalized_previous = normalized(previous_plan)

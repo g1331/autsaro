@@ -196,6 +196,10 @@ typedef struct {
     uint32_t data_bitrate;
     boolean brs;
     uint8_t padding;
+    const Can_ControllerConfigType *controllers;
+    uint16_t controller_count;
+    const Can_HohConfigType *hardware;
+    uint32_t hardware_count;
 } ExpectedConfig;
 typedef char Id32[(sizeof(Can_IdType) == 4u) ? 1 : -1];
 typedef char Hoh16[(sizeof(Can_HwHandleType) == 2u) ? 1 : -1];
@@ -209,7 +213,11 @@ typedef char ConfigLayout[(sizeof(Can_ConfigType) == sizeof(ExpectedConfig) &&
  offsetof(Can_ConfigType, nominal_bitrate) == offsetof(ExpectedConfig, nominal_bitrate) &&
  offsetof(Can_ConfigType, data_bitrate) == offsetof(ExpectedConfig, data_bitrate) &&
  offsetof(Can_ConfigType, brs) == offsetof(ExpectedConfig, brs) &&
- offsetof(Can_ConfigType, fd_padding) == offsetof(ExpectedConfig, padding)) ? 1 : -1];
+ offsetof(Can_ConfigType, fd_padding) == offsetof(ExpectedConfig, padding) &&
+ offsetof(Can_ConfigType, controllers) == offsetof(ExpectedConfig, controllers) &&
+ offsetof(Can_ConfigType, controller_count) == offsetof(ExpectedConfig, controller_count) &&
+ offsetof(Can_ConfigType, hardware) == offsetof(ExpectedConfig, hardware) &&
+ offsetof(Can_ConfigType, hardware_count) == offsetof(ExpectedConfig, hardware_count)) ? 1 : -1];
 void (*initialize)(const Can_ConfigType *) = Can_Init;
 Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
 "#;

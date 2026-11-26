@@ -83,44 +83,130 @@ pub(super) fn reference_shape(plan: &ValidatedIntegrationPlan) -> Option<Referen
 pub(super) fn verification_files(
     plan: &ValidatedIntegrationPlan,
 ) -> Result<BTreeMap<String, Vec<u8>>, crate::message::LocalizedText> {
-    let Some(shape) = reference_shape(plan) else {
-        return Ok(BTreeMap::new());
-    };
+    let shape = reference_shape(plan);
     let description = plan.description();
-    let (Some(communication), Some(transport)) = (
-        &description.communication_runtime,
-        &description.diagnostic_transport,
-    ) else {
+    let Some(communication) = &description.communication_runtime else {
         return Ok(BTreeMap::new());
     };
-    let endpoint = |direction, handle, id, accepts_fd, length| {
+    if shape.is_none() && communication.channels.len() == 1 {
+        return Ok(BTreeMap::new());
+    }
+    let transport = description.diagnostic_transport.as_ref();
+    let channels = communication
+        .channels
+        .iter()
+        .map(|channel| (channel.controller_id.to_string(), &channel.physical_channel))
+        .collect::<BTreeMap<_, _>>();
+    let fd_timing = communication
+        .channels
+        .iter()
+        .filter_map(|channel| {
+            Some((
+                channel.controller_id.to_string(),
+                json!({
+                    "nominalBitrate": channel.nominal_bitrate,
+                    "dataBitrate": channel.data_bitrate?,
+                    "brs": channel.brs,
+                }),
+            ))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let channel_id = |physical: &str| {
+        communication
+            .channels
+            .iter()
+            .find(|entry| entry.physical_channel == physical)
+            .map(|entry| entry.controller_id)
+    };
+    let signal_channel = |signal: &super::SignalChannel| {
+        description
+            .composition
+            .as_ref()?
+            .network_endpoints
+            .iter()
+            .find(|entry| entry.transport.can_if_pdu == signal.can_if_pdu)
+            .and_then(|entry| channel_id(&entry.channel))
+    };
+    let endpoint = |direction,
+                    channel,
+                    handle,
+                    id,
+                    accepts_fd,
+                    [logical, wire, offset]: [u8; 3]| {
         json!({
-            "module": "CanIf", "direction": direction, "handle": handle, "channel": 0,
+            "module": "CanIf", "direction": direction, "handle": handle, "channel": channel,
             "format": if id & super::can_id::EXTENDED != 0 { "EXTENDED" } else { "STANDARD" },
             "fdPolicy": if id & super::can_id::FD != 0 { "FD" }
                 else if accepts_fd { "CLASSICAL_OR_FD" } else { "CLASSICAL" },
-            "id": id & super::can_id::EXTENDED_MAX, "logicalLength": length, "wireLength": length,
+            "id": id & super::can_id::EXTENDED_MAX, "logicalLength": logical, "wireLength": wire,
+            "frameOffset": offset,
         })
     };
-    let inputs = json!({
-        "format": "autosar-ecu-test-inputs-v2", "periodMs": shape.period_ms,
-        "canFd": communication.can.data_bitrate.is_some(),
-        "fdTiming": communication.can.data_bitrate.map(|data_bitrate| json!({
-            "nominalBitrate": communication.can.nominal_bitrate,
-            "dataBitrate": data_bitrate,
-            "brs": communication.can.brs,
-        })),
-        "channels": {"0": communication.can.physical_channel},
-        "endpoints": {
-            "receive": endpoint("RX", shape.rx.can_if_handle, shape.rx.encoded_id(), shape.rx.accepts_fd, 4),
-            "transmit": endpoint("TX", shape.tx.can_if_handle, shape.tx.encoded_id(), false, 4),
-            "request": endpoint("RX", transport.request_can_if_handle, transport.encoded_request_id(), false, 8),
-            "response": endpoint("TX", transport.response_can_if_handle, transport.encoded_response_id(), false, 8),
-        },
-        "did": shape.diagnostic.did, "initialReceiveValue": shape.read.initial_value,
-        "receiveTimeoutMs": shape.diagnostic.n_cr_ms,
-        "scope": "Actual configured endpoints; independent fixed echo bytes and protocol assertions are in tools/ecu_tools/verify.py. This is test input, not a verification result."
+    let missing_binding = || crate::product_message!("backend.integration.composition.contract_invalid", "code" => "CONTROLLER_MAPPING");
+    let mut configured = BTreeMap::new();
+    for signal in super::signals::pdus(&description.signals) {
+        let channel = signal_channel(signal).ok_or_else(missing_binding)?;
+        configured.insert(
+            &signal.can_if_pdu,
+            endpoint(
+                if signal.receive { "RX" } else { "TX" },
+                channel,
+                signal.can_if_handle,
+                signal.encoded_id(),
+                signal.accepts_fd,
+                [signal.pdu_length, signal.dlc, signal.frame_offset],
+            ),
+        );
+    }
+    if let Some(tp) = transport {
+        let channel = channel_id(&tp.physical_channel).ok_or_else(missing_binding)?;
+        configured.insert(
+            &tp.can_if_rx_pdu,
+            endpoint(
+                "RX",
+                channel,
+                tp.request_can_if_handle,
+                tp.encoded_request_id(),
+                false,
+                [8, 8, 0],
+            ),
+        );
+        configured.insert(
+            &tp.can_if_tx_pdu,
+            endpoint(
+                "TX",
+                channel,
+                tp.response_can_if_handle,
+                tp.encoded_response_id(),
+                false,
+                [8, 8, 0],
+            ),
+        );
+    }
+    let mut inputs = json!({
+        "format": "autosar-ecu-test-inputs-v2",
+        "canFd": !fd_timing.is_empty(),
+        "fdTimingByChannel": fd_timing,
+        "channels": channels,
+        "configuredEndpoints": configured,
+        "scope": "Actual configured endpoints for independent checks. The package supplies input metadata, not a verification result.",
     });
+    if let (Some(shape), Some(tp)) = (shape, transport) {
+        let tx = signal_channel(shape.tx)
+            .ok_or_else(missing_binding)?
+            .to_string();
+        inputs["fdTiming"] = json!(fd_timing.get(&tx).or_else(|| fd_timing.values().next()));
+        inputs["periodMs"] = json!(shape.period_ms);
+        inputs["endpoints"] = json!({
+            "receive": configured[&shape.rx.can_if_pdu],
+            "transmit": configured[&shape.tx.can_if_pdu],
+            "request": configured[&tp.can_if_rx_pdu],
+            "response": configured[&tp.can_if_tx_pdu],
+        });
+        inputs["did"] = json!(shape.diagnostic.did);
+        inputs["initialReceiveValue"] = json!(shape.read.initial_value);
+        inputs["receiveTimeoutMs"] = json!(shape.diagnostic.n_cr_ms);
+    }
     Ok(BTreeMap::from([(
         super::outputs::VERIFICATION_INPUTS_PATH.into(),
         serde_json::to_vec_pretty(&inputs).map_err(|error| error.to_string())?,
@@ -283,10 +369,11 @@ pub fn verify_ecu_project(
     owner: &ProcessOwner,
 ) -> Result<RunReport, crate::message::LocalizedText> {
     checked_project(expected, project)?;
-    if !expected
-        .iter()
-        .any(|(path, _)| path == super::outputs::VERIFICATION_INPUTS_PATH)
-    {
+    if !expected.iter().any(|(path, bytes)| {
+        path == super::outputs::VERIFICATION_INPUTS_PATH
+            && serde_json::from_slice::<Value>(bytes)
+                .is_ok_and(|inputs| inputs["endpoints"].is_object())
+    }) {
         return Err(crate::product_message!(
             "backend.integration.handoff.reference_verification_inputs_missing"
         ));

@@ -8,10 +8,10 @@
 | --- | --- |
 | BswM 模块、BswMGeneral 与 ComM 开关 | 已核对（内置 ECUC metadata 与 mode.rs 校验：BswMGeneral 恰一个、BswMComMEnabled 必须为 true、BswMUserIncludeFile 只接受 Ecu_HostBusSM.h）：ECUC_BswM_00800、00939、00954、00955、01063 |
 | BswMGeneral 的模块开关定义 | 已核对（内置 ECUC metadata 保留 Boolean／默认 false；mode.rs 的 disabled() 对其余开关只接受 false，配置测试 mode_features_outside_the_selection_are_refused_at_their_source 的 Rejects 覆盖）：ECUC_BswM_00811、00812、00938、00940–00949、00965、00987、01047、01071、01072、01093 |
-| 仲裁容器、模式请求端口与 ComM 指示源 | 已核对（内置 ECUC metadata 与 mode.rs 校验：BswMArbitration 恰一个，BswMModeRequestPort 恰一个且 BSWM_IMMEDIATE，来源仅 BswMComMIndication 且引用 ComM 通道，初值 COMM_NO_COMMUNICATION）：ECUC_BswM_00801、00805、00822、00856、00880、00883、00928、00932 |
+| 仲裁容器、模式请求端口与 ComM 指示源 | 已核对（内置 ECUC metadata 与 mode.rs 校验：BswMArbitration 恰一个，每个配置通道恰一个 BswMModeRequestPort 且 BSWM_IMMEDIATE，来源仅 BswMComMIndication 且引用 ComM 通道，初值 COMM_NO_COMMUNICATION）：ECUC_BswM_00801、00805、00822、00856、00880、00883、00928、00932 |
 | 模式条件与逻辑表达式 | 已核对（内置 ECUC metadata 与 mode.rs 校验：每条规则一个 BSWM_EQUALS 的 BswMModeCondition，BswMBswMode 取 COMM 三种模式，表达式为 BSWM_AND 或省略）：ECUC_BswM_00807、00808、00814–00816、00820、00821、00866、00869 |
-| 规则 | 已核对（内置 ECUC metadata 与 mode.rs 校验：恰三条规则、BSWM_FALSE、无 false 列表、不嵌套执行、true 列表唯一）：ECUC_BswM_00806、00817–00819、00888、00935 |
-| 模式控制、动作与动作列表 | 已核对（内置 ECUC metadata 与 mode.rs 校验：BswMModeControl 恰一个，动作只能是 BswMUserCallout，调用文本须为固定的 Ecu_HostBusSM_ConfirmMode，动作列表 BSWM_CONDITION、Priority 0 或省略、单个 Index 0 且 AbortOnFail false、引用 BswMAction）：ECUC_BswM_00802、00809、00810、00823–00826、00834、00843、00894、00902、01076 |
+| 规则 | 已核对（内置 ECUC metadata 与 mode.rs 校验：每个通道恰三条规则、BSWM_FALSE、无 false 列表、不嵌套执行、true 列表唯一）：ECUC_BswM_00806、00817–00819、00888、00935 |
+| 模式控制、动作与动作列表 | 已核对（内置 ECUC metadata 与 mode.rs 校验：BswMModeControl 恰一个，动作只能是 BswMUserCallout，多通道调用 Ecu_HostBusSM_ConfirmControllerMode 并显式传入 ComM 句柄和 CanIf 配置符号，动作列表 BSWM_CONDITION、Priority 0 或省略、单个 Index 0 且 AbortOnFail false、引用 BswMAction）：ECUC_BswM_00802、00809、00810、00823–00826、00834、00843、00894、00902、01076 |
 | BswMConfig | 已核对（内置 ECUC metadata 与 mode.rs 校验：BswMConfig 只含 BswMArbitration 与 BswMModeControl，不含分区引用与数据类型映射）：ECUC_BswM_00895 |
 | CanSM 输入 | 不适用（配置：ECUC_BswM_00938）：ECUC_BswM_00857、00870 |
 | Dcm 输入 | 不适用（配置：ECUC_BswM_00940）：ECUC_BswM_00863、00925、00969 |

@@ -5,6 +5,7 @@ use super::graph::Graph;
 use super::schedule::{ScheduleContract, definition_is, value, values};
 use super::{DiagnosticCategory, PlanDiagnostic};
 use serde::Serialize;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -29,6 +30,9 @@ impl CommunicationIntegerType {
 #[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct CanRuntimeContract {
     pub physical_channel: String,
+    pub network: String,
+    pub connector: String,
+    pub can_if_controller: String,
     pub controller: String,
     pub controller_id: u8,
     pub can_if_controller_id: u8,
@@ -55,6 +59,18 @@ pub struct CanRuntimeContract {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ipc-types", derive(specta::Type))]
+pub struct CanHardwareContract {
+    pub path: String,
+    pub handle: u16,
+    pub controller: String,
+    pub receive: bool,
+    pub id_type: String,
+    pub fd_padding: u8,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct PartitionRuntimeContract {
     pub path: String,
     pub name: String,
@@ -72,6 +88,8 @@ pub struct CommunicationRuntimeContract {
     pub pdu_id_type: CommunicationIntegerType,
     pub pdu_length_type: CommunicationIntegerType,
     pub can: CanRuntimeContract,
+    pub channels: Vec<CanRuntimeContract>,
+    pub hardware: Vec<CanHardwareContract>,
     pub partition: PartitionRuntimeContract,
 }
 
@@ -99,6 +117,37 @@ fn one(graph: &Graph, kind: &str) -> Result<usize, Vec<PlanDiagnostic>> {
             "COMMUNICATION_CONFIGURATION",
         ))
     }
+}
+
+/// The controller and hardware object IDs are independent, dense namespaces.
+/// A single driver owns the complete HRH/HTH namespace (ECUC_Can_00326).
+fn numbered(
+    graph: &Graph,
+    kind: &str,
+    name: &str,
+    maximum: u16,
+    code: &str,
+) -> Result<BTreeMap<u16, usize>, Vec<PlanDiagnostic>> {
+    let mut items = BTreeMap::new();
+    for index in graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, kind))
+    {
+        let id = value(graph, index, name, false)
+            .and_then(|text| text.parse::<u16>().ok())
+            .filter(|id| *id <= maximum)
+            .ok_or_else(|| fail(graph, index, code))?;
+        if items.insert(id, index).is_some() {
+            return Err(fail(graph, index, code));
+        }
+    }
+    for (expected, (&id, &index)) in items.iter().enumerate() {
+        if usize::from(id) != expected {
+            return Err(fail(graph, index, code));
+        }
+    }
+    Ok(items)
 }
 fn integer_type(
     graph: &Graph,
@@ -230,7 +279,10 @@ fn bitrates(
     let fd: Vec<_> = graph
         .of_kind("ECUC-CONTAINER-VALUE")
         .into_iter()
-        .filter(|index| definition_is(graph, *index, "CanControllerFdBaudrateConfig"))
+        .filter(|index| {
+            graph.within(*index, controller)
+                && definition_is(graph, *index, "CanControllerFdBaudrateConfig")
+        })
         .collect();
     let [config] = fd.as_slice() else {
         return if fd.is_empty() {
@@ -258,10 +310,82 @@ fn bitrates(
     Ok((nominal, Some(data), brs))
 }
 
+fn reference(graph: &Graph, source: usize, name: &str) -> Result<usize, Vec<PlanDiagnostic>> {
+    value(graph, source, name, true)
+        .and_then(|path| graph.objects.get(path).copied())
+        .ok_or_else(|| fail(graph, source, "CONTROLLER_MAPPING"))
+}
+
+fn route_controller(
+    graph: &Graph,
+    pdu: usize,
+    receive: bool,
+) -> Result<usize, Vec<PlanDiagnostic>> {
+    let (hoh, binding, kind) = if receive {
+        (
+            reference(graph, pdu, "CanIfRxPduHrhIdRef")?,
+            "CanIfHrhCanCtrlIdRef",
+            "CanIfHrhCfg",
+        )
+    } else {
+        let buffer = reference(graph, pdu, "CanIfTxPduBufferRef")?;
+        (
+            reference(graph, buffer, "CanIfBufferHthRef")?,
+            "CanIfHthCanCtrlIdRef",
+            "CanIfHthCfg",
+        )
+    };
+    if !definition_is(graph, hoh, kind) {
+        return Err(fail(graph, pdu, "CONTROLLER_MAPPING"));
+    }
+    let abstract_controller = reference(graph, hoh, binding)?;
+    reference(graph, abstract_controller, "CanIfCtrlCanCtrlRef")
+}
+
+fn physical_bindings(
+    graph: &Graph,
+    composition: &super::composition::CompositionContract,
+    diagnostic: Option<&super::diagnostic::DiagnosticTransportContract>,
+) -> Result<BTreeMap<usize, usize>, Vec<PlanDiagnostic>> {
+    let mut endpoints = composition
+        .network_endpoints
+        .iter()
+        .map(|endpoint| {
+            (
+                endpoint.transport.can_if_pdu.as_str(),
+                endpoint.channel.as_str(),
+                endpoint.transport.receive,
+            )
+        })
+        .collect::<Vec<_>>();
+    if let Some(tp) = diagnostic {
+        endpoints.push((&tp.can_if_rx_pdu, &tp.physical_channel, true));
+        endpoints.push((&tp.can_if_tx_pdu, &tp.physical_channel, false));
+    }
+    let mut by_driver = BTreeMap::new();
+    let mut by_channel = BTreeMap::new();
+    for (pdu, channel, receive) in endpoints {
+        let pdu = graph.index(pdu)?;
+        let channel = graph.index(channel)?;
+        let controller = route_controller(graph, pdu, receive)?;
+        if by_driver
+            .insert(controller, channel)
+            .is_some_and(|prior| prior != channel)
+            || by_channel
+                .insert(channel, controller)
+                .is_some_and(|prior| prior != controller)
+        {
+            return Err(fail(graph, pdu, "CONTROLLER_MAPPING"));
+        }
+    }
+    Ok(by_driver)
+}
+
 pub(super) fn inspect(
     graph: &Graph,
     schedule: &ScheduleContract,
     composition: &super::composition::CompositionContract,
+    diagnostic: Option<&super::diagnostic::DiagnosticTransportContract>,
 ) -> Result<CommunicationRuntimeContract, Vec<PlanDiagnostic>> {
     let partition = partition(graph, composition)?;
     let collection = one(graph, "EcucPduCollection")?;
@@ -306,17 +430,28 @@ pub(super) fn inspect(
             }
         }
     }
-    let controller = one(graph, "CanController")?;
-    let (nominal_bitrate, data_bitrate, brs) = bitrates(graph, controller)?;
-    let mut fd_padding = 0;
-    for name in [
-        "CanRxProcessing",
-        "CanTxProcessing",
-        "CanBusoffProcessing",
-        "CanWakeupProcessing",
-    ] {
-        if value(graph, controller, name, false) != Some("POLLING") {
-            return Err(fail(graph, controller, "CAN_PROCESSING"));
+    let driver_controllers = numbered(
+        graph,
+        "CanController",
+        "CanControllerId",
+        u16::from(u8::MAX),
+        "CAN_CONTROLLER_ID",
+    )?;
+    let mut can_if_bindings = BTreeMap::new();
+    for (id, abstract_controller) in numbered(
+        graph,
+        "CanIfCtrlCfg",
+        "CanIfCtrlId",
+        u16::from(u8::MAX),
+        "CAN_CONTROLLER_ID",
+    )? {
+        let driver = reference(graph, abstract_controller, "CanIfCtrlCanCtrlRef")?;
+        if !definition_is(graph, driver, "CanController")
+            || can_if_bindings
+                .insert(driver, (id, abstract_controller))
+                .is_some()
+        {
+            return Err(fail(graph, abstract_controller, "CONTROLLER_MAPPING"));
         }
     }
     let general = one(graph, "CanGeneral")?;
@@ -334,14 +469,14 @@ pub(super) fn inspect(
     }
     let rw = one(graph, "CanMainFunctionRWPeriods")?;
     let rw_path = graph.elements[rw].object.as_str();
-    let hardware: Vec<_> = graph
-        .of_kind("ECUC-CONTAINER-VALUE")
-        .into_iter()
-        .filter(|index| definition_is(graph, *index, "CanHardwareObject"))
-        .collect();
-    let mut receive = None;
-    let mut transmit = None;
-    for index in hardware {
+    let mut hardware = Vec::new();
+    for (handle, index) in numbered(
+        graph,
+        "CanHardwareObject",
+        "CanObjectId",
+        u16::MAX,
+        "CAN_HARDWARE_HANDLES",
+    )? {
         if value(graph, index, "CanMainFunctionRWPeriodRef", true) != Some(rw_path) {
             return Err(fail(graph, index, "CAN_POLLING_REFERENCE"));
         }
@@ -351,57 +486,35 @@ pub(super) fn inspect(
         ) {
             return Err(fail(graph, index, "CAN_FEATURE_UNSUPPORTED"));
         }
-        let handle = value(graph, index, "CanObjectId", false)
-            .and_then(|text| text.parse::<u16>().ok())
-            .ok_or_else(|| fail(graph, index, "CAN_HARDWARE_HANDLES"))?;
-        let selected = match value(graph, index, "CanObjectType", false) {
-            Some("RECEIVE") => &mut receive,
-            Some("TRANSMIT") => &mut transmit,
+        let receive = match value(graph, index, "CanObjectType", false) {
+            Some("RECEIVE") => true,
+            Some("TRANSMIT") => false,
             _ => return Err(fail(graph, index, "CAN_HARDWARE_HANDLES")),
         };
-        if let Some(padding) = value(graph, index, "CanFdPaddingValue", false) {
-            if value(graph, index, "CanObjectType", false) != Some("TRANSMIT") {
-                return Err(fail(graph, index, "CAN_FD_PADDING"));
-            }
-            fd_padding = crate::definitions::unsigned_integer(padding)
+        let fd_padding = match value(graph, index, "CanFdPaddingValue", false) {
+            None => 0,
+            Some(value) if !receive => crate::definitions::unsigned_integer(value)
                 .and_then(|padding| u8::try_from(padding).ok())
-                .ok_or_else(|| fail(graph, index, "CAN_FD_PADDING"))?;
-        }
+                .ok_or_else(|| fail(graph, index, "CAN_FD_PADDING"))?,
+            Some(_) => return Err(fail(graph, index, "CAN_FD_PADDING")),
+        };
         let id_type = match value(graph, index, "CanIdType", false) {
-            Some(format @ ("STANDARD" | "EXTENDED" | "MIXED")) => format,
+            Some(format @ ("STANDARD" | "EXTENDED" | "MIXED")) => format.to_owned(),
             _ => return Err(fail(graph, index, "CAN_ID_CONFLICT")),
         };
-        if selected
-            .replace((
-                graph.elements[index].object.clone(),
-                handle,
-                id_type.to_owned(),
-            ))
-            .is_some()
-        {
-            return Err(fail(graph, index, "CAN_HARDWARE_HANDLES"));
+        let controller = reference(graph, index, "CanControllerRef")?;
+        if !definition_is(graph, controller, "CanController") {
+            return Err(fail(graph, index, "CONTROLLER_MAPPING"));
         }
+        hardware.push(CanHardwareContract {
+            path: graph.elements[index].object.clone(),
+            handle,
+            controller: graph.elements[controller].object.clone(),
+            receive,
+            id_type,
+            fd_padding,
+        });
     }
-    let (receive_hardware, receive_handle, receive_id_type) =
-        receive.ok_or_else(|| fail(graph, controller, "CAN_HARDWARE_HANDLES"))?;
-    let (transmit_hardware, transmit_handle, transmit_id_type) =
-        transmit.ok_or_else(|| fail(graph, controller, "CAN_HARDWARE_HANDLES"))?;
-    // The selected two-object common HRH/HTH range is contiguous from zero
-    // (ECUC_Can_00326, SWS_CANIF_00115).
-    if (receive_handle == transmit_handle) || (receive_handle > 1) || (transmit_handle > 1) {
-        return Err(fail(graph, controller, "CAN_HARDWARE_HANDLES"));
-    }
-    // Both selected namespaces contain one controller, numbered from zero
-    // (ECUC_Can_00316, SWS_CANIF_00653 and 00433), despite the wider metadata range.
-    let controller_id = value(graph, controller, "CanControllerId", false)
-        .and_then(|text| text.parse::<u8>().ok())
-        .filter(|id| *id == 0)
-        .ok_or_else(|| fail(graph, controller, "CAN_CONTROLLER_ID"))?;
-    let can_if_controller = one(graph, "CanIfCtrlCfg")?;
-    let can_if_controller_id = value(graph, can_if_controller, "CanIfCtrlId", false)
-        .and_then(|text| text.parse::<u8>().ok())
-        .filter(|id| *id == 0)
-        .ok_or_else(|| fail(graph, can_if_controller, "CAN_CONTROLLER_ID"))?;
     for (symbol, configured) in [
         (
             "Can_MainFunction_Read",
@@ -428,25 +541,76 @@ pub(super) fn inspect(
     }
     let ecu = graph.of_kind("ECU-INSTANCE");
     let [ecu] = ecu.as_slice() else {
-        return Err(fail(graph, controller, "CONTROLLER_MAPPING"));
+        return Err(fail(graph, general, "CONTROLLER_MAPPING"));
     };
-    let channel = super::component::selected_channel(graph, *ecu)?;
-    Ok(CommunicationRuntimeContract {
-        partition,
-        pdu_collection: graph.elements[collection].object.clone(),
-        pdu_id_type,
-        pdu_length_type,
-        can: CanRuntimeContract {
-            physical_channel: graph.elements[channel].object.clone(),
-            controller: graph.elements[controller].object.clone(),
-            controller_id,
-            can_if_controller_id,
-            receive_hardware,
-            receive_id_type,
-            receive_handle,
-            transmit_hardware,
-            transmit_id_type,
-            transmit_handle,
+    let selected = super::component::selected_channels(graph, *ecu);
+    let physical = physical_bindings(graph, composition, diagnostic)?;
+    let mut networks = BTreeSet::new();
+    let mut channels = Vec::new();
+    for (controller_id, controller) in driver_controllers {
+        let (can_if_controller_id, can_if_controller) = can_if_bindings
+            .get(&controller)
+            .ok_or_else(|| fail(graph, controller, "CONTROLLER_MAPPING"))?;
+        let physical_channel = physical
+            .get(&controller)
+            .copied()
+            .filter(|channel| selected.contains(channel))
+            .ok_or_else(|| fail(graph, controller, "CONTROLLER_MAPPING"))?;
+        let network = graph
+            .ancestor(physical_channel, "CAN-CLUSTER")
+            .ok_or_else(|| fail(graph, physical_channel, "CONTROLLER_MAPPING"))?;
+        if !networks.insert(network) {
+            return Err(fail(graph, physical_channel, "CONTROLLER_MAPPING"));
+        }
+        let connectors = graph
+            .descendants(physical_channel, "COMMUNICATION-CONNECTOR-REF")
+            .into_iter()
+            .filter_map(|reference| graph.objects.get(&graph.elements[reference].text).copied())
+            .filter(|connector| graph.within(*connector, *ecu))
+            .collect::<Vec<_>>();
+        let [connector] = connectors.as_slice() else {
+            return Err(fail(graph, physical_channel, "CONTROLLER_MAPPING"));
+        };
+        let (nominal_bitrate, data_bitrate, brs) = bitrates(graph, controller)?;
+        let rates = graph.descendants(network, "BAUDRATE");
+        if rates.len() != 1
+            || graph.elements[rates[0]].text.parse::<u32>().ok() != Some(nominal_bitrate)
+        {
+            return Err(fail(graph, controller, "BAUDRATE_CONFLICT"));
+        }
+        for name in [
+            "CanRxProcessing",
+            "CanTxProcessing",
+            "CanBusoffProcessing",
+            "CanWakeupProcessing",
+        ] {
+            if value(graph, controller, name, false) != Some("POLLING") {
+                return Err(fail(graph, controller, "CAN_PROCESSING"));
+            }
+        }
+        let path = &graph.elements[controller].object;
+        let receive = hardware
+            .iter()
+            .find(|hoh| &hoh.controller == path && hoh.receive)
+            .ok_or_else(|| fail(graph, controller, "CAN_HARDWARE_HANDLES"))?;
+        let transmit = hardware
+            .iter()
+            .find(|hoh| &hoh.controller == path && !hoh.receive)
+            .ok_or_else(|| fail(graph, controller, "CAN_HARDWARE_HANDLES"))?;
+        channels.push(CanRuntimeContract {
+            physical_channel: graph.elements[physical_channel].object.clone(),
+            network: graph.elements[network].object.clone(),
+            connector: graph.elements[*connector].object.clone(),
+            controller: path.clone(),
+            controller_id: controller_id as u8,
+            can_if_controller: graph.elements[*can_if_controller].object.clone(),
+            can_if_controller_id: *can_if_controller_id as u8,
+            receive_hardware: receive.path.clone(),
+            receive_id_type: receive.id_type.clone(),
+            receive_handle: receive.handle,
+            transmit_hardware: transmit.path.clone(),
+            transmit_id_type: transmit.id_type.clone(),
+            transmit_handle: transmit.handle,
             read_write_period: rw_path.into(),
             read_write_period_ms: period(graph, rw, "CanMainFunctionPeriod", schedule)?,
             busoff_period_ms: period(graph, general, "CanMainFunctionBusoffPeriod", schedule)?,
@@ -458,19 +622,49 @@ pub(super) fn inspect(
             nominal_bitrate,
             data_bitrate,
             brs,
-            fd_padding,
-        },
+            fd_padding: transmit.fd_padding,
+        });
+    }
+    if channels.len() != selected.len() || channels.is_empty() {
+        return Err(fail(graph, general, "CONTROLLER_MAPPING"));
+    }
+    Ok(CommunicationRuntimeContract {
+        partition,
+        pdu_collection: graph.elements[collection].object.clone(),
+        pdu_id_type,
+        pdu_length_type,
+        can: channels[0].clone(),
+        channels,
+        hardware,
     })
 }
 
 /// ECU-only CAN selection; component contracts do not consume driver configuration.
 pub(super) fn profile_header(
     communication: &CommunicationRuntimeContract,
-    can_if_controller: &str,
+    comm_channel_count: usize,
+    comm_user_count: usize,
+    can_if_counts: [usize; 3],
 ) -> (String, Vec<u8>) {
     let can = &communication.can;
     let profile = super::c_layout::commented_defines(
         &[
+            (
+                "CAN_CONTROLLER_CAPACITY",
+                format!("{}u", communication.channels.len()),
+            ),
+            (
+                "CAN_HOH_CAPACITY",
+                format!("{}u", communication.hardware.len()),
+            ),
+            ("COMM_USER_CAPACITY", format!("{comm_user_count}u")),
+            ("COMM_CHANNEL_CAPACITY", format!("{comm_channel_count}u")),
+            (
+                "CANIF_CONTROLLER_CAPACITY",
+                format!("{}u", can_if_counts[0]),
+            ),
+            ("CANIF_RX_CAPACITY", format!("{}u", can_if_counts[1])),
+            ("CANIF_TX_CAPACITY", format!("{}u", can_if_counts[2].max(1))),
             ("CAN_HOST_QUEUED_COMPLETION", "STD_ON".to_owned()),
             ("CAN_RX_POLLING", "STD_ON".to_owned()),
             ("CAN_TX_POLLING", "STD_ON".to_owned()),
@@ -479,7 +673,10 @@ pub(super) fn profile_header(
                 "CAN_CONTROLLER_ID",
                 super::symbolic_names::name("Can", "CanController", &can.controller),
             ),
-            ("CAN_CANIF_CONTROLLER_ID", can_if_controller.to_owned()),
+            (
+                "CAN_CANIF_CONTROLLER_ID",
+                super::symbolic_names::name("CanIf", "CanIfCtrlCfg", &can.can_if_controller),
+            ),
             (
                 "CAN_RX_ID_TYPE",
                 format!("CAN_HOH_ID_{}", can.receive_id_type),
@@ -497,7 +694,7 @@ pub(super) fn profile_header(
                 super::symbolic_names::name("Can", "CanHardwareObject", &can.receive_hardware),
             ),
         ],
-        "Generated CAN selection.",
+        "CAN profile.",
     );
     (
         "include/Ecu_ProfileConfig.h".into(),

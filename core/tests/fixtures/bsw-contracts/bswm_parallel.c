@@ -40,20 +40,33 @@ static unsigned armed;
 static unsigned paused;
 static unsigned released;
 static ComM_ModeType actions[8];
+static NetworkHandleType action_channels[8];
 static unsigned action_count;
 static unsigned action_depth;
+static unsigned failures;
+static NetworkHandleType failed_channel;
 
 static Std_ReturnType action(NetworkHandleType Network, ComM_ModeType Mode)
 {
-    assert(Network == 7u && action_count < 8u && action_depth == 0u);
+    assert(action_count < 8u && action_depth == 0u);
     ++action_depth;
     SchM_Enter_ComM_COMM_STATE();
     SchM_Exit_ComM_COMM_STATE();
-    actions[action_count++] = Mode;
+    action_channels[action_count] = Network;
+    actions[action_count] = Mode;
+    ++action_count;
     --action_depth;
-    return E_OK;
+    return (Network == 89u) ? E_NOT_OK : E_OK;
 }
-static const BswM_ConfigType configuration = {7u, action, NULL_PTR};
+static void action_failed(NetworkHandleType Network)
+{
+    SchM_Enter_ComM_COMM_STATE();
+    SchM_Exit_ComM_COMM_STATE();
+    failed_channel = Network;
+    ++failures;
+}
+static const NetworkHandleType channels[] = {7u, 89u};
+static const BswM_ConfigType configuration = {channels, 2u, &action, &action_failed};
 
 void __real_SchM_Exit_BswM_BSWM_STATE(void);
 void __wrap_SchM_Exit_BswM_BSWM_STATE(void)
@@ -135,6 +148,12 @@ static void indicate_while_acting(void)
     BswM_ComM_CurrentMode(7u, COMM_SILENT_COMMUNICATION);
     assert(action_count == 0u);
 }
+static void indicate_distinct_ports(void)
+{
+    BswM_ComM_CurrentMode(7u, COMM_NO_COMMUNICATION);
+    BswM_ComM_CurrentMode(89u, COMM_SILENT_COMMUNICATION);
+    assert(action_count == 0u);
+}
 /* Deinit drops the postponed input; the action already taken still completes. */
 static void deinitialize_while_acting(void)
 {
@@ -162,6 +181,12 @@ int main(void)
     window(indicate_while_acting);
     assert(action_count == 3u && actions[0] == COMM_FULL_COMMUNICATION &&
            actions[1] == COMM_SILENT_COMMUNICATION && actions[2] == COMM_SILENT_COMMUNICATION);
+    assert(failures == 0u);
+    window(indicate_distinct_ports);
+    assert(action_count == 3u && action_channels[0] == 7u && action_channels[1] == 7u &&
+           action_channels[2] == 89u && actions[0] == COMM_FULL_COMMUNICATION &&
+           actions[1] == COMM_NO_COMMUNICATION && actions[2] == COMM_SILENT_COMMUNICATION);
+    assert(failures == 1u && failed_channel == 89u);
     window(deinitialize_while_acting);
     assert(action_count == 1u && actions[0] == COMM_FULL_COMMUNICATION);
     BswM_ComM_CurrentMode(7u, COMM_NO_COMMUNICATION);

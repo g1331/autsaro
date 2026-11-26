@@ -355,9 +355,17 @@ jobs:
           # Only tracked inputs participate, even after imports/builds create new files.
           paths = subprocess.check_output(['git', 'ls-files', '-z', '--',
               'core', 'runtime', 'third_party/freertos', 'tools/python/src/ecu_tools', 'LICENSE', 'NOTICE'])
+          tracked = set(paths.split(b'\0')) - {b''}
+          if os.environ.get('ANALYSIS_SIDE') == 'baseline':
+              # The staged sample trees come from the current index. Production stays on the first parent.
+              overlay_roots = ('core/tests', 'core/resources')
+              prefixes = tuple(root.encode() + b'/' for root in overlay_roots)
+              overlay = subprocess.check_output(['git', '-C', os.environ['CURRENT_INPUTS'],
+                  'ls-files', '-z', '--', *overlay_roots])
+              tracked = {path for path in tracked if not path.startswith(prefixes)}
+              tracked.update(set(overlay.split(b'\0')) - {b''})
           digest = hashlib.sha256()
-          tracked = sorted(path for path in paths.split(b'\0') if path)
-          for path in tracked:
+          for path in sorted(tracked):
               digest.update(path + b'\0')
               digest.update(hashlib.sha256(Path(os.fsdecode(path)).read_bytes()).digest())
           source = digest.hexdigest()
@@ -912,7 +920,7 @@ jobs:
           subprocess.run(['uv', 'run', '--locked', '--project', os.environ['CURRENT_INPUTS'],
               'python', '-m', 'autosar_tooling.ci_reporting', 'run', '--', 'cargo', 'test',
               '--manifest-path', str(Path(os.environ['GITHUB_WORKSPACE']) / 'Cargo.toml'),
-              '--locked', '-p', 'autosar-config-core', '--test', 'it', '--', 'c_analysis::'],
+              '--locked', '-p', 'autosar-config-core', '--test', 'c_analysis'],
               cwd=os.environ['GITHUB_WORKSPACE'], check=True)
       - name: Validate generated sample inventory and tree
         shell: python

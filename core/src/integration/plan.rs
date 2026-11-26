@@ -327,12 +327,18 @@ pub(super) fn inspect_composition(
         Some(transport) => routing::inspect_transport(graph, &signals, transport)?,
         None => routing::inspect_optional(graph, &signals, None)?,
     };
-    let communication_runtime = super::can_runtime::inspect(graph, &schedule, &composition)?;
-    if communication_runtime.can.data_bitrate.is_some()
-        && let Some(transport) = diagnostic_transport
-            .as_ref()
-            .filter(|tp| tp.request_accepts_fd)
-    {
+    let communication_runtime = super::can_runtime::inspect(
+        graph,
+        &schedule,
+        &composition,
+        diagnostic_transport.as_ref(),
+    )?;
+    if let Some(transport) = diagnostic_transport.as_ref().filter(|tp| {
+        tp.request_accepts_fd
+            && communication_runtime.channels.iter().any(|channel| {
+                channel.physical_channel == tp.physical_channel && channel.data_bitrate.is_some()
+            })
+    }) {
         let route = graph
             .of_kind("ECUC-CONTAINER-VALUE")
             .into_iter()
@@ -352,7 +358,12 @@ pub(super) fn inspect_composition(
             crate::product_message!("backend.integration.composition.repair_contract"),
         )]);
     }
-    let mode_runtime = super::mode::inspect(graph, &schedule)?;
+    let mode_runtime = super::mode::inspect(
+        graph,
+        &schedule,
+        &communication_runtime,
+        diagnostic_transport.as_ref(),
+    )?;
     let configuration = match definition_catalog {
         Some(catalog) => configuration::inspect_native(graph, catalog)?,
         None => configuration::inspect_native(
@@ -502,52 +513,52 @@ pub(super) fn inspect_composition(
     }
     let mut can_ids = BTreeSet::new();
     let mut can_handles = BTreeSet::new();
-    for (object, id, handle, receive, dual, fd_trigger) in super::signals::pdus(&signals)
+    let signal_endpoints = super::signals::pdus(&signals)
         .map(|signal| {
-            (
+            let trigger = graph.index(&signal.trigger)?;
+            let channel = graph
+                .ancestor(trigger, "CAN-PHYSICAL-CHANNEL")
+                .ok_or_else(|| PlanDiagnostic::plan_premise(&signal.trigger))?;
+            Ok((
                 signal.can_if_pdu.as_str(),
+                graph.elements[channel].object.as_str(),
                 signal.encoded_id(),
                 signal.can_if_handle,
                 signal.receive,
                 signal.accepts_fd,
                 signal.fd,
-            )
+            ))
         })
-        .chain(diagnostic_transport.iter().flat_map(|diagnostic| {
-            [
-                (
-                    diagnostic.rx_sdu.as_str(),
-                    diagnostic.encoded_request_id(),
-                    diagnostic.request_can_if_handle,
-                    true,
-                    false,
-                    false,
-                ),
-                (
-                    diagnostic.tx_sdu.as_str(),
-                    diagnostic.encoded_response_id(),
-                    diagnostic.response_can_if_handle,
-                    false,
-                    false,
-                    false,
-                ),
-            ]
-        }))
+        .collect::<Result<Vec<_>, Vec<PlanDiagnostic>>>()?;
+    let diagnostic_endpoints = diagnostic_transport.iter().flat_map(|diagnostic| {
+        [
+            (
+                diagnostic.can_if_rx_pdu.as_str(),
+                diagnostic.physical_channel.as_str(),
+                diagnostic.encoded_request_id(),
+                diagnostic.request_can_if_handle,
+                true,
+                diagnostic.request_accepts_fd,
+                false,
+            ),
+            (
+                diagnostic.can_if_tx_pdu.as_str(),
+                diagnostic.physical_channel.as_str(),
+                diagnostic.encoded_response_id(),
+                diagnostic.response_can_if_handle,
+                false,
+                false,
+                false,
+            ),
+        ]
+    });
+    for (object, channel, id, handle, receive, dual, fd_trigger) in
+        signal_endpoints.into_iter().chain(diagnostic_endpoints)
     {
-        // The delivered ComStack_Types.h defines PduIdType as uint8_t: a wider
-        // handle is a target width limit, not an identifier collision.
-        if handle > u16::from(u8::MAX) {
-            return Err(vec![graph.diagnostic(
-                graph.index(object)?,
-                DiagnosticCategory::Unsupported,
-                "CANIF_HANDLE_WIDTH",
-                crate::product_message!("backend.integration.plan.canif_pdu_handle_out_of_range"),
-                crate::product_message!("backend.integration.plan.use_uint8_canif_handles"),
-            )]);
-        }
-        if ((id & super::can_id::FD != 0) || fd_trigger)
-            && communication_runtime.can.data_bitrate.is_none()
-        {
+        let supports_fd = communication_runtime.channels.iter().any(|controller| {
+            controller.physical_channel == channel && controller.data_bitrate.is_some()
+        });
+        if ((id & super::can_id::FD != 0) || fd_trigger) && !supports_fd {
             return Err(vec![graph.diagnostic(
                 graph.index(object)?,
                 DiagnosticCategory::Input,
@@ -556,9 +567,10 @@ pub(super) fn inspect_composition(
                 crate::product_message!("backend.integration.composition.repair_contract"),
             )]);
         }
-        let dual_on_fd_controller = dual && communication_runtime.can.data_bitrate.is_some();
-        if !can_ids.insert(id)
-            || (dual_on_fd_controller && !can_ids.insert(id | super::can_id::FD))
+        let dual_on_fd_controller = dual && supports_fd;
+        if !can_ids.insert((channel, receive, id))
+            || (dual_on_fd_controller
+                && !can_ids.insert((channel, receive, id | super::can_id::FD)))
             || !can_handles.insert((receive, handle))
         {
             return Err(vec![graph.diagnostic(
@@ -592,7 +604,7 @@ pub(super) fn inspect_composition(
     })
 }
 
-/// CanIf Rx and Tx handles each number 0..N-1 (SWS_Comtype_00007) per direction. Runs after the uniqueness check.
+/// CanIf Rx and Tx handles each number 0..N-1 (SWS_Comtype_00007).
 fn can_if_handle_sequence(
     graph: &super::graph::Graph,
     signals: &[SignalChannel],
@@ -611,6 +623,11 @@ fn can_if_handle_sequence(
             });
         }
         let count = handles.len();
+        if count > usize::from(u16::MAX) {
+            return Err(PlanDiagnostic::plan_premise(
+                handles[usize::from(u16::MAX)].1,
+            ));
+        }
         for (handle, object) in handles {
             let (category, code, message, repair) = if usize::from(handle) >= count {
                 (

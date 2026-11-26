@@ -2188,13 +2188,11 @@ fn inspect_with_transport(
             return Err(fail(graph, mapping, "SIGNAL_MAPPING"));
         }
     }
-    if !network_endpoints.is_empty() {
-        let channel = super::component::selected_channel(graph, ecu)?;
-        if network_endpoints
-            .iter()
-            .any(|endpoint| endpoint.channel != path(graph, channel))
-        {
-            return Err(fail(graph, channel, "SIGNAL_MAPPING"));
+    let selected_channels = super::component::selected_channels(graph, ecu);
+    for endpoint in &network_endpoints {
+        let entry = graph.index(&endpoint.channel)?;
+        if !selected_channels.contains(&entry) {
+            return Err(fail(graph, entry, "SIGNAL_MAPPING"));
         }
     }
     for component in graph.of_kind("APPLICATION-SW-COMPONENT-TYPE") {
@@ -2552,6 +2550,11 @@ fn check_names(graph: &Graph, plan: &CompositionContract) -> Result<(), Vec<Plan
             "ComM_UserModeType",
             "ComM_UserModeConfigType",
             "comm_user_modes",
+            "comm_channel_config",
+            "bswm_comm_channels",
+            "bus_channels",
+            "Ecu_HostBusSM_ChannelConfigType",
+            "ComM_ChannelConfigType",
         ]
         .into_iter()
         .map(str::to_owned),

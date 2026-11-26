@@ -106,9 +106,10 @@ void BswM_ComM_CurrentMode(NetworkHandleType Network, ComM_ModeType RequestedMod
     }
     --depth;
 }
-static const ComM_UserHandleType users[] = {17u};
-static const ComM_ConfigType configuration = {
-    7u, users, 1u, 2u, bus_request, bus_current, dcm_no, dcm_silent, dcm_full, NULL_PTR, 0u};
+static const NetworkHandleType user_channels[] = {7u};
+static const ComM_UserModeConfigType users[] = {{17u, user_channels, 1u, NULL_PTR}};
+static const ComM_ChannelConfigType channels[] = {{7u, 2u, dcm_no, dcm_silent, dcm_full}};
+static const ComM_ConfigType configuration = {channels, 1u, users, 1u, bus_request, bus_current};
 
 void __real_SchM_Exit_ComM_COMM_STATE(void);
 void __wrap_SchM_Exit_ComM_COMM_STATE(void)
@@ -200,7 +201,7 @@ static void restart_while_requesting(void)
     ComM_Init(&configuration);
     assert(request_count == 1u); /* Only the first lifetime's NO so far. */
     assert(ComM_RequestComMode(17u, COMM_FULL_COMMUNICATION) == E_OK);
-    assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING); /* Allowed reset by Init. */
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_REQUEST_PENDING); /* Allowed reset by Init. */
     assert(request_count == 1u);
 }
 /* The dispatcher publishes FULL: later modes are recorded, the latest published after. */
@@ -214,7 +215,7 @@ static void indicate_while_publishing(void)
 static void request_while_deinitializing(void)
 {
     assert(ComM_RequestComMode(17u, COMM_FULL_COMMUNICATION) == E_OK);
-    assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_REQUEST_PENDING);
 }
 /* DeInit during a publication: the mode in flight completes, the recorded one is dropped. */
 static void deinitialize_while_publishing(void)
@@ -254,7 +255,7 @@ int main(void)
     window(2u, REQUEST, restart_while_requesting);
     assert(request_count == 3u && requested[1] == COMM_FULL_COMMUNICATION &&
            requested[2] == COMM_NO_COMMUNICATION);
-    assert(ComM_RunChannel() == COMM_NO_COM_REQUEST_PENDING && request_count == 3u);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_REQUEST_PENDING && request_count == 3u);
 
     /* Exit 1 claims the publisher; exit 2 takes FULL for BswM and Dcm. */
     window(2u, INDICATE, indicate_while_publishing);
@@ -275,7 +276,7 @@ int main(void)
     window(1u, DEINIT, request_while_deinitializing);
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_INIT);
     assert(ComM_RequestComMode(17u, COMM_NO_COMMUNICATION) == E_OK);
-    assert(ComM_RunChannel() == COMM_NO_COM_NO_PENDING_REQUEST);
+    assert(ComM_RunChannel(7u) == COMM_NO_COM_NO_PENDING_REQUEST);
     ComM_DeInit();
     assert(ComM_GetStatus(&status) == E_OK && status == COMM_UNINIT);
 

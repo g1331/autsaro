@@ -3,6 +3,64 @@ use super::*;
 use autosar_config_core::integration::InputSource;
 use std::path::Path;
 
+/// Verifies: ECUC_EcuC_00052, ECUC_EcuC_00054
+#[test]
+fn diagnostic_global_pdu_reference_selects_the_extract_trigger() {
+    for (definition, destination, trigger) in [
+        (
+            "SysTPduToFrameTriggeringRef",
+            "CAN-FRAME-TRIGGERING",
+            "DiagRequestTrigger",
+        ),
+        (
+            "SysTPduToPduTriggeringRef",
+            "PDU-TRIGGERING",
+            "DiagRequestPduTrigger",
+        ),
+    ] {
+        let mut sources = single_component_sources();
+        let path = format!("/Extract/ReferenceCan/Channel/{trigger}");
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| named(node, "ECUC-CONTAINER-VALUE", "DiagRequestPdu"),
+            |text| {
+                text.replace("</PARAMETER-VALUES>", &format!(
+                    "</PARAMETER-VALUES>
+                    <REFERENCE-VALUES>
+                      <ECUC-REFERENCE-VALUE>
+                        <DEFINITION-REF DEST=\"ECUC-FOREIGN-REFERENCE-DEF\">/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu/{definition}</DEFINITION-REF>
+                        <VALUE-REF DEST=\"{destination}\">{path}</VALUE-REF>
+                      </ECUC-REFERENCE-VALUE>
+                    </REFERENCE-VALUES>"
+                ))
+            },
+        );
+        let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+        assert!(plan.description().diagnostic_transport.is_some());
+        let validation = normal_validation(&sources);
+        assert!(
+            validation.diagnostics.is_empty(),
+            "{:?}",
+            validation.diagnostics
+        );
+
+        let wrong_path = path.replace("DiagRequest", "DiagResponse");
+        xml_edit(
+            &mut sources,
+            "ecuc.arxml",
+            |node| named(node, "ECUC-CONTAINER-VALUE", "DiagRequestPdu"),
+            |text| text.replace(&path, &wrong_path),
+        );
+        rejected_at(
+            &sources,
+            "SIGNAL_MAPPING",
+            "ecuc.arxml",
+            "/Configuration/EcuC/Config/Pdus/DiagRequestPdu",
+        );
+    }
+}
+
 /// Verifies: ECUC_Can_00473, ECUC_Can_00475, ECUC_Can_00481, ECUC_Can_00485
 #[test]
 fn fd_configuration_requires_the_selected_controller_and_preserves_brs_and_padding() {
@@ -401,7 +459,7 @@ fn reference_shape_records_independent_verification_inputs() {
             serde_json::json!({
                 "module": "CanIf", "direction": direction, "handle": handle, "channel": 0,
                 "format": "STANDARD", "fdPolicy": "CLASSICAL", "id": id,
-                "logicalLength": length, "wireLength": length,
+                "logicalLength": length, "wireLength": length, "frameOffset": 0,
             }),
             "{role}"
         );
@@ -816,12 +874,12 @@ fn configuration_rejections_keep_identifier_width_and_order() {
         "/Configuration/CanTp/Config/PhysicalChannel/DiagRequest",
     );
 
-    // The delivered ComStack_Types.h defines PduIdType as uint8_t.
+    // The configured UINT16 PduIdType fits 256 but the handles must be consecutive.
     let mut wide = single_component_sources();
     parameter(&mut wide, "TxValue", "CanIfTxPduId", "256");
     rejected_at(
         &wide,
-        "CANIF_HANDLE_WIDTH",
+        "CANIF_HANDLE_SEQUENCE",
         "ecuc.arxml",
         "/Configuration/CanIf/Config/TxValue",
     );
@@ -2223,40 +2281,6 @@ fn second_can_read_write_period_is_refused() {
         "ecuc.arxml",
         "/Configuration/Can/General/Polling",
     );
-}
-
-/// The selected controller has one HRH and one HTH; a second one is refused.
-#[test]
-fn second_canif_hardware_object_is_refused() {
-    // Rejects: ECUC_CanIf_00259, ECUC_CanIf_00258
-    for (name, definition) in [("Receive", "/CanIfHrhCfg"), ("Transmit", "/CanIfHthCfg")] {
-        let mut sources = single_component_sources();
-        xml_edit(
-            &mut sources,
-            "ecuc.arxml",
-            |node| {
-                named(node, "ECUC-CONTAINER-VALUE", name)
-                    && node.children().any(|child| {
-                        child.has_tag_name("DEFINITION-REF")
-                            && child.text().is_some_and(|text| text.ends_with(definition))
-                    })
-            },
-            |text| {
-                let copy = text.replacen(
-                    &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
-                    &format!("<SHORT-NAME>{name}Second</SHORT-NAME>"),
-                    1,
-                );
-                format!("{text}{copy}")
-            },
-        );
-        rejected_at(
-            &sources,
-            "CONFIGURATION_NOT_UNIQUE",
-            "ecuc.arxml",
-            "/Configuration/Can/Config/Controller",
-        );
-    }
 }
 
 /// Configuration is generated before compilation, so a module declaring the

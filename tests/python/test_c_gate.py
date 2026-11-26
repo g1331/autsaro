@@ -273,6 +273,61 @@ class SourceGateTests(unittest.TestCase):
                     for root in (project, output / "project"):
                         helper.seal(root, json.loads(original))
 
+    def test_multichannel_plan_preserves_single_channel_binding(self):
+        from autosar_tooling.c_comparison import compare
+        from ecu_tools.build import digest
+
+        helper = comparison_tests.CComparisonTests()
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = helper.runtime_fixture(Path(temporary))
+            old_root = baseline / "project"
+            old = json.loads((old_root / "meta/integration.json").read_text())
+            can = {"controller": "/Driver", "physicalChannel": "/Bus/Physical",
+                   "receiveHardware": "/Receive", "transmitHardware": "/Transmit",
+                   "receiveHandle": 0, "transmitHandle": 1, "receiveIdType": "STANDARD",
+                   "transmitIdType": "EXTENDED", "fdPadding": 85}
+            mode = {"channel": "/ComM", "channelHandle": 3, "input": "/BswM",
+                    "mainSymbol": "ComM_MainFunction_Host", "periodMs": 1}
+            rule = {"path": "/Rule", "mode": 2}
+            old["plan"].update(
+                communicationRuntime={"can": can},
+                modeRuntime={**mode, "rules": [rule], "dcmConnections": ["/Diagnostic"]},
+                composition={"ecu": "/Ecu"},
+                objects=[{"kind": "CAN-COMMUNICATION-CONNECTOR", "path": "/Ecu/Connector"}],
+                configuration=[{"path": "/CanIf", "definition": "/CanIfCtrlCfg",
+                                "references": {"/CanIfCtrlCfg/CanIfCtrlCanCtrlRef": ["/Driver"]}}],
+            )
+            helper.seal(old_root, old)
+            previous = json.loads((baseline / "summary.json").read_text())
+            previous["sourceSealSha256"] = digest(old_root / "meta/files.sha256")
+            helper.write(baseline, previous)
+
+            channel = {**can, "network": "/Bus", "connector": "/Ecu/Connector", "canIfController": "/CanIf"}
+            hardware = [
+                {"path": "/Receive", "controller": "/Driver", "handle": 0,
+                 "idType": "STANDARD", "receive": True, "fdPadding": 0},
+                {"path": "/Transmit", "controller": "/Driver", "handle": 1,
+                 "idType": "EXTENDED", "receive": False, "fdPadding": 85},
+            ]
+            new = {**old, "plan": {**old["plan"],
+                   "communicationRuntime": {"can": channel, "channels": [channel], "hardware": hardware},
+                   "modeRuntime": {"channels": [{**mode, "canIfController": "/CanIf"}],
+                                   "rules": [{**rule, "channel": "/ComM"}],
+                                   "dcmConnections": {"/Diagnostic": "/ComM"}}}}
+            for binding in ("/ComM", "/Other"):
+                new["plan"]["modeRuntime"]["dcmConnections"]["/Diagnostic"] = binding
+                for root in (project, output / "project"):
+                    helper.seal(root, new)
+                current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+                with self.assertRaisesRegex(ValueError, "configuration differs"):
+                    compare(current, project, output, baseline)
+                if binding == "/ComM":
+                    self.assertEqual(compare(current, project, output, baseline, source_tree=True),
+                                     {"new": [], "removed": []})
+                else:
+                    with self.assertRaisesRegex(ValueError, "configuration differs"):
+                        compare(current, project, output, baseline, source_tree=True)
+
     def test_rename_keeps_source_counts_and_config_binding(self):
         helper = comparison_tests.CComparisonTests()
         from autosar_tooling.c_comparison import compare

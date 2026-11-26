@@ -364,9 +364,23 @@ fn strict_consumer(scratch: &Path, module: &str, fixture: &str, flags: &[&str]) 
         command.arg("-I").arg(scratch);
         command.arg(root.join("runtime/host/src/SchM_Diagnostic_Host.c"));
     }
+    if module == "Can" {
+        command
+            .arg("-I")
+            .arg(root.join("runtime/ecu/src"))
+            .arg("-I")
+            .arg(root.join("runtime/ecu/include"))
+            .arg(root.join("runtime/bsw/src/CanIf.c"))
+            .arg(root.join("runtime/host/src/Can_Host.c"));
+    }
     if matches!(module, "ComM" | "BswM") {
         command.arg(root.join("runtime/host/src/SchM_Mode_Host.c"));
     }
+    let source_directory = if module == "Ecu_HostBusSM" {
+        "runtime/host/src"
+    } else {
+        "runtime/bsw/src"
+    };
     let output = command
         .args(["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic"])
         .args(flags)
@@ -384,7 +398,7 @@ fn strict_consumer(scratch: &Path, module: &str, fixture: &str, flags: &[&str]) 
         .arg(root.join("core/tests/fixtures/bsw-contracts/config"))
         .arg(root.join("runtime/host/src/SchM_CanIf_Host.c"))
         .arg(root.join("runtime/host/src/Can_HostLock.c"))
-        .arg(root.join(format!("runtime/bsw/src/{module}.c")))
+        .arg(root.join(format!("{source_directory}/{module}.c")))
         .arg(root.join("core/tests/fixtures/bsw-contracts").join(fixture))
         .arg("-o")
         .arg(&executable)
@@ -468,6 +482,22 @@ fn comm_bus_requests_and_mode_publications_stay_ordered_while_another_waits_outs
         "comm_parallel.c",
         "-Wl,--wrap=SchM_Exit_ComM_COMM_STATE",
     );
+}
+
+#[test]
+fn comm_aggregates_user_modes_and_keeps_channel_requests_and_timers_separate() {
+    let scratch = Scratch::new();
+    let executable = strict_consumer(&scratch.0, "ComM", "comm_multichannel.c", &[]);
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+}
+
+#[test]
+fn bussm_keeps_controller_transitions_and_busoff_recovery_on_the_bound_channel() {
+    let scratch = Scratch::new();
+    let executable = strict_consumer(&scratch.0, "Ecu_HostBusSM", "bussm_multichannel.c", &[]);
+    let output = Command::new(executable).output().unwrap();
+    assert!(output.status.success(), "{output:?}");
 }
 
 /// BswM runs its action outside BSWM_STATE and postpones concurrent input (ADR 0018).
@@ -724,6 +754,37 @@ fn com_periodic_transmission_executes_real_lower_modules_and_can_busy() {
         "{:?}",
         output
     );
+}
+
+#[test]
+fn can_and_canif_preserve_channel_across_faults_and_confirmations() {
+    for channel_count in [2, 3, 4, 6] {
+        let scratch = Scratch::new();
+        let channels = format!("-DCAN_TEST_CHANNELS={channel_count}u");
+        let capacity = format!("-DCAN_CONTROLLER_CAPACITY={channel_count}u");
+        let hardware = format!("-DCAN_HOH_CAPACITY={}u", 2 * channel_count);
+        let if_capacity = format!("-DCANIF_CONTROLLER_CAPACITY={channel_count}u");
+        let executable = strict_consumer(
+            &scratch.0,
+            "Can",
+            "can_multichannel.c",
+            &[
+                &channels,
+                &capacity,
+                &hardware,
+                &if_capacity,
+                "-DCAN_HOST_QUEUED_COMPLETION=1",
+                "-DCAN_RX_POLLING=1",
+                "-DCAN_TX_POLLING=1",
+                "-DCAN_BUSOFF_POLLING=1",
+            ],
+        );
+        let output = Command::new(executable).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{channel_count} channels: {output:?}"
+        );
+    }
 }
 
 #[test]

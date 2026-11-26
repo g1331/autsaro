@@ -21,7 +21,8 @@ static unsigned modes;
 static unsigned busoffs;
 static uint8 expected_length;
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
-static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
+static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8])
+{
     assert(id == 0x321u && length == expected_length);
     if (length == 0u) {
         assert(data[0] == 0u);
@@ -31,14 +32,16 @@ static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     ++emitted;
     return ECU_OK;
 }
-static void indication(PduIdType id, const PduInfoType *info) {
+static void indication(PduIdType id, const PduInfoType *info)
+{
     assert(id == 17u && info != NULL_PTR && info->SduLength == expected_length);
     if (info->SduLength > 0u) {
         assert(info->SduDataPtr[0] == 42u);
     }
     ++received;
 }
-static void confirmation(PduIdType id, Std_ReturnType result) {
+static void confirmation(PduIdType id, Std_ReturnType result)
+{
     assert(id == 18u);
     if (result == E_OK) {
         ++positive;
@@ -47,20 +50,23 @@ static void confirmation(PduIdType id, Std_ReturnType result) {
         ++negative;
     }
 }
-static void mode(uint8 controller, Can_ControllerStateType value) {
+static void mode(uint8 controller, Can_ControllerStateType value)
+{
     assert(controller == 0u && (value == CAN_CS_STARTED || value == CAN_CS_STOPPED));
     ++modes;
 }
-static void busoff(uint8 controller) {
+static void busoff(uint8 controller)
+{
     Can_ControllerStateType actual = CAN_CS_STARTED;
     assert(controller == 0u);
     assert(Can_GetControllerMode(0u, &actual) == E_OK && actual == CAN_CS_STOPPED);
     ++busoffs;
 }
 static const Can_ConfigType can = {.sink = sink};
-static const CanIf_RxPduConfigType rx[] = {{0x320u, 21u, 0u, FALSE, 0u, 0u}};
-static const CanIf_TxPduConfigType tx[] = {{0x321u, 51u, 4u, 0u, 0u}};
-static const CanIf_ConfigType canif = {rx, 1u, tx, 1u, mode, busoff, 0u, 0u, 0u, 1u};
+static const CanIf_RxPduConfigType rx[] = {{0x320u, 21u, 0u, FALSE, 0u, 0u, 0u, 0u}};
+static const CanIf_TxPduConfigType tx[] = {{0x321u, 51u, 4u, 0u, 1u, 0u, 0u}};
+static const CanIf_ControllerConfigType canif_controllers[] = {{0u, 0u}};
+static const CanIf_ConfigType canif = {rx, 1u, tx, 1u, mode, busoff, canif_controllers, 1u};
 static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, NULL_PTR}};
@@ -70,12 +76,14 @@ static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_COM, 18u, PDUR_LO_LSDUR, 41u, LSduR_PduRTransmit, confirmation, NULL_PTR}};
 static const PduR_PBConfigType pdur = {23u, pdur_rx, 1u, pdur_tx, 1u, NULL_PTR, 0u};
 static unsigned lost;
-static Std_ReturnType report_loss(uint16_t module, uint8_t instance, uint8_t api, uint8_t error) {
+static Std_ReturnType report_loss(uint16_t module, uint8_t instance, uint8_t api, uint8_t error)
+{
     assert(module == 80u && instance == 0u && api == 0x08u && error == 1u);
     ++lost;
     return E_OK;
 }
-int main(void) {
+int main(void)
+{
     static const Det_ErrorHookType hooks[] = {report_loss};
     static const Det_ConfigType det = {NULL, 0u, hooks, 1u};
     Det_Init(&det);

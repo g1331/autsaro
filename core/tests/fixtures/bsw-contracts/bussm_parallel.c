@@ -78,33 +78,26 @@ static void entered_full(uint8 NetworkId)
     assert(NetworkId == 0u);
     note(COMM_FULL_COMMUNICATION);
 }
-static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u, FALSE, 0u, 0u}};
-static const CanIf_TxPduConfigType transmits[] = {{0x321u, 51u, 1u, 0u, 0u}};
+static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u, FALSE, 0u, 0u, 0u, 0u}};
+static const CanIf_TxPduConfigType transmits[] = {{0x321u, 51u, 1u, 0u, 0u, 0u, 0u}};
+static const CanIf_ControllerConfigType canif_controllers[] = {{0u, 0u}};
 static const CanIf_ConfigType canif = {receives,
                                        1u,
                                        transmits,
                                        1u,
                                        Ecu_HostBusSM_ControllerModeIndication,
                                        Ecu_HostBusSM_ControllerBusOff,
-                                       0u,
-                                       0u,
-                                       0u,
-                                       0u};
+                                       canif_controllers,
+                                       1u};
 static const Can_ConfigType can = {.sink = sink};
-static const Ecu_HostBusSM_ConfigType bussm = {0u, 0u};
-static const ComM_UserHandleType users[] = {1u};
-/* The Dcm notifications observe what ComM receives from the provider. */
-static const ComM_ConfigType comm = {0u,
-                                     users,
-                                     1u,
-                                     1u,
-                                     Ecu_HostBusSM_RequestComMode,
-                                     Ecu_HostBusSM_GetCurrentComMode,
-                                     entered_no,
-                                     entered_silent,
-                                     entered_full,
-                                     NULL_PTR,
-                                     0u};
+static const Ecu_HostBusSM_ChannelConfigType bus_channels[] = {{0u, 0u}};
+static const Ecu_HostBusSM_ConfigType bussm = {bus_channels, 1u};
+static const NetworkHandleType user_channels[] = {0u};
+static const ComM_UserModeConfigType users[] = {{1u, user_channels, 1u, NULL_PTR}};
+static const ComM_ChannelConfigType channels[] = {
+    {0u, 1u, entered_no, entered_silent, entered_full}};
+static const ComM_ConfigType comm = {
+    channels, 1u, users, 1u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode};
 
 Std_ReturnType __real_CanIf_SetControllerMode(uint8 ControllerId,
                                               Can_ControllerStateType ControllerMode);

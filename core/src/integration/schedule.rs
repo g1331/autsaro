@@ -857,12 +857,24 @@ pub(super) fn inspect_events(
             })
             .unwrap_or_default()
     };
-    let mut expected_order: Vec<String> = vec![
-        configured_symbol("ComMChannel", "ComM_MainFunction"),
+    let comm_main: BTreeSet<_> = graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, "ComMChannel"))
+        .filter_map(|index| graph.text(index, "SHORT-NAME"))
+        .map(|name| format!("ComM_MainFunction_{name}"))
+        .collect();
+    let mut expected_order: Vec<_> = entities
+        .iter()
+        .take_while(|entity| comm_main.contains(&entity.symbol))
+        .map(|entity| entity.symbol.clone())
+        .collect();
+    let all_comm_channels = expected_order.iter().collect::<BTreeSet<_>>().len() == comm_main.len();
+    expected_order.extend([
         "Can_MainFunction_Wakeup".into(),
         "CanTp_MainFunction".into(),
         configured_symbol("ComMainFunctionRx", "Com_MainFunctionRx"),
-    ];
+    ]);
     expected_order.extend(
         entities
             .iter()
@@ -894,14 +906,15 @@ pub(super) fn inspect_events(
         "Can_MainFunction_Mode".into(),
         "Can_MainFunction_BusOff".into(),
     ]);
-    if entities
-        .iter()
-        .map(|entity| entity.symbol.as_str())
-        .collect::<Vec<_>>()
-        != expected_order
+    if !all_comm_channels
+        || entities
             .iter()
-            .map(String::as_str)
+            .map(|entity| entity.symbol.as_str())
             .collect::<Vec<_>>()
+            != expected_order
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
     {
         return Err(reject(
             graph,
