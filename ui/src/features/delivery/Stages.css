@@ -1,0 +1,51 @@
+/* An aligned grid: long English stage names would otherwise wrap into ragged rows. */
+.stage-list {
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 16px;
+  margin: 12px 0 8px;
+}
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  font-size: 12px;
+}
+.stage-copy {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.stage-number {
+  display: none;
+}
+.stage-pill {
+  max-width: 100%;
+  white-space: nowrap;
+}
+.stage-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stage-copy small {
+  display: block;
+  max-width: 230px;
+  overflow-wrap: anywhere;
+}
+.stage.done .stage-pill {
+  color: var(--success);
+  background: var(--success-bg);
+}
+.stage.failed .stage-pill {
+  color: var(--error);
+  background: var(--error-bg);
+}
+.stage.stale .stage-pill {
+  color: var(--warning);
+  background: var(--warning-bg);
+}

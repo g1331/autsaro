@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
-import { importedSaveStage } from '../src/workbench/useDelivery';
+import { importedSaveStage } from '../src/features/delivery/stages';
 
 test('unsaved configuration remains pending while saved configuration is done', () => {
   const pending = importedSaveStage({ dirty: true, issues: [] });

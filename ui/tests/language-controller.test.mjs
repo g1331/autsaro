@@ -3,8 +3,8 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { i18n, message, previewLanguage, translate } from '../src/i18n';
-import { useWorkbench } from '../src/workbench/useWorkbench';
-import { SettingsPage } from '../src/pages/SettingsPage';
+import { useWorkbench } from '../src/app/useWorkbench';
+import { SettingsPage } from '../src/features/settings/SettingsPage';
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),

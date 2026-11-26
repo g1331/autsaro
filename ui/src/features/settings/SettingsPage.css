@@ -1,0 +1,30 @@
+.settings-layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 24px;
+}
+.settings-layout > [role='tablist'] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-layout [role='presentation'] {
+  display: flex;
+}
+.settings-layout [role='tab'] {
+  flex: 1;
+  justify-content: flex-start;
+  text-align: left;
+  min-height: 32px;
+}
+.settings-content {
+  min-width: 0;
+}
+.settings-content > section > h3:first-child {
+  margin-top: 0;
+}
+.catalog-row > span {
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+}

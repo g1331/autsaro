@@ -2,14 +2,15 @@
 import { createElement } from 'react';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { ProjectTree } from '../src/workbench/ProjectTree';
+import { ProjectTree } from '../src/features/project/ProjectTree';
 import {
   fieldState,
   groupedObjectTree,
   objectGroup,
   objectMarks,
-} from '../src/workbench/projectGroups';
-import { applyPatch, initialState } from '../src/workbench/state';
+} from '../src/features/project/projectGroups';
+import { initialDomains, reduceWorkbench } from '../src/app/state';
+import { initialState } from './support/workbench-state.mjs';
 import { previewLanguage } from '../src/i18n';
 
 const object = (objectId, parentId, kind, shortName, definitionId = null) => ({
@@ -139,13 +140,13 @@ test('marks sum diagnostics, saved-value differences and drafts over the subtree
 
 test('only a projection without unsaved changes becomes the saved baseline', () => {
   const clean = { dirty: false, fields: [field('f1', 'canGeneral', '1')] };
-  const state = applyPatch(initialState(), { projection: clean });
-  expect(state.savedValues).toEqual({ f1: fieldState(clean.fields[0]) });
-  const edited = applyPatch(state, {
+  const state = reduceWorkbench(initialDomains(), { projection: clean });
+  expect(state.project.savedValues).toEqual({ f1: fieldState(clean.fields[0]) });
+  const edited = reduceWorkbench(state, {
     projection: { dirty: true, fields: [field('f1', 'canGeneral', '7')] },
   });
-  expect(edited.savedValues).toBe(state.savedValues);
-  expect(applyPatch(edited, { projection: null }).savedValues).toBeNull();
+  expect(edited.project.savedValues).toBe(state.project.savedValues);
+  expect(reduceWorkbench(edited, { projection: null }).project.savedValues).toBeNull();
 });
 
 function controllerFor(extra = {}) {

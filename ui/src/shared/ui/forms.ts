@@ -1,0 +1,107 @@
+import type { Text } from '../../i18n';
+import { composedMessage, isMessage, localize, ProductError } from '../../i18n';
+
+export type NoticeTone = 'error' | 'warning' | 'info' | 'success';
+
+/**
+ * `text` is the sentence shown to the user; `detail` keeps the original backend
+ * reply for copying. `fieldId` ties a rejection to the field that caused it.
+ */
+export type Notice = {
+  tone: NoticeTone;
+  text: Text;
+  detail?: Text;
+  fieldId?: string;
+  /** A rejected change: the banner gives one line and the problems window the split details. */
+  rejected?: true;
+} | null;
+
+/** Drops exact repeats so counts always match the rendered list. */
+export function distinct<T>(items: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = JSON.stringify(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Backend composite replies lead with their summary; the rest is detail. */
+export function headline(error: unknown): Text {
+  if (!Array.isArray(error)) return errorText(error);
+  // Leading `*_context` messages only identify the change or object; they belong in the detail.
+  const start = error.findIndex((item) => !(isMessage(item) && item.key.endsWith('_context')));
+  const reply = start > 0 ? error.slice(start) : error;
+  if (reply.length < 2) return errorText(reply);
+  const summary = errorText(reply[0]);
+  // A context prefix such as "Initialization failed:" needs its first reason to read as a sentence.
+  return /[:：]\s*$/.test(localize(summary)) ? [summary, errorText(reply[1])] : summary;
+}
+
+export function labelFromPath(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
+}
+
+export function intInRange(value: string, label: Text, min: number, max: number): number {
+  const parsed = Number(value);
+  if (
+    !/^\d+$/.test(value.trim()) ||
+    !Number.isSafeInteger(parsed) ||
+    parsed < min ||
+    parsed > max
+  ) {
+    throw new ProductError(
+      composedMessage('controller.error.integerRange', { label }, { min, max }),
+    );
+  }
+  return parsed;
+}
+
+export function errorText(error: unknown): Text {
+  if (error instanceof ProductError) return error.text;
+  if (isMessage(error)) return error;
+  if (Array.isArray(error)) return error.map(errorText);
+  if (error && typeof error === 'object' && 'message' in error && !(error instanceof Error)) {
+    const diagnostic = error as { message: unknown; code?: unknown; remedy?: unknown };
+    return composedMessage(
+      'controller.error.diagnostic',
+      {
+        detail: errorText(diagnostic.message),
+        remedy: diagnostic.remedy == null ? '' : errorText(diagnostic.remedy),
+      },
+      { code: diagnostic.code == null ? '' : String(diagnostic.code) },
+    );
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+export interface PreviewDelta {
+  oldStart: number;
+  newStart: number;
+  oldText: string;
+  newText: string;
+}
+
+export function previewDelta(before: string, after: string, xml = true): PreviewDelta {
+  // Generated ARXML often puts many XML elements on one physical line.
+  // Break only adjacent tags for display; the complete source stays available below.
+  const oldLines = (xml ? before.replaceAll('><', '>\n<') : before).split('\n');
+  const newLines = (xml ? after.replaceAll('><', '>\n<') : after).split('\n');
+  let first = 0;
+  while (first < oldLines.length && first < newLines.length && oldLines[first] === newLines[first])
+    first++;
+  let tail = 0;
+  while (
+    tail < oldLines.length - first &&
+    tail < newLines.length - first &&
+    oldLines[oldLines.length - 1 - tail] === newLines[newLines.length - 1 - tail]
+  )
+    tail++;
+  return {
+    oldStart: first + 1,
+    newStart: first + 1,
+    oldText: oldLines.slice(first, oldLines.length - tail).join('\n'),
+    newText: newLines.slice(first, newLines.length - tail).join('\n'),
+  };
+}

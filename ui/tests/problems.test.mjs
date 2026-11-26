@@ -1,16 +1,15 @@
 // @vitest-environment jsdom
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { createElement } from 'react';
 import { cleanup, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { localize, message, previewLanguage, translate } from '../src/i18n';
-import { rejectedDiagnostics } from '../src/workbench/batchEditing';
-import { NoticeBanner } from '../src/workbench/Dialog';
-import { ToolWindows } from '../src/workbench/ToolWindows';
-import { initialState } from '../src/workbench/state';
+import { rejectedDiagnostics } from '../src/features/editing/batchEditing';
+import { NoticeBanner } from '../src/shared/ui/Dialog';
+import { ToolWindows } from '../src/app/ToolWindows';
+import { initialState } from './support/workbench-state.mjs';
 import { withCommands } from './support/commands.mjs';
-import { ProblemsTable, RejectionDetails } from '../src/workbench/Problems';
+import { ProblemsTable, RejectionDetails } from '../src/app/Problems';
+import { workbenchStyles } from './support/workbench-styles.mjs';
 
 beforeEach(() => previewLanguage('en'));
 afterEach(() => {
@@ -282,7 +281,7 @@ test('a rejected change notice is one summary line with a details action', () =>
 
 test('automatic-check caption and summaries share type and spacing while keeping expandable coverage', () => {
   const style = document.createElement('style');
-  style.textContent = readFileSync(path.join(import.meta.dirname, '../src/styles.css'), 'utf8');
+  style.textContent = workbenchStyles();
   document.head.append(style);
   try {
     const c = withCommands({

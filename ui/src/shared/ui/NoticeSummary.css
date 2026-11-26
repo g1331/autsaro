@@ -1,0 +1,16 @@
+/* A rejected change: one summary line; the split diagnostic is in the problems window. */
+.notice.summary {
+  align-items: center;
+}
+.notice.summary > svg {
+  margin-top: 0;
+}
+.notice.summary .notice-body > span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notice.summary > button {
+  flex: none;
+}

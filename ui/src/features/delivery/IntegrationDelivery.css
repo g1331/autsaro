@@ -1,0 +1,34 @@
+/* Wide windows must not stretch path fields across the screen; tables stay full width. */
+.delivery-view {
+  max-width: 960px;
+}
+.delivery-step {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.delivery-step > h3 {
+  margin-top: 0;
+}
+.delivery-step .section-actions {
+  margin-bottom: 0;
+}
+label.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+label.checkbox-field > input[type='checkbox'] {
+  margin: 0;
+}
+.path-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.path-picker > input {
+  flex: 1;
+}
+.path-picker > button {
+  flex: none;
+}
