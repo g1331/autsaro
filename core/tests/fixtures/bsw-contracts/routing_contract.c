@@ -76,6 +76,7 @@ enum {
 static unsigned calls[CALLS];
 static PduIdType last_id;
 static const PduInfoType *last_info;
+static PduLengthType last_length;
 static Std_ReturnType last_result;
 static Std_ReturnType lower_result = E_OK;
 static uint8 bytes[64];
@@ -88,6 +89,7 @@ static void record(unsigned which, PduIdType id, const PduInfoType *pdu, Std_Ret
     ++calls[which];
     last_id = id;
     last_info = pdu;
+    last_length = (pdu == NULL_PTR) ? 0u : pdu->SduLength;
     last_result = result;
 }
 static unsigned total(void)
@@ -165,11 +167,14 @@ static void tp_conf(PduIdType id, Std_ReturnType result) { record(TP_CONF, id, N
 
 /* Post-build structures with implementation-specific content
  * (Verifies: SWS_PduR_00743; Verifies: CP_SWS_LSduR_91003). */
-static const LSduR_RxRouteType ls_rx[] = {{5u, 25u, PduR_CanIfRxIndication}};
+static const LSduR_RxRouteType ls_rx[] = {{5u, 25u, PduR_CanIfRxIndication},
+                                          {6u, 26u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 35u, 5u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit},
-    {LSDUR_UP_CANTP, 5u, 6u, cantp_conf, NULL_PTR}};
-static const PduR_RxRouteType pdur_rx[] = {{25u, 5u, com_rx}};
+    {LSDUR_UP_CANTP, 5u, 6u, cantp_conf, NULL_PTR},
+    {LSDUR_UP_PDUR, 37u, 7u, PduR_CanIfTxConfirmation, NULL_PTR}};
+static const PduR_RxRouteType pdur_rx[] = {{25u, 5u, com_rx, NULL_PTR, 0u},
+                                           {26u, 37u, NULL_PTR, LSduR_PduRTransmit, 8u}};
 /* The CanTp route comes first: IF callbacks must skip it although its lower ID matches. */
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_DCM, 5u, PDUR_LO_CANTP, 35u, cantp_transmit, NULL_PTR, NULL_PTR},
@@ -179,7 +184,7 @@ static const PduR_TpRouteType tp_routes[] = {
     {35u, 45u, 35u, 55u, start, copy_rx, tp_rx, copy_tx, tp_conf}};
 static const PduR_PBConfigType pdur = {23u, pdur_rx, 1u, pdur_tx, 3u, tp_routes, 1u};
 /* Valid but different: a later Init must not replace the published configuration. */
-static const PduR_RxRouteType other_rx[] = {{25u, 9u, com_rx}};
+static const PduR_RxRouteType other_rx[] = {{25u, 9u, com_rx, NULL_PTR, 0u}};
 static const PduR_PBConfigType other = {24u, other_rx, 1u, NULL_PTR, 0u, NULL_PTR, 0u};
 static const LSduR_PBConfigType ls_other = {30u, NULL_PTR, 0u, NULL_PTR, 0u};
 /* Invalid: equal lower IDs within one namespace, or an IF route without confirmation. */
@@ -279,8 +284,8 @@ static void reject_pdur_transport_configurations(void)
 
 static void reject_pdur_configurations(void)
 {
-    const PduR_RxRouteType missing_rx[] = {{25u, 5u, NULL_PTR}};
-    const PduR_RxRouteType duplicate_rx[] = {pdur_rx[0], {25u, 6u, com_rx}};
+    const PduR_RxRouteType missing_rx[] = {{25u, 5u, NULL_PTR, NULL_PTR, 0u}};
+    const PduR_RxRouteType duplicate_rx[] = {pdur_rx[0], {25u, 6u, com_rx, NULL_PTR, 0u}};
     const PduR_TxRouteType bad_tx[] = {
         {(PduR_UpperType)2, 5u, PDUR_LO_CANTP, 35u, cantp_transmit, NULL_PTR, NULL_PTR},
         {PDUR_UP_DCM, 5u, (PduR_LowerType)2, 35u, cantp_transmit, NULL_PTR, NULL_PTR},
@@ -309,14 +314,14 @@ static void reject_pdur_configurations(void)
 
 static void install_large_route_tables(void)
 {
-    static LSduR_RxRouteType lsdur_receive[33];
-    static LSduR_TxRouteType lsdur_transmit[34];
-    static PduR_RxRouteType pdur_receive[33];
+    static LSduR_RxRouteType lsdur_receive[34];
+    static LSduR_TxRouteType lsdur_transmit[35];
+    static PduR_RxRouteType pdur_receive[34];
     static PduR_TxRouteType pdur_transmit[35];
     static PduR_TpRouteType pdur_transport[33];
-    static const LSduR_PBConfigType lsdur_config = {29u, lsdur_receive, 33u, lsdur_transmit, 34u};
+    static const LSduR_PBConfigType lsdur_config = {29u, lsdur_receive, 34u, lsdur_transmit, 35u};
     static const PduR_PBConfigType pdur_config = {
-        23u, pdur_receive, 33u, pdur_transmit, 35u, pdur_transport, 33u};
+        23u, pdur_receive, 34u, pdur_transmit, 35u, pdur_transport, 33u};
     memcpy(lsdur_receive, ls_rx, sizeof(ls_rx));
     memcpy(lsdur_transmit, ls_tx, sizeof(ls_tx));
     memcpy(pdur_receive, pdur_rx, sizeof(pdur_rx));
@@ -325,10 +330,10 @@ static void install_large_route_tables(void)
     for (unsigned index = 0u; index < 32u; ++index) {
         const PduIdType handle = (PduIdType)(100u + index);
         const PduIdType lower = (PduIdType)(150u + index);
-        lsdur_receive[index + 1u] = (LSduR_RxRouteType){handle, lower, PduR_CanIfRxIndication};
-        lsdur_transmit[index + 2u] =
+        lsdur_receive[index + 2u] = (LSduR_RxRouteType){handle, lower, PduR_CanIfRxIndication};
+        lsdur_transmit[index + 3u] =
             (LSduR_TxRouteType){LSDUR_UP_CANTP, handle, lower, cantp_conf, NULL_PTR};
-        pdur_receive[index + 1u] = (PduR_RxRouteType){lower, handle, com_rx};
+        pdur_receive[index + 2u] = (PduR_RxRouteType){lower, handle, com_rx, NULL_PTR, 0u};
         pdur_transmit[index + 3u] = (PduR_TxRouteType){
             PDUR_UP_DCM, handle, PDUR_LO_CANTP, lower, cantp_transmit, NULL_PTR, NULL_PTR};
         pdur_transport[index + 1u] = (PduR_TpRouteType){
@@ -344,6 +349,21 @@ static void install_large_route_tables(void)
     once(CANTP_TX, 181u);
     pdur_tp_rx(131u, E_OK);
     once(TP_RX, 181u);
+}
+
+/* Verifies: SWS_PduR_00437, 00303, 00783, 00640, 00256. */
+static void direct_gateway(void)
+{
+    lsdur_rx(6u, &info);
+    once(CANIF_TX, 7u);
+    assert(last_length == 8u && info.SduLength == 64u);
+    lsdur_conf(7u, E_OK);
+    lsdur_conf(7u, E_NOT_OK);
+    none();
+    lower_result = E_NOT_OK;
+    lsdur_rx(6u, &info);
+    once(CANIF_TX, 7u);
+    lower_result = E_OK;
 }
 
 int main(void)
@@ -364,6 +384,7 @@ int main(void)
      * (Verifies: SWS_PduR_00326, 00280; Verifies: CP_SWS_LSduR_00029, 00036;
      * Verifies[PduR]: SWS_BSW_00071; Verifies[LSduR]: SWS_BSW_00071). */
     install_large_route_tables();
+    direct_gateway();
     assert(PduR_GetConfigurationId() == 23u && LSduR_GetConfigurationId() == 29u);
     /* No ONLINE -> ONLINE transition: a second Init keeps the published configuration. */
     PduR_Init(&other);
@@ -463,7 +484,7 @@ int main(void)
     assert(LSduR_PduRTransmit(5u, &info) == E_NOT_OK &&
            LSduR_PduRTransmit(35u, NULL_PTR) == E_NOT_OK);
     assert(LSduR_CanTpTransmit(35u, &info) == E_NOT_OK);
-    LSduR_CanIfRxIndication(6u, &info);
+    LSduR_CanIfRxIndication(7u, &info);
     LSduR_CanIfRxIndication(5u, NULL_PTR);
     LSduR_CanIfTxConfirmation(7u, E_OK);
     assert(LSduR_CanIfTriggerTransmit(7u, &pdu) == E_NOT_OK);

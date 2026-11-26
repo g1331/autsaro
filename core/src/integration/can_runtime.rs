@@ -346,6 +346,7 @@ fn physical_bindings(
     graph: &Graph,
     composition: &super::composition::CompositionContract,
     diagnostic: Option<&super::diagnostic::DiagnosticTransportContract>,
+    routes: &[super::routing::PduRoute],
 ) -> Result<BTreeMap<usize, usize>, Vec<PlanDiagnostic>> {
     let mut endpoints = composition
         .network_endpoints
@@ -361,6 +362,20 @@ fn physical_bindings(
     for tp in diagnostic.into_iter().flat_map(|tp| tp.connections()) {
         endpoints.push((&tp.can_if_rx_pdu, &tp.physical_channel, true));
         endpoints.push((&tp.can_if_tx_pdu, &tp.physical_channel, false));
+    }
+    for gateway in routes.iter().filter_map(|route| route.gateway.as_ref()) {
+        endpoints.extend([
+            (
+                gateway.receive.can_if_pdu.as_str(),
+                gateway.receive.channel.as_str(),
+                true,
+            ),
+            (
+                gateway.transmit.can_if_pdu.as_str(),
+                gateway.transmit.channel.as_str(),
+                false,
+            ),
+        ]);
     }
     let mut by_driver = BTreeMap::new();
     let mut by_channel = BTreeMap::new();
@@ -386,6 +401,7 @@ pub(super) fn inspect(
     schedule: &ScheduleContract,
     composition: &super::composition::CompositionContract,
     diagnostic: Option<&super::diagnostic::DiagnosticTransportContract>,
+    routes: &[super::routing::PduRoute],
 ) -> Result<CommunicationRuntimeContract, Vec<PlanDiagnostic>> {
     let partition = partition(graph, composition)?;
     let collection = one(graph, "EcucPduCollection")?;
@@ -544,7 +560,7 @@ pub(super) fn inspect(
         return Err(fail(graph, general, "CONTROLLER_MAPPING"));
     };
     let selected = super::component::selected_channels(graph, *ecu);
-    let physical = physical_bindings(graph, composition, diagnostic)?;
+    let physical = physical_bindings(graph, composition, diagnostic, routes)?;
     let mut networks = BTreeSet::new();
     let mut channels = Vec::new();
     for (controller_id, controller) in driver_controllers {

@@ -110,7 +110,7 @@ static const Com_SignalConfigType signals[] = {{10u, COM_UINT32, 0u, 32u, FALSE,
                                                {11u, COM_UINT32, 0u, 32u, FALSE, 9u, 0u, 0u}};
 static const Com_ConfigType com_config = {
     pdus, 2u, signals, 2u, 0u, receive, timeout, lower, rejection};
-static const PduR_RxRouteType pdur_rx[] = {{31u, 1u, Com_RxIndication}};
+static const PduR_RxRouteType pdur_rx[] = {{31u, 1u, Com_RxIndication, NULL_PTR, 0u}};
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_COM, 2u, PDUR_LO_LSDUR, 41u, LSduR_PduRTransmit, confirmed, Com_TriggerTransmit}};
 static const PduR_PBConfigType pdur_config = {23u, pdur_rx, 1u, pdur_tx, 1u, NULL_PTR, 0u};

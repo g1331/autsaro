@@ -630,6 +630,21 @@ export type FileView = {
   retainedCount: number;
 };
 
+export type GatewayEndpoint = {
+  canIfPdu: string;
+  channel: string;
+  canId: number;
+  acceptsFd: boolean;
+  fdTrigger: boolean;
+  handle: number;
+  length: number;
+};
+
+export type GatewayRoute = {
+  receive: GatewayEndpoint;
+  transmit: GatewayEndpoint;
+};
+
 export type GenerationPreview = GenerationPreview_Serialize | GenerationPreview_Deserialize;
 
 export type GenerationPreviewFile =
@@ -887,7 +902,9 @@ export type PartitionRuntimeContract = {
   instances: string[];
 };
 
-export type PduRoute = {
+export type PduRoute = PduRoute_Serialize | PduRoute_Deserialize;
+
+export type PduRoute_Deserialize = {
   path: string;
   pdu: string;
   source: string;
@@ -896,6 +913,19 @@ export type PduRoute = {
   destinationHandle: number;
   receive: boolean;
   transport: boolean;
+  gateway: GatewayRoute | null;
+};
+
+export type PduRoute_Serialize = {
+  path: string;
+  pdu: string;
+  source: string;
+  destination: string;
+  sourceHandle: number;
+  destinationHandle: number;
+  receive: boolean;
+  transport: boolean;
+  gateway?: GatewayRoute | null;
 };
 
 /**
@@ -922,7 +952,7 @@ export type PlanDescription_Deserialize = {
   signals: SignalChannel[];
   diagnostic: DiagnosticContract | null;
   diagnosticTransport: DiagnosticTransportContract | null;
-  routes: PduRoute[];
+  routes: PduRoute_Deserialize[];
   configuration: ConfigurationRecord[];
   events: EventAssignment[];
   handles: HandleAssignment[];
@@ -951,7 +981,7 @@ export type PlanDescription_Serialize = {
   signals: SignalChannel[];
   diagnostic?: DiagnosticContract | null;
   diagnosticTransport?: DiagnosticTransportContract | null;
-  routes: PduRoute[];
+  routes: PduRoute_Serialize[];
   configuration: ConfigurationRecord[];
   events: EventAssignment[];
   handles: HandleAssignment[];

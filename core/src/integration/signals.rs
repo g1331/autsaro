@@ -798,7 +798,10 @@ fn payload_length(graph: &Graph, object: usize, tag: &str) -> Result<u8, Vec<Pla
         .ok_or_else(|| field(graph, object, "LENGTH_CONFLICT", tag))
 }
 
-fn mapping_position(graph: &Graph, object: usize) -> Result<(u16, bool), Vec<PlanDiagnostic>> {
+pub(super) fn mapping_position(
+    graph: &Graph,
+    object: usize,
+) -> Result<(u16, bool), Vec<PlanDiagnostic>> {
     let start = number(graph.text(object, "START-POSITION"))
         .ok_or_else(|| field(graph, object, "LENGTH_CONFLICT", "START-POSITION"))?;
     let big_endian = match graph.text(object, "PACKING-BYTE-ORDER") {

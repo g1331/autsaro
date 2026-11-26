@@ -1005,7 +1005,9 @@ pub(super) fn files(
             ls_rx.push(row(&format!(
                 "{ls_source}, {source}, &PduR_CanIfRxIndication"
             )));
-            pd_rx.push(row(&format!("{source}, {pdu}, &Com_RxIndication")));
+            pd_rx.push(row(&format!(
+                "{source}, {pdu}, &Com_RxIndication, NULL_PTR, 0u"
+            )));
         } else {
             transmit.push(row(&format!(
                 "{}u, {can_if}, {length}u, {controller}, {hoh}, {offset}u, {frame_length}u",
@@ -1016,6 +1018,41 @@ pub(super) fn files(
             )));
             pd_tx.push(row(&format!("PDUR_UP_COM, {source}, PDUR_LO_LSDUR, {ls_source}, &LSduR_PduRTransmit, &Com_TxConfirmation, &Com_TriggerTransmit")));
         }
+    }
+    for route in &description.routes {
+        let Some(gateway) = &route.gateway else {
+            continue;
+        };
+        let rx = &gateway.receive;
+        let tx = &gateway.transmit;
+        let rx_pdu = name("CanIf", "CanIfRxPduCfg", &rx.can_if_pdu);
+        let tx_pdu = name("CanIf", "CanIfTxPduCfg", &tx.can_if_pdu);
+        let (rx_controller, hrh) = can_if_route(description, &rx.can_if_pdu, true)?;
+        let (tx_controller, hth) = can_if_route(description, &tx.can_if_pdu, false)?;
+        let pd_source = name("PduR", "PduRSrcPdu", &route.source);
+        let pd_destination = name("PduR", "PduRDestPdu", &route.destination);
+        let ls_source = name("LSduR", "LSduRPathSourcePdu", &route.source);
+        let ls_destination = name("LSduR", "LSduRPathDestPdu", &route.destination);
+        receive.push(row(&format!(
+            "{}u, {rx_pdu}, {}u, {}, {rx_controller}, {hrh}, 0u, 0u",
+            rx.can_id,
+            rx.length,
+            if rx.accepts_fd { "TRUE" } else { "FALSE" }
+        )));
+        transmit.push(row(&format!(
+            "{}u, {tx_pdu}, {}u, {tx_controller}, {hth}, 0u, 0u",
+            tx.can_id, tx.length
+        )));
+        ls_rx.push(row(&format!(
+            "{ls_source}, {pd_source}, &PduR_CanIfRxIndication"
+        )));
+        ls_tx.push(row(&format!(
+            "LSDUR_UP_PDUR, {ls_destination}, {tx_pdu}, &PduR_CanIfTxConfirmation, NULL_PTR"
+        )));
+        pd_rx.push(row(&format!(
+            "{pd_source}, {pd_destination}, NULL_PTR, &LSduR_PduRTransmit, {}u",
+            tx.length
+        )));
     }
     config_data(
         &mut config,
@@ -1207,8 +1244,6 @@ pub(super) fn files(
             entries,
         );
     }
-    let rx_count = receive.len();
-    let tx_count = transmit.len();
     let controllers = description
         .configuration
         .iter()
@@ -1233,7 +1268,9 @@ pub(super) fn files(
         "CanIf",
         "const CanIf_ConfigType CanIf_Config",
         &values(&format!(
-            "can_rx, {rx_count}u, can_tx, {tx_count}u, &Ecu_HostBusSM_ControllerModeIndication, &Ecu_HostBusSM_ControllerBusOff, canif_bindings, {}u",
+            "can_rx, {}u, can_tx, {}u, &Ecu_HostBusSM_ControllerModeIndication, &Ecu_HostBusSM_ControllerBusOff, canif_bindings, {}u",
+            receive.len(),
+            transmit.len(),
             controllers.len()
         )),
     );
@@ -1241,7 +1278,11 @@ pub(super) fn files(
         &mut ls_configuration,
         "LSduR",
         "const LSduR_PBConfigType LSduR_Config",
-        &values(&format!("0u, ls_rx, {rx_count}u, ls_tx, {tx_count}u")),
+        &values(&format!(
+            "0u, ls_rx, {}u, ls_tx, {}u",
+            ls_rx.len(),
+            ls_tx.len()
+        )),
     );
     let configuration_id = "/AUTOSAR/EcucDefs/PduR/PduRRoutingPaths/PduRConfigurationId";
     let configuration_id = description

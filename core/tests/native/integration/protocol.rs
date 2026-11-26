@@ -1982,3 +1982,163 @@ Ingress_CODE Std_ReturnType Ingress_ReadData(Dcm_DataElement_ApplicationValueTyp
         .collect();
     assert_eq!(output, [("801", "4", "003fd000")], "{result}");
 }
+
+#[test]
+fn generated_host_batch_forwards_cross_channel_pdus_and_preserves_com_state() {
+    use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
+    for count in [2, 4, 6] {
+        let scratch = super::Scratch::new();
+        let sources = crate::support::multichannel::gateway_sources(count);
+        let plan = super::build(&sources).unwrap_or_else(|issues| panic!("{count}: {issues:#?}"));
+        let fixture = fs::read_to_string(
+            root().join("core/tests/fixtures/component-pipeline/applications/Ingress.c"),
+        )
+        .unwrap();
+        let application = scratch.0.join("Ingress.c");
+        let read = (0..count).map(|index| {
+            let suffix = if index == 0 { String::new() } else { index.to_string() };
+            format!(
+                "    uint32 value{index} = 0u;\n    const Std_ReturnType status{index} = Rte_Read_RxValue{suffix}_Value(&value{index});\n    (void)Rte_Write_TxValue{suffix}_Value((value{index} & 0x00ffffffu) | ((uint32)status{index} << 24u));\n"
+            )
+        }).collect::<String>();
+        let (before, periodic) = fixture
+            .split_once("    (void)Ingress_RecordActor();\n")
+            .unwrap();
+        let (_, after) = periodic.split_once("\n}\n/* MR12 RULE 8.7").unwrap();
+        fs::write(
+            &application,
+            format!("{before}    (void)Ingress_RecordActor();\n{read}}}\n/* MR12 RULE 8.7{after}"),
+        )
+        .unwrap();
+        let project = scratch.0.join("project");
+        prepare_ecu_project_with_applications(
+            &plan,
+            super::tooling::native_target(),
+            &[ApplicationSource {
+                component_instance: "/Application/Pipeline/IngressInstance".into(),
+                path: application,
+            }],
+        )
+        .unwrap()
+        .generate(&project)
+        .unwrap();
+        let binary =
+            super::sealed_builds::host_batch(&project, &scratch.0.join("host-batch-build"));
+        let mut baseline = String::from("BEGIN 1\n");
+        for channel in 1..count {
+            baseline.push_str(&format!(
+                "RX {channel} STANDARD 0 800 4 {channel:02x}123400\n"
+            ));
+        }
+        baseline.push_str("COMMIT\nBEGIN 10\nCOMMIT\nBEGIN 30\nCOMMIT\nBEGIN 40\nCOMMIT\n");
+        let control = run(
+            &binary,
+            &scratch.0.join("with-no-forwarding"),
+            baseline.as_bytes(),
+        );
+        let injected = baseline.replace(
+            "BEGIN 10\n",
+            "BEGIN 10\nRX 0 EXTENDED 1 933 12 0102030405060708090a0b0c\n",
+        );
+        let result = run(
+            &binary,
+            &scratch.0.join("single-channel"),
+            injected.as_bytes(),
+        );
+        let com_records = |trace: &str| {
+            trace
+                .lines()
+                .filter(|line| line.starts_with("OUT ") && field(line, "id=") == "801")
+                .map(|line| {
+                    [
+                        field(line, "epoch=").to_owned(),
+                        field(line, "channel=").to_owned(),
+                        field(line, "data=").to_owned(),
+                    ]
+                })
+                .collect::<Vec<_>>()
+        };
+        let prior = com_records(&control);
+        assert!(
+            prior
+                .iter()
+                .any(|record| record[1] == "1" && record[2].starts_with("011234"))
+        );
+        assert_ne!(
+            prior
+                .iter()
+                .find(|record| record[0] == "10" && record[1] == "1")
+                .unwrap()[2],
+            prior
+                .iter()
+                .find(|record| record[0] == "40" && record[1] == "1")
+                .unwrap()[2],
+            "the comparison must include the receive deadline transition: {control}"
+        );
+        assert_eq!(prior, com_records(&result));
+        let forwarded = |trace: &str| {
+            trace
+                .lines()
+                .filter(|line| line.starts_with("OUT ") && field(line, "id=") == "934")
+                .map(|line| {
+                    [
+                        "epoch=", "pdu=", "channel=", "format=", "fd=", "length=", "data=",
+                    ]
+                    .map(|key| field(line, key).to_owned())
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            forwarded(&result),
+            [[
+                "10".to_owned(),
+                (count + 1).to_string(),
+                (count - 1).to_string(),
+                "EXTENDED".into(),
+                "1".into(),
+                "12".into(),
+                "0102030405060708090a0b0c".into()
+            ]],
+            "{result}"
+        );
+        assert_eq!(result.matches("COMMIT_OK ").count(), 4, "{result}");
+
+        let mut script = String::new();
+        let mut expected = Vec::new();
+        for source in 0..count {
+            let from = count - 1 - source;
+            let next = (source + 1) % count;
+            let to = count - 1 - next;
+            let epoch = source + 1;
+            let (format, fd, length, payload) = if source % 2 == 0 {
+                ("STANDARD", 0, 4, format!("{source:02x}102030"))
+            } else {
+                (
+                    "EXTENDED",
+                    1,
+                    12,
+                    format!("{source:02x}0102030405060708090a0b"),
+                )
+            };
+            script.push_str(&format!(
+                "BEGIN {epoch}\nRX {from} {format} {fd} 933 {length} {payload}\nCOMMIT\n"
+            ));
+            expected.push([
+                epoch.to_string(),
+                (count + 1 + next).to_string(),
+                to.to_string(),
+                "EXTENDED".to_owned(),
+                fd.to_string(),
+                length.to_string(),
+                payload,
+            ]);
+        }
+        let result = run(
+            &binary,
+            &scratch.0.join("all-gateway-routes"),
+            script.as_bytes(),
+        );
+        assert_eq!(forwarded(&result), expected, "{result}");
+        assert_eq!(result.matches("COMMIT_OK ").count(), count, "{result}");
+    }
+}

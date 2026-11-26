@@ -334,6 +334,7 @@ pub(super) fn inspect_composition(
         &schedule,
         &composition,
         diagnostic_transport.as_ref(),
+        &routes,
     )?;
     for tp in diagnostic_transport.iter().flat_map(|tp| tp.connections()) {
         if tp.request_accepts_fd
@@ -551,8 +552,26 @@ pub(super) fn inspect_composition(
             ]
         })
         .filter(|(object, _, _, _, receive, _, _)| *receive || shared_tx.insert(*object));
-    for (object, channel, id, handle, receive, dual, fd_trigger) in
-        signal_endpoints.into_iter().chain(diagnostic_endpoints)
+    let gateway_endpoints = routes
+        .iter()
+        .filter_map(|route| route.gateway.as_ref())
+        .flat_map(|gateway| {
+            [(&gateway.receive, true), (&gateway.transmit, false)].map(|(endpoint, receive)| {
+                (
+                    endpoint.can_if_pdu.as_str(),
+                    endpoint.channel.as_str(),
+                    endpoint.can_id,
+                    endpoint.handle,
+                    receive,
+                    endpoint.accepts_fd,
+                    endpoint.fd_trigger,
+                )
+            })
+        });
+    for (object, channel, id, handle, receive, dual, fd_trigger) in signal_endpoints
+        .into_iter()
+        .chain(diagnostic_endpoints)
+        .chain(gateway_endpoints)
     {
         let supports_fd = communication_runtime.channels.iter().any(|controller| {
             controller.physical_channel == channel && controller.data_bitrate.is_some()
@@ -585,7 +604,7 @@ pub(super) fn inspect_composition(
             )]);
         }
     }
-    can_if_handle_sequence(graph, &signals, diagnostic_transport.as_ref())?;
+    can_if_handle_sequence(graph, &signals, diagnostic_transport.as_ref(), &routes)?;
     symbols.sort_by(|left, right| left.symbol.cmp(&right.symbol));
     Ok(CompositionInputs {
         com_runtime,
@@ -608,6 +627,7 @@ fn can_if_handle_sequence(
     graph: &super::graph::Graph,
     signals: &[SignalChannel],
     transport: Option<&super::diagnostic::DiagnosticTransportContract>,
+    routes: &[PduRoute],
 ) -> Result<(), Vec<PlanDiagnostic>> {
     for receive in [true, false] {
         let mut handles: Vec<(u16, &str)> = super::signals::pdus(signals)
@@ -621,6 +641,19 @@ fn can_if_handle_sequence(
                 (tp.response_can_if_handle, tp.can_if_tx_pdu.as_str())
             });
         }
+        handles.extend(
+            routes
+                .iter()
+                .filter_map(|route| route.gateway.as_ref())
+                .map(|gateway| {
+                    let endpoint = if receive {
+                        &gateway.receive
+                    } else {
+                        &gateway.transmit
+                    };
+                    (endpoint.handle, endpoint.can_if_pdu.as_str())
+                }),
+        );
         handles.sort_unstable();
         handles.dedup();
         let count = handles.len();

@@ -4,6 +4,8 @@
 
 ### Breaking
 
+- Regenerate ECU packages for PduR direct CAN I-PDU gateways. `PduR_RxRouteType` now selects either local delivery or a direct transmit callback and destination length. Update private initializers before rebuilding (#489)
+
 - CanTp supports FD segmentation, transport-layer padding and independent connections on configured CAN buses. Regenerate ECU packages and rebuild direct consumers of `CanTp_ConfigType` and `Dcm_ConfigType` with their connection tables. Existing diagnostic services use the connection that admitted the request (#487)
 
 - Regenerate ECU packages for configured CAN controller and HOH tables, channel-scoped CanIf routes and confirmations, and ComM/BswM/Dcm channel bindings. Update direct initializers of `Can_ConfigType`, `CanIf_ConfigType` and its route types for the controller, HOH and PDU-to-frame mapping. HostBatchV2 uses the configured driver channel in frame and mode records, and the probe reports the channel with each output. PduR and LSduR use the generated route counts (#486)

@@ -71,7 +71,7 @@ static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, NULL_PTR}};
 static const LSduR_PBConfigType ls = {29u, ls_rx, 1u, ls_tx, 1u};
-static const PduR_RxRouteType pdur_rx[] = {{31u, 17u, indication}};
+static const PduR_RxRouteType pdur_rx[] = {{31u, 17u, indication, NULL_PTR, 0u}};
 static const PduR_TxRouteType pdur_tx[] = {
     {PDUR_UP_COM, 18u, PDUR_LO_LSDUR, 41u, LSduR_PduRTransmit, confirmation, NULL_PTR}};
 static const PduR_PBConfigType pdur = {23u, pdur_rx, 1u, pdur_tx, 1u, NULL_PTR, 0u};

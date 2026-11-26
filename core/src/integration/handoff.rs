@@ -158,6 +158,26 @@ pub(super) fn verification_files(
             ),
         );
     }
+    for gateway in description
+        .routes
+        .iter()
+        .filter_map(|route| route.gateway.as_ref())
+    {
+        for (direction, bus) in [("RX", &gateway.receive), ("TX", &gateway.transmit)] {
+            let channel = channel_id(&bus.channel).ok_or_else(missing_binding)?;
+            configured.insert(
+                &bus.can_if_pdu,
+                endpoint(
+                    direction,
+                    channel,
+                    bus.handle,
+                    bus.can_id,
+                    bus.accepts_fd,
+                    [bus.length, bus.length, 0],
+                ),
+            );
+        }
+    }
     for tp in transport.into_iter().flat_map(|tp| tp.connections()) {
         let channel = channel_id(&tp.physical_channel).ok_or_else(missing_binding)?;
         configured.insert(
