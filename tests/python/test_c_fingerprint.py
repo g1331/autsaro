@@ -524,6 +524,23 @@ class FingerprintTests(unittest.TestCase):
         self.assertEqual(result["staleDispositions"], sorted(approval))
         self.assertEqual(c_fingerprint.verdict([], [row], set())["status"], "passed")
 
+    def test_disposition_registry_parse_failure_identifies_the_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            target, sample = c_gate.TARGETS[0], "no-diagnostic"
+            registry = root / c_disposition.DIRECTORY / target / f"{sample}.json"
+            registry.parent.mkdir(parents=True)
+            for content in ("{", "[[]]"):
+                registry.write_text(content, encoding="utf-8")
+                with self.assertRaises(ValueError) as error:
+                    c_disposition.load(root, target, sample)
+                self.assertIn(str(registry), str(error.exception))
+            with (patch.object(c_disposition.json, "loads", side_effect=RecursionError("nested JSON")),
+                  self.assertRaises(ValueError) as error):
+                c_disposition.load(root, target, sample)
+            self.assertIn(str(registry), str(error.exception))
+            self.assertIsInstance(error.exception.__cause__, RecursionError)
+
     def test_disposition_fingerprint_requires_current_technical_and_formal_proof(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory).resolve()

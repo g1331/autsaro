@@ -52,9 +52,11 @@ clang 作为第二编译器检查同一批样本：`uv run --locked python -B -m
 
 CI 工具 prepare 与两树生成独立并行，每侧扫描仅依赖共享工具与本侧生成，Windows 共用分析器。各入口基准均为实际 checkout 第一父提交，PR 检出测试合并提交。双方共用 PR 样本配置、依赖与驱动，源码及生成器来自各自树；生成／扫描失败或不可比均阻断。
 
-`Strict generated source gate` 复用逐程序差集及本次[精确处置](source-acceptance.md)，改写诊断行算新增，Git 改名回接路径。基准可复用同 SHA、完整身份一致的 master 原始结果；缺失／不匹配现场扫描，验收及门每轮重算。`gate.json` 记双侧身份、差集及基线运行／工件来源，八份门回执进入唯一 `CI required`。所需上游跳过／取消／失败、缺重样本均阻断；文档选择见 [CI](README.md#ci)。
+PR 的 `c-analysis-gates` 比较双树范围内的原始诊断。改写诊断行算新增，Git 改名回接路径。`gate.json.inScopeNew` 有新增即阻断。指纹及处置留给[项目验收](source-acceptance.md)，主线、手动分析和发版仍严格核对。
 
-项目验收仍报告 accepted／blocked／error；整体 blocked 留作报告，error 阻断。原始退出码、`passed=false` 和 221 项状态保留。工具与编译产物可缓存，原始基准复用另核完整身份。当前树每轮扫描，工件留存 14 天。完整验收门见 [#482](https://github.com/g1331/autsaro/issues/482)。
+基准复用同 SHA、完整身份一致的 master 原件，否则现场扫描。门和验收每轮重算。`gate.json` 记双树身份、差集和基准来源。八份门回执进入 `CI required`，上游跳过、取消、失败或样本漏重均阻断。文档选择见 [CI](README.md#ci)。
+
+验收报告 accepted／blocked／error，执行 error 阻断。原始退出码、`passed=false` 和 221 项状态保留。工具和编译产物可缓存。当前树每轮扫描，工件留存 14 天。完整验收门见 [#482](https://github.com/g1331/autsaro/issues/482)。
 
 正常摘要的`coverage.manualAssessment`仅汇总[既有66项人工记录](../../standards/os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)，按实际`automaticChecker`与155项分开；`retained`不是满足，未评估项继续计入unclassified。它不评估当前source seal，也不改写221项`assessment=not_assessed`或`completeCompliance=false`。`misra-manual-assessment-v1`绑定解析器原始字节、五篇记录全文原始字节和固定路径选集摘要；analysisCode另含解析器的规范化文本摘要。两层换行身份分别保留，coverage或任一分析身份变化仍明确拒绝旧基线。跨平台换行反例须用原始字节显式建立LF和CRLF两个输入，再断言结论相同、摘要不同；不能假定checkout为LF，或把已为CRLF的输入再写成CRLF当作变化。
 

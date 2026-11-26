@@ -686,8 +686,10 @@ class SourceGateTests(unittest.TestCase):
             for path in paths:
                 current = c_gate.read(path.with_name("summary.json"))
                 c_gate.c_comparison.annotate_scope(current, set(scope["targetHeaders"]))
+                stale = "a" * 64
                 current["projectAcceptance"].update(
                     scopeMatrix=scope, complianceScope=current["complianceScope"],
+                    fingerprintDispositions={"accepted": [], "stale": [stale]},
                     occurrences=[{"diagnostic": index, "locationIndex": position,
                                   "assessment": "blocked"}
                                  for index, position, _row, _location
@@ -695,13 +697,24 @@ class SourceGateTests(unittest.TestCase):
                 path.with_name("summary.json").write_text(json.dumps(current))
                 data = c_gate.read(path)
                 data["baselineScopeMatrix"] = scope
+                data["inScopeNew"] = []
+                inventories = {
+                    side: [{"diagnostic": index, "locationIndex": 0, "program": "target",
+                            "fingerprint": hashlib.sha256(f"{side}/{index}".encode()).hexdigest()}
+                           for index in range(len(current["diagnostics"]))]
+                    for side in ("current", "baseline")
+                }
+                data["diagnosticFingerprints"] = c_gate.fingerprint_comparison(
+                    {"current": current, "baseline": c_gate.read(path.with_name("baseline-summary.json"))},
+                    inventories, {"current": scope, "baseline": scope}, mode="pr")
+                self.assertEqual(data["diagnosticFingerprints"]["status"], "blocked")
                 data["summarySha256"]["current"] = c_gate.sha(path.with_name("summary.json"))
                 path.write_text(json.dumps(data))
             shutil.rmtree(root / "fixture")
             def revision(*args):
                 return "head" if args[-1] == "HEAD" else "parent"
             with patch.object(c_gate, "git", side_effect=revision):
-                c_gate.aggregate(root)
+                c_gate.aggregate(root, mode="pr")
                 path = next(root.glob("*/*/gate.json"))
                 original = path.read_bytes()
                 summary_bytes = path.with_name("summary.json").read_bytes()
@@ -732,7 +745,7 @@ class SourceGateTests(unittest.TestCase):
                             data[key] = "wrong" if change != "identity" else {"current": "missing"}
                             path.write_text(json.dumps(data))
                         with self.assertRaises((ValueError, KeyError)):
-                            c_gate.aggregate(root)
+                            c_gate.aggregate(root, mode="pr")
                         path.write_bytes(original)
                         if change == "duplicate":
                             shutil.rmtree(root / "extra")

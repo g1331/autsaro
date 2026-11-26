@@ -1140,7 +1140,8 @@ def _freertos_positions(
 
 def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
              matrix_scope: dict | None = None, sdk_revision: str | None = None,
-             fingerprints: list[dict] | None = None, sample: str | None = None) -> dict:
+             fingerprints: list[dict] | None = None, sample: str | None = None,
+             report_disposition_errors: bool = False) -> dict:
     """Assess independent frozen record groups, preserving raw analysis."""
     result = {"format": FORMAT, "status": "blocked", "target": summary.get("scope", {}).get("target"),
               "caseId": None, "inputIdentity": None, "contexts": [], "assessmentInputs": None,
@@ -1189,8 +1190,18 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
         selected = {group: rows[label] if label is not None else next(iter(rows.values()))
                     for group, rows in candidates.items()}
         frozen_checker = selected.get("checker-obligations")
+        disposition_error = None
         if fingerprints is not None:
-            bindings = c_disposition.load(root, result["target"], sample, summary["tool"]["binarySha256"])
+            binary = summary["tool"]["binarySha256"]
+            try:
+                bindings = c_disposition.load(root, result["target"], sample, binary)
+            except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+                if not report_disposition_errors:
+                    raise
+                bindings = {}
+                disposition_error = str(error)
+                add("context", "diagnostic-fingerprints", "disposition_registry_unavailable",
+                    error=disposition_error)
             for context in registered:
                 group = context["records"]["kind"]
                 if group not in DIAGNOSTIC_GROUPS:
@@ -1411,6 +1422,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
             result["analysisSample"] = sample
             c_disposition.apply(summary, result, fingerprints, bindings,
                                 {context["id"]: context for context in registered})
+            if disposition_error is not None:
+                result["fingerprintDispositions"].update(bindingsSha256=None, error=disposition_error)
         result["status"] = "blocked" if result["objects"] else "accepted"
     except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError) as error:
         result["status"] = "error"
