@@ -17,6 +17,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from autosar_tooling import (
+    c_acceptance,
     c_baseline,
     c_check,
     c_comparison,
@@ -78,8 +79,11 @@ class ActualCAnalysisTests(unittest.TestCase):
         })
         target = c_gate.read(project / "target.json")
         delivery = {"producerVersion": "0.1.0", "profileId": "singlecore-ecu-v1"}
-        target.update(entries={"target": None}, kernelSha256={"kernel.h": c_gate.sha(project / "kernel/kernel.h")},
-                      nativeDelivery=delivery)
+        kernel_root = project / "kernel"
+        target.update(entries={"target": None}, nativeDelivery=delivery, kernelSha256={
+            path.relative_to(kernel_root).as_posix(): c_gate.sha(path)
+            for path in sorted(kernel_root.rglob("*")) if path.is_file()
+        })
         if debug:
             target["compilerFlags"].append("-g")
         (project / "target.json").write_text(json.dumps(target), encoding="utf-8")
@@ -217,7 +221,19 @@ int main(void)
 """
         target = c_gate.TARGETS[1 if platform.system() == "Windows" else 0]
         sample = "no-diagnostic"
+        platform_files = {}
+        if target == c_disposition.WINDOWS:
+            # The Windows SDK receipt requires an active wait in the port's TU.
+            platform_files["kernel/portable/MSVC-MingW/port.c"] = """#include <windows.h>
+DWORD FixtureWait(HANDLE object);
+DWORD FixtureWait(HANDLE object)
+{
+    return WaitForSingleObject(object, INFINITE);
+}
+"""
+        # This standalone fixture carries no reviewed production SDK sites.
         with (tempfile.TemporaryDirectory() as temporary, redirect_stdout(io.StringIO()),
+              patch.object(c_acceptance, "_sdk_records", return_value={"definitions": {}, "sites": []}),
               patch.dict(os.environ, {"ImageOS": "test", "ImageVersion": "test"})):
             os.environ.pop("GITHUB_REPOSITORY", None)
             root = Path(temporary).resolve()
@@ -226,8 +242,9 @@ int main(void)
             def analyze(side, name, code, seed):
                 job = "c-analysis-baseline" if side == "baseline" else "c-analysis-results"
                 output = root / "build" / job / sample
-                project = self.gate_project(root / name, code, False,
-                                            extra_files={"shared.h": f"#define SEED {seed}U\n"})
+                project = self.gate_project(root / name, code, False, extra_files={
+                    **platform_files, "shared.h": f"#define SEED {seed}U\n",
+                })
                 self.assertEqual(c_baseline.analyze(side, target, sample, project, output, fingerprints=True), 1)
                 summary = c_gate.read(output / "summary.json")
                 self.gate_scope(scopes, side, summary, sample)
