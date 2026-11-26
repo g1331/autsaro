@@ -458,7 +458,7 @@ static CANTP_CODE void CanTp_Claim(CanTp_ConnectionType *connection,
 static CANTP_CODE void CanTp_PrepareCopy(CanTp_ConnectionType *connection, CanTp_WorkType *work)
 {
     const uint8 tx_dl = connection->config->tx_dl;
-    const PduLengthType total = connection->tx.total;
+    const uint32 total = (uint32)connection->tx.total;
     uint8 *const frame = connection->tx.frame;
     uint8 pci = 1u;
     if (total <= CANTP_SHORT_SF_MAX) {
@@ -474,18 +474,17 @@ static CANTP_CODE void CanTp_PrepareCopy(CanTp_ConnectionType *connection, CanTp
         frame[1] = (uint8)(total % 256u);
         pci = 2u;
     } else {
-        const uint32 wire_total = (uint32)total;
         frame[0] = 0x10u;
         frame[1] = 0u;
-        frame[2] = (uint8)(wire_total >> 24u);
-        frame[3] = (uint8)(wire_total >> 16u);
-        frame[4] = (uint8)(wire_total >> 8u);
-        frame[5] = (uint8)wire_total;
+        frame[2] = (uint8)(total >> 24u);
+        frame[3] = (uint8)(total >> 16u);
+        frame[4] = (uint8)(total >> 8u);
+        frame[5] = (uint8)total;
         pci = 6u;
     }
     const uint8 capacity = tx_dl - pci;
     work->offset = pci;
-    work->length = total - connection->tx.position;
+    work->length = connection->tx.total - connection->tx.position;
     if (work->length > capacity) {
         work->length = capacity;
     }
