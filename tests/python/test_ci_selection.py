@@ -757,6 +757,42 @@ class CiSelectionTests(unittest.TestCase):
             source.write_text("value = 2\n", encoding="utf-8")
             self.assertNotEqual(digest(), before)
 
+    def test_cargo_source_digest_tracks_renamed_sample_inputs_on_baseline(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        script = next(step["run"] for step in jobs["c-analysis-baseline-generate"]["steps"]
+                      if step.get("name") == "Identify native build cache inputs")
+        with tempfile.TemporaryDirectory() as temporary:
+            baseline = Path(temporary) / "baseline"
+            current = baseline / "build/c-analysis-current-inputs"
+            baseline.mkdir()
+            current.mkdir(parents=True)
+            for root, sample in ((baseline, "it/c_analysis.rs"), (current, "c_analysis.rs")):
+                subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+                path = root / "core/tests" / sample
+                path.parent.mkdir(parents=True)
+                path.write_text("test input\n", encoding="utf-8")
+                subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            before = baseline / "core/tests/it/c_analysis.rs"
+            after = baseline / "core/tests/c_analysis.rs"
+            before.rename(after)
+            output = baseline / "github-env"
+            environment = dict(os.environ, ANALYSIS_SIDE="baseline",
+                               CURRENT_INPUTS=str(current.relative_to(baseline)),
+                               GITHUB_ENV=str(output), ImageOS="test", ImageVersion="1")
+
+            def digest():
+                output.write_text("", encoding="utf-8")
+                subprocess.run([sys.executable, "-c", script], cwd=baseline, env=environment,
+                               check=True, capture_output=True, text=True)
+                return next(line for line in output.read_text(encoding="utf-8").splitlines()
+                            if line.startswith("CACHE_SOURCE="))
+
+            previous = digest()
+            (after.parent / "untracked.rs").write_text("local file\n", encoding="utf-8")
+            self.assertEqual(digest(), previous)
+            after.write_text("updated test input\n", encoding="utf-8")
+            self.assertNotEqual(digest(), previous)
+
     def test_native_filters_partition_existing_and_future_modules(self):
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
         native = workflow["jobs"]["native"]
