@@ -38,8 +38,8 @@ checkout 日志核对实际提交及父提交，按该树导出目标换行副�
 分支增量时，先同步并核对完整 tree，再核验 producer。扫描来源与当前评估身份分别记录。
 
 日常 PR 门按 [ADR 0027](../../adr/0027-misra-compliance-track.md) 阻断分析失败、不完整、不可比及范围内新增原始诊断（`gate.json.inScopeNew`）。
-指纹漂移、缺处置、过期登记及验收 blocked 由合规线消费，验收执行 error 阻断。
-报告见 `gate.json.diagnosticFingerprints` 与 `summary.json.projectAcceptance`。
+指纹漂移、缺处置、登记过期或不可读写入合规报告。`gate.json.diagnosticFingerprints` 记录指纹结果，
+`summary.json.projectAcceptance` 记录验收。验收执行 error 阻断。
 
 按 [ADR 0033](../../adr/0033-c-diagnostic-fingerprints.md) 逐位置验证处置及 `docs/standards/c-dispositions/` 的指纹。Windows 按分析器 SHA-256 选登记。
 按 [ADR 0025](../../adr/0025-misra-layered-scope.md) 复核 `fingerprintDispositions.candidates`，修复后删去失效指纹。

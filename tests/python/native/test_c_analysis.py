@@ -242,9 +242,12 @@ int main(void)
                 if row["fingerprint"] and previous["diagnostics"][row["diagnostic"]]["id"] == "misra-c2012-10.4"
             }
             self.assertTrue(registered)
+            load_dispositions = c_disposition.load
             with (patch.object(c_gate, "ROOT", root), patch.object(c_gate, "git", c_baseline.git),
                   patch.object(c_disposition, "load", return_value=registered)):
                 current, raw = analyze("current", "shared-header", source, 2)
+                summary_path = current / "summary.json"
+                raw_bytes = summary_path.read_bytes()
                 c_gate.scan(target, sample, scopes, mode="pr")
                 gate = c_gate.read(current / "gate.json")
                 self.assertEqual(gate["status"], "passed")
@@ -258,8 +261,25 @@ int main(void)
                 self.assertEqual(summary["projectAcceptance"]["fingerprintDispositions"]["stale"], sorted(registered))
                 for field in ("passed", "coverage", "diagnostics"):
                     self.assertEqual(summary[field], raw[field])
-                shutil.move(current, root / "drift-result")
 
+            with (patch.object(c_gate, "ROOT", root), patch.object(c_gate, "git", c_baseline.git),
+                  patch.object(c_disposition, "DIRECTORY", root.name + "-missing-dispositions"),
+                  patch.object(c_disposition, "load", wraps=load_dispositions)):
+                summary_path.write_bytes(raw_bytes)
+                c_gate.scan(target, sample, scopes, mode="pr")
+                gate = c_gate.read(current / "gate.json")
+                self.assertEqual(gate["status"], "passed")
+                self.assertEqual(gate["inScopeNew"], [])
+                self.assertEqual(gate["diagnosticFingerprints"]["status"], "incomplete")
+                dispositions = c_gate.read(summary_path)["projectAcceptance"]["fingerprintDispositions"]
+                self.assertIsNone(dispositions["bindingsSha256"])
+                self.assertIn("missing-dispositions", dispositions["error"])
+                self.assertEqual(gate["diagnosticFingerprints"]["dispositionError"], dispositions["error"])
+
+                summary_path.write_bytes(raw_bytes)
+                with self.assertRaisesRegex(ValueError, "Project acceptance execution failed: .*missing-dispositions"):
+                    c_gate.scan(target, sample, scopes, mode="strict")
+                shutil.move(current, root / "drift-result")
                 changed = source.replace("    Probe(SEED);", "    Probe(SEED);\n    storage = SEED + (signed int)storage;")
                 current, _raw = analyze("current", "new-diagnostic", changed, 2)
                 with self.assertRaisesRegex(ValueError, "New in-scope source diagnostics"):

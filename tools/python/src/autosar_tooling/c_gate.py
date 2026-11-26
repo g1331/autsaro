@@ -290,7 +290,9 @@ def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict, *
         approved = set(dispositions["accepted"])
         comparison = c_fingerprint.verdict(inside["current"], inside["baseline"], approved)
         comparison["staleDispositions"] = dispositions["stale"]
-        if comparison["status"] == "passed" and dispositions["stale"]:
+        if "error" in dispositions:
+            comparison.update(status="incomplete", dispositionError=dispositions["error"])
+        elif comparison["status"] == "passed" and dispositions["stale"]:
             comparison["status"] = "blocked"
         return {"format": c_fingerprint.FORMAT, "mode": mode, **comparison,
                 "current": inventories["current"], "baseline": inventories["baseline"]}
@@ -365,7 +367,8 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
         c_comparison.annotate_scope(summary, set(matrices["current"]["targetHeaders"]))
         summary["projectAcceptance"] = c_acceptance.evaluate(
             summary, current / "project", matrix_scope=matrices["current"],
-            **({"fingerprints": inventories["current"], "sample": sample} if mode is not None else {}))
+            **({"fingerprints": inventories["current"], "sample": sample,
+                "report_disposition_errors": mode == "pr"} if mode is not None else {}))
         (current / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     shutil.copy2(baseline / "summary.json", current / "baseline-summary.json")
     summaries = {side: read(path / "summary.json") for side, path in outputs.items()}
