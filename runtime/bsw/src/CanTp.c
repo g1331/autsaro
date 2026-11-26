@@ -437,18 +437,18 @@ static CANTP_CODE void CanTp_Claim(CanTp_ConnectionType *connection,
                                    CanTp_WorkType *work,
                                    CanTp_LowerType direction)
 {
-    uint8 i;
     const uint8 *frame =
         (direction == CANTP_LOWER_TX) ? connection->tx.frame : connection->rx.frame;
+    const uint8 length =
+        (direction == CANTP_LOWER_TX) ? connection->tx.frame_length : CANTP_MIN_PADDED_DL;
     connection->lower_owner = direction;
     connection->lower_generation =
         (direction == CANTP_LOWER_TX) ? connection->tx.generation : connection->rx.generation;
     connection->pending_lower_id = connection->config->lower_transmit;
-    work->length =
-        (direction == CANTP_LOWER_TX) ? connection->tx.frame_length : CANTP_MIN_PADDED_DL;
-    for (i = 0u; i < work->length; ++i) {
+    for (uint8 i = 0u; i < length; ++i) {
         work->frame[i] = frame[i];
     }
+    work->length = length;
     work->kind = CANTP_WORK_LOWER;
     work->direction = direction;
     work->generation = connection->lower_generation;
@@ -509,11 +509,10 @@ static CANTP_CODE void CanTp_PrepareFlow(CanTp_ConnectionType *connection, CanTp
 /* Takes the oldest connection->queued frame. */
 static CANTP_CODE void CanTp_TakeFrame(CanTp_ConnectionType *connection, CanTp_WorkType *work)
 {
-    const uint8 length = connection->queued_length[connection->queue_head];
-    for (uint8 i = 0u; i < length; ++i) {
+    for (uint8 i = 0u; i < CANTP_FRAME_BYTES; ++i) {
         work->frame[i] = connection->queued[connection->queue_head][i];
     }
-    work->length = length;
+    work->length = connection->queued_length[connection->queue_head];
     work->kind = CANTP_WORK_FRAME;
     work->generation = connection->rx.generation;
     connection->queue_head = (uint8)((connection->queue_head + 1u) % CANTP_RX_QUEUE);
