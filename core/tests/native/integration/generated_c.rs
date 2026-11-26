@@ -62,15 +62,13 @@ fn comm_services_execute_real_user_calls_and_mode_publications() {
     );
     mutations.push(("wrong-second-user".into(), changed, false));
     let mut changed = original.clone();
-    assert_eq!(
-        changed[2]
-            .matches("users[i].notify(users[i].mode);")
-            .count(),
-        1
-    );
+    let publication = "comm_user_publications[i].notify(comm_user_publications[i].mode);";
+    assert_eq!(changed[2].matches(publication).count(), 1);
     changed[2] = changed[2].replace(
-        "users[i].notify(users[i].mode);",
-        "if (users[i].mode > COMM_FULL_COMMUNICATION) { users[i].notify(users[i].mode); }",
+        publication,
+        &format!(
+            "if (comm_user_publications[i].mode > COMM_FULL_COMMUNICATION) {{ {publication} }}"
+        ),
     );
     mutations.push(("missing-user-notifications".into(), changed, false));
     let mut changed = original.clone();
