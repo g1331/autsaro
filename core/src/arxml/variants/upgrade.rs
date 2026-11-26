@@ -68,7 +68,7 @@ fn incoming_refs(
         };
         for node in document
             .descendants()
-            .filter(|node| node.is_element() && node.tag_name().name().ends_with("-REF"))
+            .filter(|node| super::resolve::reference_element(*node))
         {
             if let Some(value) = crate::arxml::xml::literal_text(node)
                 && within(value.trim(), &target.object.path)
@@ -84,14 +84,41 @@ fn incoming_refs(
 }
 
 fn candidate_reference_is_opaque(
-    snapshot: &crate::arxml::projection::SourceSnapshot,
+    sources: &[InputSource],
     path: &str,
-) -> bool {
-    snapshot.opaque_values.iter().any(|value| value.contains(path))
-        || snapshot.fields.iter().any(|field| {
-            field.view.definition.kind.is_none() && field.view.reference.is_none()
-                && matches!(&field.view.current, crate::project_model::ValueState::Explicit { value } if value.lexeme.contains(path))
-        })
+    history: &[Vec<PathMigration>],
+) -> Result<bool, LocalizedText> {
+    for source in sources {
+        let text = std::str::from_utf8(source.bytes()).map_err(|error| error.to_string())?;
+        let document = Document::parse(text).map_err(|error| error.to_string())?;
+        for node in document.descendants().filter(|node| node.is_element()) {
+            let vendor = node.ancestors().any(|ancestor| {
+                ancestor.is_element()
+                    && (ancestor.tag_name().namespace() != Some(crate::arxml::NS)
+                        || ancestor.has_tag_name((crate::arxml::NS, "SDG")))
+            });
+            let points_to_old = |value: &str| {
+                value.contains(path)
+                    || within(
+                        &super::resolve::replay_migrations(value.trim(), history),
+                        path,
+                    )
+            };
+            if node.attributes().any(|attribute| {
+                (vendor
+                    || attribute.namespace().is_some_and(|namespace| {
+                        namespace != "http://www.w3.org/2001/XMLSchema-instance"
+                    }))
+                    && points_to_old(attribute.value())
+            }) || (vendor
+                || super::resolve::reference_element(node) && node.attribute("DEST").is_none())
+                && crate::arxml::xml::literal_text(node).is_some_and(|value| points_to_old(&value))
+            {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 impl Workspace {
@@ -164,7 +191,11 @@ impl Workspace {
         let mut migration_sources = BTreeSet::new();
         let mut migration_targets = BTreeSet::new();
         for migration in &base.migrations {
-            if candidate_reference_is_opaque(&candidate.snapshot, &migration.previous.path) {
+            if candidate_reference_is_opaque(
+                &new_sources,
+                &migration.previous.path,
+                &next.applied_migrations,
+            )? {
                 return Err(crate::product_message!(
                     "backend.arxml.changes.opaque_extension_reference_impact_unknown"
                 ));
@@ -190,13 +221,9 @@ impl Workspace {
                 .into());
             }
         }
-        for previous in &mut next.applied_migrations {
-            if let Some(path) = migrated_path(&previous.current.path, &base.migrations) {
-                previous.current.path = path;
-            }
+        if !base.migrations.is_empty() {
+            next.applied_migrations.push(base.migrations.clone());
         }
-        next.applied_migrations
-            .extend(base.migrations.iter().cloned());
         let layers_base = layers.base.clone();
         let mut conflicts = Vec::new();
         let mut agreements = Vec::new();
@@ -226,7 +253,7 @@ impl Workspace {
                         .iter_mut()
                         .filter(|value| value.kind == ValueKind::Reference)
                     {
-                        if let Some(path) = migrated_path(&value.lexeme, &base.migrations) {
+                        if let Some(path) = migrated_path(value.lexeme.trim(), &base.migrations) {
                             value.lexeme = path;
                         }
                     }
@@ -267,17 +294,24 @@ impl Workspace {
                 } else {
                     match &operation.action {
                         LayerAction::Set { values, .. } => {
-                            let destination = incoming
-                                .or(previous)
-                                .and_then(|entry| entry.values.first())
-                                .and_then(|value| value.split_once(' ').map(|(dest, _)| dest));
                             let new_values = values
                                 .iter()
                                 .map(|value| {
+                                    let destination = if value.kind == ValueKind::Reference {
+                                        incoming
+                                            .into_iter()
+                                            .chain(previous)
+                                            .flat_map(|entry| &entry.values)
+                                            .filter_map(|entry| entry.split_once(' '))
+                                            .find(|(_, path)| *path == value.lexeme.trim())
+                                            .map(|(destination, _)| destination)
+                                    } else {
+                                        None
+                                    };
                                     super::resolve::semantic_value(
                                         Some(value.kind),
                                         &value.lexeme,
-                                        destination.filter(|_| value.kind == ValueKind::Reference),
+                                        destination,
                                     )
                                 })
                                 .collect::<Vec<_>>();

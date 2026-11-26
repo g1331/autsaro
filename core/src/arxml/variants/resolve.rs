@@ -129,6 +129,17 @@ pub(super) fn migrated_path(path: &str, migrations: &[PathMigration]) -> Option<
     ))
 }
 
+pub(super) fn reference_element(node: Node<'_, '_>) -> bool {
+    node.is_element()
+        && (node.tag_name().name().ends_with("-REF") || node.tag_name().name().ends_with("-TREF"))
+}
+
+pub(super) fn replay_migrations(path: &str, history: &[Vec<PathMigration>]) -> String {
+    history.iter().fold(path.to_owned(), |path, revision| {
+        migrated_path(&path, revision).unwrap_or(path)
+    })
+}
+
 fn xml_escape(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -201,6 +212,26 @@ pub(super) fn resolve(
             origins.insert(member.as_str(), layer.clone());
         }
     }
+    let documents = sources
+        .iter()
+        .filter(|source| origins.contains_key(source.logical_path()))
+        .map(|source| {
+            let error = |message| vec![diagnostic("LAYER_XML", source.logical_path(), message)];
+            let text = std::str::from_utf8(source.bytes())
+                .map_err(|failure| error(failure.to_string()))?;
+            let document = Document::parse(text).map_err(|failure| error(failure.to_string()))?;
+            Ok((source, document))
+        })
+        .collect::<Result<Vec<_>, Vec<PlanDiagnostic>>>()?;
+    let reference_types = documents
+        .iter()
+        .flat_map(|(_, document)| {
+            document
+                .descendants()
+                .filter(|node| is_named(*node))
+                .map(|node| (path_of(node), node.tag_name().name().to_owned()))
+        })
+        .collect();
     let mut result = Resolution::default();
     let mut known = BTreeSet::new();
     let mut applied_fields = BTreeSet::new();
@@ -217,15 +248,10 @@ pub(super) fn resolve(
                 error.to_string(),
             )]
         })?;
-    for source in sources {
+    for (source, doc) in documents {
         let path = source.logical_path();
-        let Some(layer) = origins.get(path) else {
-            continue;
-        };
-        let text = std::str::from_utf8(source.bytes())
-            .map_err(|error| vec![diagnostic("LAYER_XML", path, error.to_string())])?;
-        let doc = Document::parse(text)
-            .map_err(|error| vec![diagnostic("LAYER_XML", path, error.to_string())])?;
+        let layer = &origins[path];
+        let text = doc.input_text();
         let digest = source.sha256();
         let origin = |range: std::ops::Range<usize>| LayerOrigin {
             layer: layer.clone(),
@@ -410,36 +436,36 @@ pub(super) fn resolve(
                 if let Some(action) = action {
                     let first = applied_fields.insert(target.clone());
                     let edit = if first { action } else { &LayerAction::Delete };
-                    apply_field(node, &id, &entries, edit, catalog, &mut patches, first).map_err(
-                        |message| {
-                            vec![diagnostic(
-                                "LAYER_FIELD_OPERATION",
-                                &format!("{}:{id}", target.object.path),
-                                message,
-                            )]
-                        },
-                    )?;
+                    apply_field(
+                        node,
+                        &id,
+                        (&entries, &reference_types),
+                        edit,
+                        catalog,
+                        &mut patches,
+                        first,
+                    )
+                    .map_err(|message| {
+                        vec![diagnostic(
+                            "LAYER_FIELD_OPERATION",
+                            &format!("{}:{id}", target.object.path),
+                            message,
+                        )]
+                    })?;
                     removals.extend(entries.iter().map(|entry| entry.node_range.clone()));
                     if first && let LayerAction::Set { values, .. } = action {
-                        let dest = (kind == Some(ValueKind::Reference))
-                            .then(|| {
-                                entries
-                                    .first()
-                                    .and_then(|field| field.dest.as_deref())
-                                    .or_else(|| {
-                                        catalog
-                                            .get(&id)?
-                                            .reference_destinations
-                                            .first()
-                                            .map(String::as_str)
-                                    })
-                            })
-                            .flatten();
-                        row.values.extend(
-                            values
-                                .iter()
-                                .map(|value| semantic_value(kind, &value.lexeme, dest)),
-                        );
+                        let descriptor = catalog.get(&id);
+                        row.values.extend(values.iter().map(|value| {
+                            let dest = descriptor.and_then(|definition| {
+                                reference_destination(
+                                    value,
+                                    &entries,
+                                    &reference_types,
+                                    &definition.reference_destinations,
+                                )
+                            });
+                            semantic_value(kind, &value.lexeme, dest)
+                        }));
                         if kind == Some(ValueKind::Reference) {
                             inbound.extend(values.iter().map(|value| {
                                 (
@@ -478,10 +504,7 @@ pub(super) fn resolve(
                 }
             }
         }
-        for node in doc
-            .descendants()
-            .filter(|node| node.is_element() && node.tag_name().name().ends_with("-REF"))
-        {
+        for node in doc.descendants().filter(|node| reference_element(*node)) {
             if removals
                 .iter()
                 .any(|range| range.contains(&node.range().start))
@@ -502,9 +525,12 @@ pub(super) fn resolve(
                     });
                     continue;
                 }
-                if layer[0] != "base"
-                    && let Some(current) = migrated_path(&target, &layers.applied_migrations)
-                {
+                let current = if layer[0] == "base" {
+                    target.clone()
+                } else {
+                    replay_migrations(&target, &layers.applied_migrations)
+                };
+                if current != target {
                     if node.tag_name().namespace() != Some(NS) || node.attribute("DEST").is_none() {
                         return Err(vec![diagnostic(
                             "BASE_MIGRATION_REFERENCE_OPAQUE",
@@ -604,10 +630,32 @@ fn collect_attributes(node: Node<'_, '_>, attributes: &mut Vec<String>) {
     }
 }
 
+fn reference_destination<'a>(
+    value: &TypedValue,
+    entries: &'a [Field],
+    types: &'a BTreeMap<String, String>,
+    allowed: &'a [String],
+) -> Option<&'a str> {
+    if value.kind != ValueKind::Reference {
+        return None;
+    }
+    let path = value.lexeme.trim();
+    types
+        .get(path)
+        .map(String::as_str)
+        .or_else(|| {
+            entries
+                .iter()
+                .find(|entry| entry.value.trim() == path)
+                .and_then(|entry| entry.dest.as_deref())
+        })
+        .or_else(|| (allowed.len() == 1).then(|| allowed[0].as_str()))
+}
+
 fn apply_field(
     node: Node<'_, '_>,
     id: &str,
-    entries: &[Field],
+    (entries, reference_types): (&[Field], &BTreeMap<String, String>),
     action: &LayerAction,
     catalog: &crate::definitions::DefinitionCatalog,
     patches: &mut Vec<Patch>,
@@ -678,14 +726,13 @@ fn apply_field(
             for value in values {
                 catalog.validate_value(id, value)?;
                 let attribute = if kind == ValueKind::Reference {
-                    let dest = entries
-                        .first()
-                        .and_then(|field| field.dest.as_deref())
-                        .or_else(|| {
-                            (descriptor.reference_destinations.len() == 1)
-                                .then(|| descriptor.reference_destinations[0].as_str())
-                        })
-                        .ok_or("The reference destination type is ambiguous.")?;
+                    let dest = reference_destination(
+                        value,
+                        entries,
+                        reference_types,
+                        &descriptor.reference_destinations,
+                    )
+                    .ok_or("The reference destination type is ambiguous.")?;
                     format!(" DEST=\"{}\"", xml_escape(dest))
                 } else {
                     String::new()
@@ -758,4 +805,51 @@ pub(crate) fn resolve_manifest_sources(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn migration(previous: &str, current: &str) -> PathMigration {
+        let object = |path: &str| LayerObject {
+            release: "R24-11".into(),
+            definition_type: "ECUC-CONTAINER-VALUE".into(),
+            path: path.into(),
+            instance_context: Vec::new(),
+        };
+        PathMigration {
+            previous: object(previous),
+            current: object(current),
+        }
+    }
+
+    #[test]
+    fn replay_preserves_nested_moves_across_revisions() {
+        let revisions = vec![vec![migration("/A", "/B")], vec![migration("/B/X", "/B/Y")]];
+        assert_eq!(replay_migrations("/A/X/Child", &revisions), "/B/Y/Child");
+        assert_eq!(replay_migrations("/A/Other", &revisions), "/B/Other");
+    }
+
+    #[test]
+    fn replacement_looks_up_each_reference_target_independently() {
+        let types = BTreeMap::from([
+            ("/Application/Timing".into(), "TIMING-EVENT".into()),
+            ("/Application/Init".into(), "INIT-EVENT".into()),
+        ]);
+        for (path, kind) in [
+            (" /Application/Timing ", "TIMING-EVENT"),
+            ("/Application/Init", "INIT-EVENT"),
+        ] {
+            let value = TypedValue {
+                kind: ValueKind::Reference,
+                lexeme: path.into(),
+            };
+            assert_eq!(reference_destination(&value, &[], &types, &[]), Some(kind));
+            assert_eq!(
+                semantic_value(Some(value.kind), &value.lexeme, Some(kind)),
+                format!("{kind} {}", path.trim())
+            );
+        }
+    }
 }

@@ -880,6 +880,22 @@ fn an_unselected_member_does_not_block_saving_the_active_variant() {
     workspace.save().unwrap();
     assert!(workspace.saved_integration_plan().is_ok());
     assert_eq!(fs::read_to_string(inactive).unwrap(), before);
+    let unsafe_encoding = before.replacen("UTF-8", "ISO-8859-1", 1);
+    let unsafe_encoding = if unsafe_encoding == before {
+        format!("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>{before}")
+    } else {
+        unsafe_encoding
+    };
+    fs::write(path.join("reduced/ecuc.arxml"), unsafe_encoding).unwrap();
+    let error =
+        Workspace::open_project_manifest(&path.join("workbench-project.json"), &path.join("cache"))
+            .err()
+            .unwrap();
+    assert!(
+        serde_json::to_string(&error)
+            .unwrap()
+            .contains("backend.rules.source_encoding")
+    );
 }
 
 #[test]

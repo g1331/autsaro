@@ -56,7 +56,7 @@ pub struct ProjectLayers {
     #[serde(default)]
     pub conflicts: Vec<UpgradeConflict>,
     #[serde(default)]
-    pub applied_migrations: Vec<PathMigration>,
+    pub applied_migrations: Vec<Vec<PathMigration>>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

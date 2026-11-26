@@ -781,6 +781,11 @@ impl Workspace {
             })
             .map(|file| (file.path.as_path(), file.text.as_str()))
             .collect();
+        if layered.is_some() {
+            for file in &self.files {
+                crate::rules::check_source(&file.path, &file.text)?;
+            }
+        }
         let safety = ScopeValidation {
             scope: ValidationScope::SourceSafety,
             status: ValidationStatus::Passed,
