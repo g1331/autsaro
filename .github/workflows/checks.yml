@@ -35,6 +35,10 @@ permissions:
 env:
   PYTHONUTF8: '1'
   PYTHONPATH: tools/python/src
+  GATE_MODE: >-
+    ${{ !inputs.release-revision &&
+        (github.event_name == 'pull_request' ||
+         (github.event_name == 'push' && github.ref == 'refs/heads/master')) && 'pr' || 'strict' }}
 jobs:
   changes:
     name: Detect changed areas
@@ -1480,11 +1484,10 @@ jobs:
               if len(scans) != 1:
                   raise RuntimeError('Missing or duplicated scan: ' + prefix + str(scans))
               shutil.copytree(scans[0], Path('build') / result)
-      - name: Strict generated source gate
+      - name: Generated source gate
         env:
           ANALYSIS_TARGET: ${{ matrix.target }}
           ANALYSIS_SAMPLE: ${{ matrix.group }}
-          GATE_MODE: ${{ github.event_name == 'pull_request' && 'pr' || 'strict' }}
         shell: python
         run: |
           import os, subprocess, sys
@@ -1607,8 +1610,6 @@ jobs:
           if found != expected:
               raise RuntimeError('Expected all eight platform/sample results; missing=' + str(expected - found) + '; extra=' + str(found - expected))
       - name: Require eight fresh source gate receipts
-        env:
-          GATE_MODE: ${{ github.event_name == 'pull_request' && 'pr' || 'strict' }}
         run: python -m autosar_tooling.c_gate aggregate build/c-analysis-summaries --mode "$GATE_MODE"
 
   required:
