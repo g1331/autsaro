@@ -1197,7 +1197,7 @@ pub(super) fn files(
         "BswM",
         "static const BswM_ConfigType bswm_config",
         &values(&format!(
-            "{}, &Ecu_BswMAction",
+            "{}, &Ecu_BswMAction, &Ecu_HostBusSM_QueueModePublication",
             name("ComM", "ComMChannel", &mode.channel)
         )),
     );
@@ -1235,7 +1235,7 @@ pub(super) fn files(
         r#"static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,
                                                   ComM_ModeType requested)
 {
-    Std_ReturnType result = E_OK;
+    Std_ReturnType result;
 "#,
     );
     config.push_str(&format!(
@@ -1255,7 +1255,7 @@ pub(super) fn files(
         let channel = name("ComM", "ComMChannel", &mode.channel);
         config.push_str(&format!(
             r#"        case {}u:
-            (void)Ecu_HostBusSM_ApplyMode({channel}, {requested});
+            result = Ecu_HostBusSM_ApplyMode({channel}, {requested});
             break;
 "#,
             rule.mode
@@ -1379,6 +1379,7 @@ pub(super) fn files(
     if ((Ecu_TargetIsOwner() == 0) || (Ecu_SchMTimingActive() == FALSE)) {
         return E_NOT_OK;
     }
+    Ecu_HostBusSM_PublishPendingMode();
 "#,
         );
         let mut active_mask = None;

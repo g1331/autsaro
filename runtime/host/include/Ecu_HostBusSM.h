@@ -83,6 +83,24 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleT
  */
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Channel,
                                                           ComM_ModeType ComMode);
+/** Schedule a fresh observation after BswM cannot apply its direction action.
+ * @par Return
+ * None.
+ * Preconditions: initialized; otherwise no action.
+ * Context: BswM failure callout; not inside an exclusive area.
+ * Reentrancy: reentrant.
+ * Ownership: None.
+ */
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_QueueModePublication(void);
+/** Publish a queued actual mode to ComM, once per observation if readable.
+ * @par Return
+ * None.
+ * Preconditions: None.
+ * Context: ECU cycle or BusSM completion; not inside an exclusive area.
+ * Reentrancy: reentrant; the active publisher handles new observations.
+ * Ownership: None.
+ */
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_PublishPendingMode(void);
 /** CanIf controller mode indication (CanIfDispatchUserCtrlModeIndicationName): applies
  * the requested directions on STARTED and indicates the completed mode to ComM.
  * @param[in] ControllerId Configured controller; others are ignored.

@@ -82,6 +82,8 @@
 
 ### Fixed
 
+- Generated BswM actions propagate rejected CAN direction changes and schedule publication of the actual communication mode. Regenerate and rebuild ECU projects with the updated BswM configuration layout (#647)
+
 - C analysis rejects unexpected include search changes from project flags and evaluated resource existence probes, and reports SDK link permission and I/O failures (#620)
 
 - `fetch-official` retries transient download failures up to twice, reports connection diagnostics, and rejects redirects before requesting a different URL (#614)

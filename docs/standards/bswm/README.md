@@ -10,6 +10,8 @@
 
 `BswM_ComM_CurrentMode` 在调用者上下文仲裁，只评估使用该输入的规则。BswM 按 [ADR 0018](../../adr/0018-per-module-exclusive-areas-without-cross-module-locking.md) 使用自己的 `BSWM_STATE`，动作列表在区外运行：动作期间到达的输入不递归执行，而是在当前动作之后各仲裁一次，仲裁前取最新指示值（`SWS_BswM_00069`、`00281`）。`BswM_Deinit` 之后的输入不再处理，正在运行的动作照常结束；`BswM_MainFunction` 没有 DEFERRED 输入可处理。
 
+生成的动作将 HostBusSM 的返回值交给 BswM。动作受拒时，BswM 在区外调用生成配置里的失败回调。回调请求 HostBusSM 在后续 ECU 周期重新读取并向 ComM 发布实际模式，避免在动作内再次进入通知链。动作列表和 Det 配置沿用原有设置。
+
 ## 处置与证据
 
 - [仲裁与动作](arbitration.md)：IMMEDIATE 仲裁、推迟输入、规则与动作列表、未选的仲裁特性。
