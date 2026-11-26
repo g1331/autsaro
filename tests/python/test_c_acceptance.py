@@ -1491,7 +1491,8 @@ class AcceptanceTests(unittest.TestCase):
             with self.subTest(identifier=old):
                 self.assertIn(f"| {filename}:{line} | {old} | {new} |", lexical_text)
                 source = (ROOT / "runtime/bsw/src" / filename).read_text(encoding="utf-8")
-                declaration = re.search(rf"(?m)^static [^;\n]*\b{new}\b", source)
+                source = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+                declaration = re.search(rf"(?m)^static [^;{{}}]*\b{new}\b[^;{{}}]*;", source)
                 self.assertIsNotNone(declaration)
                 self.assertNotRegex(declaration[0], rf"\b{old}\b")
         control_evidence = {
