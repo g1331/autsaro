@@ -563,7 +563,7 @@ fn dcm_transport_resources_and_boot_selection_are_bounded_at_the_source() {
             "DcmDslConnection",
             "OtherConnection",
             "DIAGNOSTIC_IDENTIFIER",
-            "/Configuration/Dcm/Config/Dsl/Protocols/UdsOnCan/OtherConnection/Physical",
+            "/Configuration/Dcm/Config/Dsl/Protocols/UdsOnCan/OtherConnection/OtherPhysical",
         ),
         // Rejects: ECUC_Dcm_00601
         (
@@ -588,11 +588,20 @@ fn dcm_transport_resources_and_boot_selection_are_bounded_at_the_source() {
                     })
             },
             |text| {
-                let copy = text.replacen(
+                let mut copy = text.replacen(
                     &format!("<SHORT-NAME>{name}</SHORT-NAME>"),
                     &format!("<SHORT-NAME>{renamed}</SHORT-NAME>"),
                     1,
                 );
+                if kind != "DcmDspDid" {
+                    // Keep generated C names distinct so this case reaches transport validation.
+                    for child in ["Physical", "Receive", "Transmit"] {
+                        copy = copy.replace(
+                            &format!("<SHORT-NAME>{child}</SHORT-NAME>"),
+                            &format!("<SHORT-NAME>Other{child}</SHORT-NAME>"),
+                        );
+                    }
+                }
                 format!("{text}{copy}")
             },
         );
