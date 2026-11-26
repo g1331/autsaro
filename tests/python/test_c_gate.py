@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 import test_c_comparison as comparison_tests
 from autosar_tooling import c_gate, c_rename
+from test_ci_selection import expression_value
 
 
 class SourceGateTests(unittest.TestCase):
@@ -421,15 +422,34 @@ class SourceGateTests(unittest.TestCase):
         from autosar_tooling.config import ROOT
 
         workflow = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())
-        steps = workflow["jobs"]["c-analysis-gates"]["steps"]
-        step = next(row for row in steps if row.get("name") == "Strict generated source gate")
+        jobs = workflow["jobs"]
+        steps = jobs["c-analysis-gates"]["steps"]
+        step = next(row for row in steps if "autosar_tooling.c_gate', 'scan'" in row.get("run", ""))
+        aggregate = next(row for row in jobs["c-analysis"]["steps"]
+                         if "autosar_tooling.c_gate aggregate" in row.get("run", ""))
+        self.assertEqual(jobs["c-analysis-gates-windows"]["steps"], steps)
+        for owner in (jobs["c-analysis-gates"], jobs["c-analysis-gates-windows"],
+                      jobs["c-analysis"], step, aggregate):
+            self.assertNotIn("GATE_MODE", owner.get("env", {}))
+        self.assertEqual(shlex.split(aggregate["run"])[-2:], ["--mode", "$GATE_MODE"])
         self.assertNotIn("if", step)
+        cases = (
+            ("pull_request", "refs/pull/662/merge", "", "pr"),
+            ("push", "refs/heads/master", "", "pr"),
+            ("push", "refs/heads/main", "", "strict"),
+            ("workflow_dispatch", "refs/heads/master", "", "strict"),
+            ("push", "refs/heads/master", "release-commit", "strict"),
+        )
         with tempfile.TemporaryDirectory() as temporary:
             script = Path(temporary) / "gate.py"
             script.write_text(step["run"], encoding="utf-8")
-            for mode in ("pr", "strict"):
+            for event, ref, release, expected_mode in cases:
+                mode = expression_value(workflow["env"]["GATE_MODE"], {
+                    "github.event_name": event, "github.ref": ref, "inputs.release-revision": release,
+                })
+                self.assertEqual(mode, expected_mode)
                 for code in (0, 1, 2):
-                    with self.subTest(mode=mode, code=code), patch.dict(os.environ, {
+                    with self.subTest(event=event, ref=ref, release=release, code=code), patch.dict(os.environ, {
                         "ANALYSIS_TARGET": "linux-x64-controlled-v1",
                         "ANALYSIS_SAMPLE": "standard-ecu", "GATE_MODE": mode,
                     }), patch.object(subprocess, "run", return_value=

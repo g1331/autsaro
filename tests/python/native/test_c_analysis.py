@@ -294,6 +294,13 @@ DWORD FixtureWait(HANDLE object)
                 for field in ("passed", "coverage", "diagnostics"):
                     self.assertEqual(summary[field], raw[field])
 
+                summary_path.write_bytes(raw_bytes)
+                with self.assertRaisesRegex(ValueError, "without current precise disposition"):
+                    c_gate.scan(target, sample, scopes, mode="strict")
+                strict_gate = c_gate.read(current / "gate.json")
+                self.assertEqual(strict_gate["status"], "blocked")
+                self.assertEqual(strict_gate["diagnosticFingerprints"]["staleDispositions"], sorted(registered))
+
             with (patch.object(c_gate, "ROOT", root), patch.object(c_gate, "git", c_baseline.git),
                   patch.object(c_disposition, "DIRECTORY", root.name + "-missing-dispositions"),
                   patch.object(c_disposition, "WINDOWS_DISPOSITION_BINARIES", (raw["tool"]["binarySha256"],))):
