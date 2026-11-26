@@ -375,10 +375,12 @@ fn legacy_mode_callouts_import_and_report_each_replacement_before_generation() {
         assert_eq!(issue.file.as_deref(), Some("ecuc.arxml"));
         assert_eq!(issue.code, "MODE_LEGACY_CALLOUT");
         let expected = format!("Ecu_HostBusSM_ConfirmMode(0u, {mode})");
-        assert_eq!(
-            issue.remedy,
-            autosar_config_core::product_message!("backend.integration.mode.replace_callout", "callout" => expected),
-        );
+        // The source gate also compiles this suite with the first parent's message catalog.
+        let autosar_config_core::message::LocalizedText::Message(remedy) = &issue.remedy else {
+            panic!("expected a localized replacement: {:?}", issue.remedy);
+        };
+        assert_eq!(remedy.key, "backend.integration.mode.replace_callout");
+        assert_eq!(remedy.params["callout"].as_str(), Some(expected.as_str()));
     }
     let validation = normal_validation(&sources);
     assert_eq!(
