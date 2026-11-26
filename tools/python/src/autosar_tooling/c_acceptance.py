@@ -332,10 +332,19 @@ def _retained_checker_entities(summary: dict, occurrences: list[dict], rule: str
     """Require the exact project diagnostic positions and their named source entities."""
     expected = Counter()
     programs = {row["name"]: row["translationUnits"] for row in summary["programs"]}
-    dependencies = summary["scope"].get("projectTranslationUnits", {})
+    scope = summary["scope"]
+    dependencies = scope.get("projectTranslationUnits", {})
+    target_only_r82 = (rule == "R8.2" and scope.get("profile") == "ecu"
+                       and set(programs) == {c_retention.TARGET_PROGRAM})
     for entity in entities:
         name, line = entity["file"], entity["line"]
-        for program, columns in entity["diagnostics"].items():
+        diagnostics = entity["diagnostics"]
+        if target_only_r82 and diagnostics.keys() == {"host-batch", "probe"}:
+            # Both approved programs reported the same declaration positions.
+            if diagnostics["host-batch"] != diagnostics["probe"]:
+                return False
+            diagnostics = {c_retention.TARGET_PROGRAM: diagnostics["host-batch"]}
+        for program, columns in diagnostics.items():
             if not any(unit == name or name in dependencies.get(unit, ())
                        for unit in programs.get(program, ())):
                 return False

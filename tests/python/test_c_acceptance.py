@@ -1098,6 +1098,35 @@ class AcceptanceTests(unittest.TestCase):
         self.obligation_path.write_text(text, encoding="utf-8", newline="\n")
         self.assertEqual(self.identity(), identity)
 
+    def test_r82_target_scan_requires_the_exact_shared_approved_positions(self):
+        header = "generated/include/Rte_Process.h"
+        unit = "generated/src/Ecu_Config.c"
+        summary = {
+            "scope": {"profile": "ecu", "projectTranslationUnits": {unit: [unit, header]}},
+            "programs": [{"name": "target", "translationUnits": [unit]}],
+            "diagnostics": [{"sourceCategory": "project"}],
+        }
+        entity = {"file": header, "line": 90, "name": "Process_Transform",
+                  "diagnostics": {"host-batch": [36, 45], "probe": [36, 45]}}
+        occurrences = [{"rule": "misra-c2012-8.2", "status": "owned_record_matched", "diagnostic": 0,
+                        "location": {"file": header, "line": "90", "column": str(column)},
+                        "entity": entity["name"], "programs": ["target"]} for column in (36, 45)]
+        match = c_acceptance._retained_checker_entities
+        self.assertTrue(match(summary, occurrences, "R8.2", [entity]))
+        self.assertFalse(match(summary, occurrences[:1], "R8.2", [entity]))
+        changed = copy.deepcopy(occurrences)
+        changed[1]["location"]["column"] = "46"
+        self.assertFalse(match(summary, changed, "R8.2", [entity]))
+        changed[1]["location"]["column"] = "45"
+        changed[1]["entity"] = "OtherDeclaration"
+        self.assertFalse(match(summary, changed, "R8.2", [entity]))
+        self.assertFalse(match(summary, occurrences, "R8.2", [
+            {**entity, "diagnostics": {"host-batch": [36, 45], "probe": [36]}}]))
+        self.assertFalse(match(summary, occurrences, "R8.2", [
+            {**entity, "diagnostics": {"host-batch": [36, 45]}}]))
+        summary["scope"]["projectTranslationUnits"][unit].remove(header)
+        self.assertFalse(match(summary, occurrences, "R8.2", [entity]))
+
     def test_checker_retained_requires_current_entities_and_explicit_formal_approval(self):
         self.synthetic_complete_inputs()
         table = self.obligation_path.read_text(encoding="utf-8")
