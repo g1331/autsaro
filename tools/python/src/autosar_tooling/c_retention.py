@@ -8,7 +8,6 @@ import json
 import re
 from pathlib import Path
 
-from autosar_tooling.c_comparison import ANALYSIS_PROGRAMS
 from autosar_tooling.c_standard import code_words, is_comment, lex
 from autosar_tooling.config import ROOT
 
@@ -16,6 +15,8 @@ PROFILES = {"S": "standard-ecu", "U": "user-application",
             "C": "component-pipeline", "N": "no-diagnostic"}
 COHORT_SHA256 = "f300270c060c15fe7c9d449e1e38a6a7994c02b12280578acc8cd8956e500224"
 TARGETS = {"linux-x64-controlled-v1", "windows-x64-controlled-v1"}
+TARGET_PROGRAM = "target"
+ANALYSIS_PROGRAMS = frozenset({TARGET_PROGRAM, "host-batch", "probe"})
 RECORD_DIRECTORY = "docs/standards/rte/generated-retention"
 COHORT_FIELDS = ("rule", "name", "source", "delivered", "shape", "profiles", "producer")
 

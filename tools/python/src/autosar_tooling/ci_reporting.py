@@ -14,7 +14,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
-from autosar_tooling import c_comparison, c_fingerprint
+from autosar_tooling import c_fingerprint, c_retention
 
 # GitHub truncates displayed results above this limit even when upload succeeds.
 SARIF_RESULTS_PER_RUN = 5000
@@ -241,7 +241,7 @@ def fingerprint_comparison(path: Path, current_bytes: bytes, current: dict,
 
 def cppcheck_category(prefix: str, program: str) -> str:
     # Reuse the primary category so the target scan updates previous alerts.
-    return prefix if program in {"host-batch", c_comparison.TARGET_PROGRAM} else f"{prefix}-{program}"
+    return prefix if program in {"host-batch", c_retention.TARGET_PROGRAM} else f"{prefix}-{program}"
 
 
 def cppcheck(
@@ -318,7 +318,7 @@ def cppcheck(
         prefix = f"cppcheck-{target}-{path.parent.name}"
         if categories is not None and data["error"] is None:
             programs = {row["name"] for row in data.get("programs", [])}
-            if programs == {c_comparison.TARGET_PROGRAM} and data["scope"].get("profile") == "ecu":
+            if programs == {c_retention.TARGET_PROGRAM} and data["scope"].get("profile") == "ecu":
                 # Publish the retired probe category empty to clear its alerts.
                 programs.add("probe")
             categories.update(cppcheck_category(prefix, program) for program in programs)

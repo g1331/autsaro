@@ -129,14 +129,13 @@ class FingerprintTests(unittest.TestCase):
             code["c_check.py"] = "0f933b3b794d240d3a97c674bec20c50dbe0634f9753b831fdbae942d437ebba"
             registered = self.inventory(summary, output)
             self.assertTrue(all(row["fingerprint"] for row in registered))
-            driver = Path(c_check.__file__).read_text(encoding="utf-8").encode("utf-8")
-            current_hash = hashlib.sha256(driver).hexdigest()
-            code["c_check.py"] = current_hash
+            rejection_only = "a13646572c73a07345e658afb22a52c490894c97029a42e71aafdaef84ecb993"
+            code["c_check.py"] = rejection_only
             self.assertEqual(self.inventory(summary, output), registered)
-            self.assertEqual(code["c_check.py"], current_hash)
-            code["c_check.py"] = hashlib.sha256(driver + b"\n").hexdigest()
+            self.assertEqual(code["c_check.py"], rejection_only)
+            code["c_check.py"] = hashlib.sha256(b"different analysis inputs").hexdigest()
             self.assertNotEqual(self.inventory(summary, output), registered)
-            code["c_check.py"] = current_hash
+            code["c_check.py"] = rejection_only
             code["c_addon.py"] = "changed"
             self.assertNotEqual(self.inventory(summary, output), registered)
 

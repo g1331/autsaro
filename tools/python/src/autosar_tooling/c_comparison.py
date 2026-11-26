@@ -27,8 +27,6 @@ def _read(path: Path) -> dict:
 MATRIX_TARGETS = ("linux-x64-controlled-v1", "windows-x64-controlled-v1")
 MATRIX_SAMPLES = ("standard-ecu", "user-application", "component-pipeline", "no-diagnostic")
 SEMANTIC_VERSION = 4
-TARGET_PROGRAM = "target"
-ANALYSIS_PROGRAMS = frozenset({TARGET_PROGRAM, "host-batch", "probe"})
 
 
 def raw_identity(summary: dict) -> str:

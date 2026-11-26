@@ -468,7 +468,7 @@ def prepare(project: Path, target_id: str, output: Path) -> tuple[Path, list[str
     packages = c_sdk.msys_headers(Path(compiler)) if target_id.startswith("windows") else c_sdk.debian_headers()
     sdk_headers = [c_sdk.header_identity(Path(path), root, target_id, machine.strip(), packages)
                    for path in sorted({path for paths in sdk_units.values() for path in paths})]
-    scope = {"target": target_id, "profile": target["profile"], "entries": {c_comparison.TARGET_PROGRAM: None},
+    scope = {"target": target_id, "profile": target["profile"], "entries": {c_retention.TARGET_PROGRAM: None},
                                    "compilerFlags": flags, "compilerWorkers": compiler_workers, "includePaths": target["includePaths"],
                                    "systemIncludePaths": system_includes, "diagnosticCompiler": {"path": compiler, "version": compiler_version, "sha256": digest(Path(compiler))},
                                    "compilerDiscoveredDefines": per_unit_macros,
@@ -805,7 +805,7 @@ def recheck_semantic_inputs(summary: dict, project: Path, tool: tuple[Path, Path
     refuse_links(project)
     project = project.resolve(strict=True)
     names = [row["name"] for row in summary["programs"]]
-    if any(name not in c_comparison.ANALYSIS_PROGRAMS for name in names):
+    if any(name not in c_retention.ANALYSIS_PROGRAMS for name in names):
         raise ValueError("Unsupported analysis program directory")
     directories = (project.parent,) if len(names) == 1 else tuple(project.parent / name for name in names)
     scope["cppcheckFilesDirectory"] = identity.get("filesDirectory", "")
@@ -839,7 +839,7 @@ def check(project: Path, target_id: str, output: Path, baseline: Path | None = N
         code, passed, diagnostics, command, inputs = analyze_program(
             executable, addons, root, sources, database, scope, target_id, output,
             **({"rename_units": rename_units} if rename_units else {}))
-        program = c_comparison.TARGET_PROGRAM
+        program = c_retention.TARGET_PROGRAM
         summary["programs"] = [{"name": program, "entry": None, "translationUnits": sources,
                                 "exitCode": code, "passed": passed, "command": command}]
         scope["cppcheckInputs"] = {unit: {kind: sorted(names) for kind, names in actual.items()}
