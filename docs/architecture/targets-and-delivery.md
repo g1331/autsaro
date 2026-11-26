@@ -24,34 +24,37 @@
 
 封存工程按[生成工程布局](mainline.md#生成工程布局已实施38)的所有权目录包含生成源码、受信 runtime 资产、固定内核与补丁、应用快照、所有权台账、`target.json` 构建清单与同源的 `CMakeLists.txt`、`meta/files.list`／`meta/files.sha256` 和 stdlib-only 离线工具。CMake 是供 IDE／CI 使用的标准构建入口，与 `ecu-tool build` 编译同一组源文件；固定工具链身份、目标段检查和 `verify` 只由 `ecu-tool` 承担。接收者只需受支持的 CPython、匹配的 GCC／binutils 与 Git，不依赖 checkout、Rust、Node 或 uv；包内工具以 `-I -S` 运行，只从自身 `tools/` 导入。入口 `tools/ecu-tool.py build|verify` 的用法见 [runtime/README.md](../../runtime/README.md)。
 
-当前交接格式为 `autosar-workbench-handoff-v5`。它封存工程清单 v2、原始配置成员和启用及未启用的应用源码。旧 `autosar-workbench-handoff-v4`、`autosar-workbench-handoff-v3`、`autosar-workbench-handoff-v2`、`autosar-host-handoff-v1` 与 `autosar-ecu-handoff-v1` 在导入时拒绝，其 ARXML 源文件可导入新工程。
+当前交接格式为 `autosar-workbench-handoff-v5`。它封存工程清单 v2、规则身份、原始配置成员和启用及未启用的应用源码。旧 `autosar-workbench-handoff-v4`、`autosar-workbench-handoff-v3`、`autosar-workbench-handoff-v2`、`autosar-host-handoff-v1` 与 `autosar-ecu-handoff-v1` 在导入时拒绝，其 ARXML 源文件可导入新工程。
 
 只有持久化、交付或协议格式带版本。格式的结构或取值域变化时版本加一，版本号不回收；旧版本按身份明确拒绝，不迁移。模板 ID、生成方 ID 和消息键等内部标识不带版本。
 
 | 格式 | 载体 | 版本 |
 | --- | --- | --- |
-| `autosar-workbench-handoff` | 包内 `meta/handoff.json`、`target.json` 的 `nativeDelivery` | v4 |
+| `autosar-workbench-handoff` | 包内 `meta/handoff.json`、`target.json` 的 `nativeDelivery` | v5 |
 | 所有权台账 `formatVersion` | 包内 `meta/workbench-ownership.json` | 3 |
-| `autosar-ecu-integration`；计划描述 `formatVersion` | 包内 `meta/integration.json` | v2；2 |
+| `autosar-ecu-integration`；计划描述 `formatVersion` | 包内 `meta/integration.json` | v3；3 |
 | `autosar-component-contract` | 组件契约包 `contract.json`、ECU 包 `meta/contract.json` | v2 |
 | `autosar-asset-inventory` | `runtime/contracts/assets.json` 及包内 `meta/assets.json` | v2 |
 | `autosar-workbench-build-tool-inventory` | 包内 `tools/build-tool-inventory.json` | v2 |
-| `autosar-build-target` | 包内 `target.json` | v3 |
-| `autosar-ecu-test-inputs`、`autosar-os-generation-timing` | 包内 `meta/verification-inputs.json`、`meta/os-generation-timing.json` | v1 |
+| `autosar-build-target` | 包内 `target.json` | v4 |
+| `autosar-ecu-test-inputs` | 包内 `meta/verification-inputs.json` | v2 |
+| `autosar-os-generation-timing` | 包内 `meta/os-generation-timing.json` | v1 |
 | 工程清单 `formatVersion` | 用户工程 `workbench-project.json` | 1 |
 | 扩展目录 `formatVersion` | 外部 `catalog.json` | 1 |
-| profile `singlecore-ecu-v1`；target `windows-x64-controlled-v1`、`linux-x64-controlled-v1`；协议 `HostBatchV1` | 工程、设置、交付包、主机批处理协议 | v1 |
+| profile `singlecore-ecu-v1`；target `windows-x64-controlled-v1`、`linux-x64-controlled-v1` | 工程、设置、交付包 | v1 |
+| `HostBatchV2` | 主机批处理协议 | v2 |
 
-## R11 记录与包身份（目标，待实施）
+## HostBatch V2 记录与包身份
 
 [ADR 0028](../adr/0028-r11-communication-contract.md) 规定首个改变通信身份取值域的
 实施包同时迁移 HostBatch 输入输出、验证输入和包内 ecu-tool。HostBatchV2 在 BEGIN 前
 要求显式版本握手，帧包含 channel、STANDARD／EXTENDED、FD、裸 ID、字节 length 和 payload；
-OUT 保留 epoch／sequence／ticket／PDU，并记录驱动填充后的完整线帧。
-验证输入保存 typed endpoint 及物理通道路径映射，oracle 按完整输出集合和确认核对。
+OUT 保留 epoch／sequence／ticket／PDU，并记录完整线帧。当前接纳 channel 0 和 Classical CAN 帧。
+验证输入保存端点的方向、句柄、格式和物理通道路径，oracle 按完整输出集合和确认核对。
+客户端收到 `READY HostBatchV2` 后发送 `PROTOCOL HostBatchV2`，收到
+`PROTOCOL_OK HostBatchV2` 后用 `BEGIN <epoch>` 开始批次。例如
+`RX 0 EXTENDED 0 536870911 2 a1b2` 表示通道 0 上的两字节扩展帧，以 `COMMIT` 提交。
+ID 用十进制，数据用小写十六进制，零长度数据用 `-`。
 
-目标身份为 HostBatchV2、autosar-ecu-test-inputs-v2、autosar-ecu-integration-v3
-（描述 formatVersion 3）、autosar-workbench-handoff-v5、autosar-build-target-v4。
-各实施包共用此语法，按实际能力扩展接纳组合；当前版本见上表。
 旧记录、旧包及只改版本字符串的伪新包由协议、真实结构、可信成员和 seal 检查明确拒绝，
 提示从原 ARXML 重新生成，原件保留。既有工具／资产清单格式维持，成员字节摘要随实际交付更新。

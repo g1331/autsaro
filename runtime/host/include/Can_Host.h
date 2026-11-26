@@ -122,7 +122,7 @@ CAN_CODE static inline EcuStatus Can_TransmitPdu(PduIdType pdu_id,
  * enter the CanIf receive indication.
  * @return Driver admission status; CanIf filtering and length checks are
  * observed through Det and the upper-layer indication, not this result.
- * Preconditions: Initialized started driver, id 0..0x7ff, DLC 0..8 and nonnull data.
+ * Preconditions: Initialized started driver, encoded Classical CAN ID, DLC 0..8 and nonnull data.
  * Context: Host input control, outside exclusive areas.
  * Reentrancy: Driver serializes admission; a pending/in-flight receive returns ECU_ERR_CAN_BUSY.
  * Ownership: Copies payload before acceptance; upper indication borrows snapshot during callback.

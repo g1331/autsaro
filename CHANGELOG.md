@@ -4,6 +4,7 @@
 
 ### Breaking
 
+- CanIf now accepts standard and extended Classical CAN on one controller and filters by frame format and numeric ID. Regenerate ECU packages from ARXML for the HostBatchV2 handshake, typed CAN records, and updated delivery metadata. Update private CanIf Rx route initializers to supply the FD acceptance policy (#117)
 - Workbench project manifests now use format 2 and native delivery uses `autosar-workbench-handoff-v5`. Recreate older projects from their original ARXML and regenerate packages. Layered projects retain base, project and variant source members alongside active and inactive application snapshots (#490)
 
 - Single-instance RTE handles now expand to pointers to shared const CDS objects. Regenerate all component headers, sources and BSW memory descriptions and rebuild consumers; the independent Rte_Inst_* pointer symbols are removed, and Rte_Instance_* CDS objects have external linkage (#195)

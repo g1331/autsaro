@@ -73,7 +73,7 @@ Windows provider 的内部接缝，参数沿 Win32 创建语义；公开 OS ABI 
 - **Cppcheck** 按 [#650](https://github.com/g1331/autsaro/issues/650) 从编译数据库移除 `integration/`、`os/src/host/`、`kernel/portable/` 的仿真 `.c`。目标 TU 包含的头文件仍按真实包含关系解析。平台头中出现的原始诊断保留在 `summary.json` 和 `diagnostics.xml`，SARIF 省略范围外的主机位置，保留目标 TU 包含的公共接缝头位置。
 - **不回退门**（ADR 0027）用相同目标 TU 范围和规则分别扫描基准树与 PR 树。范围内新增诊断照常阻断，范围外原始诊断按位置计数。CTU 的调用和使用关系以目标 TU 集合为限。
 - **项目验收**（ADR 0026）不要求范围外位置有处置：它们不进入 `blocked` 判定和 `objects`，报告里单列条数。范围内的处置规则不变。
-- **clang-tidy**、sanitizer、原生测试和 `test_host_boundaries.py` 照旧；`-Wall -Wextra -Werror` 和项目规则检查（直接动态内存调用等）照旧。
+- **clang-tidy**、sanitizer、原生测试、`test_host_boundaries.py` 和 `-Wall -Wextra -Werror` 照旧。直接动态内存调用由项目 addon 单独检查，使用 reduced 模式且只加载项目规则。结果写入 `summary.json` 的 `hostProjectChecks`，原始日志在 `host-project-checks/`。这些发现只报告。
 - 范围外不放宽 AUTOSAR 契约：对外使用标准名称的接口仍须满足标准签名和语义，主机行为的验证仍按[测试说明](../development/testing/README.md)执行。
 - 已完成的整改和已有的 `MR12` 注释保留，不批量回头删除，也不再为范围外位置新增类别记录或偏离注释。
 

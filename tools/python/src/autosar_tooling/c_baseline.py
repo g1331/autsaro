@@ -239,7 +239,7 @@ def restore(candidate: Path, project: Path, output: Path, tree: str,
         raise ValueError("Cached raw analysis receipt identity differs")
     c_rename.verify(candidate, manifest.get("identifierEvidence", {}))
     c_acceptance._complete(summary)
-    sealed_sources(project)
+    sealed_sources(project, analysis_baseline=True)
     compiler = os.environ.get("AUTOSAR_CC") or shutil.which("gcc")
     if compiler is None:
         raise ValueError("Current analysis compiler unavailable")

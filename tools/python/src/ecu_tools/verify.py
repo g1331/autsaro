@@ -12,7 +12,7 @@ from ecu_tools.build import build, query, sealed_sources
 @dataclass(frozen=True)
 class ExpectedBatch:
     epoch: int
-    outputs: tuple[tuple[int, int, int, str], ...]
+    outputs: tuple[tuple[int, int, int, str, int, int, int, str], ...]
     transport_error: bool = False
 
 
@@ -22,14 +22,43 @@ def verify(project: Path, build_directory: Path) -> None:
     if target.get("profile") != "ecu":
         raise ValueError("Integrated HostBatch verification requires the ECU profile")
     inputs = json.loads((project / "meta/verification-inputs.json").read_text(encoding="utf-8"))
-    if inputs.get("format") != "autosar-ecu-test-inputs-v1":
+    if inputs.get("format") != "autosar-ecu-test-inputs-v2":
         raise ValueError("Unsupported independent verification input format")
-    required = ("periodMs", "receiveCanId", "transmitCanId", "requestCanId", "responseCanId", "did", "initialReceiveValue", "receiveTimeoutMs")
+    required = ("periodMs", "did", "initialReceiveValue", "receiveTimeoutMs")
     if any(type(inputs.get(name)) is not int for name in required):
         raise ValueError("Actual endpoint/configuration inputs are incomplete")
     period = inputs["periodMs"]
     if period <= 0 or inputs["receiveTimeoutMs"] <= 0 or not 0 <= inputs["did"] <= 65535:
         raise ValueError("Independent verification timing or DID input is invalid")
+    channels = inputs.get("channels")
+    endpoints = inputs.get("endpoints")
+    roles = {"receive": ("RX", 4), "transmit": ("TX", 4),
+             "request": ("RX", 8), "response": ("TX", 8)}
+    if (not isinstance(channels, dict) or set(channels) != {"0"}
+            or not isinstance(channels["0"], str) or not channels["0"].startswith("/")
+            or not isinstance(endpoints, dict) or endpoints.keys() != roles.keys()):
+        raise ValueError("Actual endpoint/configuration inputs are incomplete")
+    for role, (direction, length) in roles.items():
+        endpoint = endpoints[role]
+        if (not isinstance(endpoint, dict) or endpoint.get("module") != "CanIf"
+                or endpoint.get("direction") != direction or endpoint.get("channel") != 0
+                or endpoint.get("fdPolicy") not in (("CLASSICAL", "CLASSICAL_OR_FD") if direction == "RX"
+                                                    else ("CLASSICAL",))
+                or endpoint.get("format") not in ("STANDARD", "EXTENDED")
+                or type(endpoint.get("id")) is not int
+                or not 0 <= endpoint["id"] <= (0x7FF if endpoint["format"] == "STANDARD" else 0x1FFFFFFF)
+                or type(endpoint.get("handle")) is not int or not 0 <= endpoint["handle"] <= 255
+                or endpoint.get("logicalLength") != length or endpoint.get("wireLength") != length):
+            raise ValueError(f"Invalid configured endpoint: {role}")
+
+    def receive_frame(role: str, data: str) -> str:
+        ep = endpoints[role]
+        return f"RX {ep['channel']} {ep['format']} 0 {ep['id']} {ep['wireLength']} {data}"
+
+    def expected_frame(at: int, role: str, data: str) -> tuple[int, int, int, str, int, int, int, str]:
+        ep = endpoints[role]
+        return at, ep["handle"], ep["channel"], ep["format"], 0, ep["id"], ep["wireLength"], data
+
     binary = build(project, build_directory, "host-batch")
     logs = binary.parent / "logs"
     did = f"{inputs['did']:04x}"
@@ -38,7 +67,7 @@ def verify(project: Path, build_directory: Path) -> None:
     initial = inputs["initialReceiveValue"].to_bytes(4, "little").hex()
 
     def actor(label: str, batches: list[tuple[int, list[str], str, list[str], bool]], *, malformed: bool = False) -> None:
-        commands = []
+        commands = ["PROTOCOL HostBatchV2"]
         expected = []
         previous = 0
         current_tx = initial
@@ -51,9 +80,9 @@ def verify(project: Path, build_directory: Path) -> None:
             commands.append("COMMIT")
             # Input-phase FC/first CF flush before periodic work; Com flushes
             # before Dcm. Equal epochs alone do not contend for the single HOH.
-            outputs = [(epoch, inputs["transmitCanId"], 4, tx)
+            outputs = [expected_frame(epoch, "transmit", tx)
                        for epoch in range((previous // period + 1) * period, at + 1, period)]
-            outputs.extend((at, inputs["responseCanId"], 8, data) for data in diagnostics)
+            outputs.extend(expected_frame(at, "response", data) for data in diagnostics)
             expected.append(ExpectedBatch(at, tuple(sorted(outputs)), error))
             previous = at
 
@@ -68,7 +97,7 @@ def verify(project: Path, build_directory: Path) -> None:
         stdin.write_text("\n".join(commands) + "\n", encoding="ascii", newline="\n")
         observed = query([str(binary)], logs, f"protocol-{label}", stdin_file=stdin, timeout=60)
         lines = observed.splitlines()
-        if not lines or lines[0] != "READY HostBatchV1":
+        if lines[:2] != ["READY HostBatchV2", "PROTOCOL_OK HostBatchV2"]:
             raise AssertionError(f"Actual HostBatch did not become ready: {observed}")
         parsed = []
         receipts = []
@@ -76,12 +105,17 @@ def verify(project: Path, build_directory: Path) -> None:
         rejection = []
         closed = False
         stack_roles = set()
-        for line in lines[1:]:
-            match = re.fullmatch(r"OUT epoch=(\d+) sequence=(\d+) ticket=(\d+) pdu=(\d+) id=(\d+) dlc=(\d+) data=([0-9a-f]+)", line)
+        for line in lines[2:]:
+            match = re.fullmatch(
+                r"OUT epoch=(\d+) sequence=\d+ ticket=\d+ pdu=(\d+) channel=(\d+) "
+                r"format=(STANDARD|EXTENDED) fd=([01]) id=(\d+) length=(\d+) data=([0-9a-f]+|-)", line,
+            )
             if match:
-                if len(match[7]) != 2 * int(match[6]):
-                    raise AssertionError(f"Output payload/DLC differs: {line}")
-                outputs.append((int(match[1]), int(match[5]), int(match[6]), match[7]))
+                epoch, handle, channel, fmt, fd, can_id, length, data = match.groups()
+                length = int(length)
+                if (length == 0 and data != "-") or (length != 0 and len(data) != 2 * length):
+                    raise AssertionError(f"Output payload length differs: {line}")
+                outputs.append((int(epoch), int(handle), int(channel), fmt, int(fd), int(can_id), length, data))
                 continue
             if line.startswith(("COMMIT_OK ", "COMMIT_ERROR ")):
                 fields = dict(re.findall(r"([a-z_]+)=(\d+)", line))
@@ -132,8 +166,10 @@ def verify(project: Path, build_directory: Path) -> None:
             raise AssertionError(f"Valid production input was rejected: {rejection}")
         print(f"protocol={label} PASS batches={len(expected)}")
 
-    rx = f"RX {inputs['receiveCanId']} 4 78563412"
-    diagnostic = lambda data: f"RX {inputs['requestCanId']} 8 {data}"
+    rx = receive_frame("receive", "78563412")
+    def diagnostic(data: str) -> str:
+        return receive_frame("request", data)
+
     actor("echo", [
         (period, [rx], "78563412", [], False),
         (period + 1, [rx, diagnostic(request)], "78563412", [response], False),

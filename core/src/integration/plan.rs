@@ -474,7 +474,7 @@ pub(super) fn inspect_composition(
         .map(|signal| {
             (
                 signal.can_if_pdu.as_str(),
-                signal.can_id,
+                signal.encoded_id(),
                 signal.can_if_handle,
                 signal.receive,
             )
@@ -483,13 +483,13 @@ pub(super) fn inspect_composition(
             [
                 (
                     diagnostic.rx_sdu.as_str(),
-                    diagnostic.request_can_id,
+                    diagnostic.encoded_request_id(),
                     diagnostic.request_can_if_handle,
                     true,
                 ),
                 (
                     diagnostic.tx_sdu.as_str(),
-                    diagnostic.response_can_id,
+                    diagnostic.encoded_response_id(),
                     diagnostic.response_can_if_handle,
                     false,
                 ),

@@ -405,7 +405,7 @@ class CAnalysisTests(unittest.TestCase):
                     patch.object(c_check, "prepare", return_value=(output / "project", ["main.c"], [], {})), \
                     patch.object(c_check, "semantic_identity", side_effect=semantic), \
                     patch.object(c_check, "analyze_program", return_value=(0, True, [], [], {})), \
-                    patch.object(c_check, "sealed_sources", side_effect=lambda *args: events.append("seal")), \
+                    patch.object(c_check, "sealed_sources", side_effect=lambda *args, **kwargs: events.append("seal")), \
                     patch.object(c_check.c_acceptance, "evaluate", side_effect=acceptance):
                 self.assertEqual(c_check.check(source, "linux-x64-controlled-v1", output), 0)
             self.assertEqual(events, ["semantic", "seal", "semantic", "acceptance"])

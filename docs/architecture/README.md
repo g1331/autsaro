@@ -70,7 +70,7 @@ flowchart LR
 R11 通信目标契约见 [ADR 0028](../adr/0028-r11-communication-contract.md)：类型化总线身份、
 单 driver 的 2／3／4 通道样本、FD／精确过滤剖面、HostBatchV2 及交付版本迁移。
 实现接缝分别见[运行时架构](runtime.md#当前支持剖面与边界)和
-[交付架构](targets-and-delivery.md#r11-记录与包身份目标待实施)。
+[交付架构](targets-and-delivery.md#hostbatch-v2-记录与包身份)。
 
 多项目配置语义见 [ADR 0029](../adr/0029-project-variant-contract.md)：基座引用与变体选择、
 覆盖操作、三方升级冲突、有效配置身份、三层差异及用户代码保护；实现由 #490、#491 承接。

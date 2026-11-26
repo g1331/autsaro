@@ -50,7 +50,7 @@ class ActualCAnalysisTests(unittest.TestCase):
         abi = "x86_64-w64-mingw32" if platform.system() == "Windows" else "x86_64-linux-gnu"
         extra_files = extra_files or {}
         files = {**extra_files, source_name: source, "target.json": json.dumps({
-            "format": "autosar-build-target-v3", "target": target, "abi": abi, "profile": "host",
+            "format": "autosar-build-target-v4", "target": target, "abi": abi, "profile": "host",
             "compilerFlags": ["-std=c99", "-Wall", "-Wextra", "-Werror", *(["-pedantic"] if pedantic else [])],
             "sources": [source_name, *(name for name in extra_files if name.endswith(".c") and name not in unbuilt)],
             "includePaths": ["."]})}
@@ -91,7 +91,8 @@ class ActualCAnalysisTests(unittest.TestCase):
         if ecu:
             entries = {"host-batch": "integration/src/ecu_host_batch.c", "probe": "integration/src/ecu_probe.c"}
             kernel_sources = [name for name in target["kernelSha256"] if name.endswith(".c")]
-            target.update(profile="ecu", entries=entries, kernelSources=kernel_sources, kernelPatches=[])
+            target.update(profile="ecu", hostBatchProtocol="HostBatchV2", entries=entries,
+                          kernelSources=kernel_sources, kernelPatches=[])
             target["sources"] = [name for name in target["sources"]
                                  if name not in entries.values() and not name.startswith("kernel/")]
             target["compilerFlags"].append("-fexceptions")
@@ -353,13 +354,17 @@ DWORD FixtureWait(HANDLE object)
 
             def analyze(side, name, *, host_change=False, target_change=False):
                 host_body = jump if host_change else clean
+                allocation = "void *memory = malloc(1U); free(memory); " if host_change else ""
                 target_body = jump if target_change else clean
                 body = source.replace("return Seam()", "goto done; done: return Seam()") if target_change else source
                 project = self.gate_project(root / name, body, False, ecu=True, fixture_inputs=(shared,), extra_files={
                     shared.name: shared.read_text(encoding="utf-8"),
                     entry: f"int main(void) {{ {host_body} }}\n",
                     "integration/src/ecu_probe.c": "int main(void) { return 0; }\n",
-                    host_batch: f"int HostBatch(void) {{ {host_body} }}\n",
+                    host_batch: ("#include <stdlib.h>\n"
+                                 "#if defined(__linux__) && __GCC_ATOMIC_INT_LOCK_FREE != 2\n"
+                                 "#error expected a lock-free host compiler setting\n#endif\n"
+                                 f"int HostBatch(void) {{ {allocation}{host_body} }}\n"),
                     host: f"int Host(void) {{ {host_body} }}\n",
                     platform_source: f"int Provider(void) {{ {host_body} }}\n",
                     port: f"int Port(void) {{ {host_body} }}\n",
@@ -389,6 +394,12 @@ DWORD FixtureWait(HANDLE object)
             findings = {location["file"] for row in raw["diagnostics"] for location in row["locations"]}
             self.assertIn(platform_header, findings)
             self.assertTrue(findings.isdisjoint({entry, host_batch, host, platform_source, port}))
+            host_checks = raw["hostProjectChecks"]
+            self.assertEqual(set(host_checks["translationUnits"]),
+                             {entry, host_batch, host, platform_source, "integration/src/ecu_probe.c"})
+            self.assertEqual([(row["id"], row["locations"][0]["file"]) for row in host_checks["diagnostics"]],
+                             [("autsaro-dynamicAllocation", host_batch)] * 2)
+            self.assertFalse((current / "host-project-checks/misra.json").exists())
             self.assertTrue(any(row["id"] == "misra-c2012-8.7" and
                                 row["locations"][0]["file"] == "bsw/src/main.c"
                                 for row in raw["diagnostics"]))
@@ -526,7 +537,8 @@ DWORD FixtureWait(HANDLE object)
                 "patch.diff": "--- a/unit.c\n+++ b/unit.c\n@@ -1 +1 @@\n-int kernel(void) { return 0; }\n+" + delivered,
             })
             target = json.loads((project / "target.json").read_text())
-            target.update(profile="ecu", sources=["bsw/src/main.c"], kernelSources=["unit.c"],
+            target.update(profile="ecu", hostBatchProtocol="HostBatchV2",
+                          sources=["bsw/src/main.c"], kernelSources=["unit.c"],
                           entries={"host-batch": "integration/src/ecu_host_batch.c", "probe": "integration/src/ecu_probe.c"},
                           kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}],
                           kernelSha256={"unit.c": hashlib.sha256(delivered.encode()).hexdigest()})
@@ -604,7 +616,7 @@ DWORD FixtureWait(HANDLE object)
                 target = json.loads((project / "target.json").read_text())
                 if stage == "patch-0":
                     target["compilerFlags"].append("-fexceptions")
-                    target.update(profile="ecu", kernelSources=["unit.c"],
+                    target.update(profile="ecu", hostBatchProtocol="HostBatchV2", kernelSources=["unit.c"],
                                   kernelPatches=[{"path": "runtime/patch.diff", "includes": ["unit.c"]}])
                     (project / "target.json").write_text(json.dumps(target))
                     seal = project / "meta/files.sha256"
@@ -1192,8 +1204,8 @@ DWORD FixtureWait(HANDLE object)
             self.assertTrue(any(d["id"] == "autsaro-hostThreadInBsw" for d in before["diagnostics"]))
             original_prepare = c_check.prepare
             # The generated header is actually passed to Cppcheck, changing its diagnostics.
-            def modeled(*args):
-                copied, units, database, scope = original_prepare(*args)
+            def modeled(*args, **kwargs):
+                copied, units, database, scope = original_prepare(*args, **kwargs)
                 model = args[2] / "injected-model.h"
                 model.write_text("#define pthread_create() 0\n")
                 scope["platformModel"] = {"path": str(model), "sha256": hashlib.sha256(model.read_bytes()).hexdigest()}

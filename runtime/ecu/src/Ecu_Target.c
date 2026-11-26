@@ -270,7 +270,7 @@ StatusType Ecu_TargetPostFrame(
     if ((data == NULL) || (ticket == NULL)) {
         return E_OS_ILLEGAL_ADDRESS;
     }
-    if ((id > 0x7ffu) || (dlc == 0u) || (dlc > 8u)) {
+    if ((!Can_IsClassicalId(id)) || (dlc == 0u) || (dlc > 8u)) {
         return E_OS_VALUE;
     }
     status = native_context();
@@ -436,8 +436,8 @@ EcuStatus Ecu_TargetEnqueueTransmit(PduIdType pdu, uint32_t id, uint8_t dlc, con
     if (Ecu_TargetIsOwner() == 0) {
         return ECU_ERR_IO;
     }
-    boolean writable =
-        (dlc <= 8u) && (data != NULL) && (id <= 0x7ffu) && (next_output_ticket != UINT64_MAX);
+    boolean writable = (dlc <= 8u) && (data != NULL) && Can_IsClassicalId(id) &&
+                       (next_output_ticket != UINT64_MAX);
     if (writable) {
         writable = load(&slot->state) == 0;
     }

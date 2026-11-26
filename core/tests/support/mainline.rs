@@ -726,6 +726,60 @@ pub(crate) fn single_component_sources() -> Vec<InputSource> {
     sources
 }
 
+/// A shared HRH receives standard and extended frames with the same numeric ID,
+/// and the diagnostic response uses the largest extended ID on the same HTH.
+pub(crate) fn mixed_can_sources() -> Vec<InputSource> {
+    let mut sources = single_component_sources();
+    for owner in ["Receive", "Transmit"] {
+        parameter(&mut sources, owner, "CanIdType", "MIXED");
+    }
+    for (owner, prefix, old_id, id, mode, policy) in [
+        (
+            "RxValue",
+            "CanIfRxPdu",
+            "800",
+            "2047",
+            "STANDARD",
+            "STANDARD_CAN",
+        ),
+        (
+            "DiagRequest",
+            "CanIfRxPdu",
+            "1792",
+            "2047",
+            "EXTENDED",
+            "EXTENDED_NO_FD_CAN",
+        ),
+        (
+            "DiagResponse",
+            "CanIfTxPdu",
+            "1800",
+            "536870911",
+            "EXTENDED",
+            "EXTENDED_CAN",
+        ),
+    ] {
+        parameter(&mut sources, owner, &format!("{prefix}CanId"), id);
+        parameter(&mut sources, owner, &format!("{prefix}CanIdType"), policy);
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| named(node, "CAN-FRAME-TRIGGERING", &format!("{owner}Trigger")),
+            |xml| {
+                xml.replace(
+                    &format!("<IDENTIFIER>{old_id}</IDENTIFIER>"),
+                    &format!("<IDENTIFIER>{id}</IDENTIFIER>"),
+                )
+                .replace(
+                    "<CAN-ADDRESSING-MODE>STANDARD</CAN-ADDRESSING-MODE>",
+                    &format!("<CAN-ADDRESSING-MODE>{mode}</CAN-ADDRESSING-MODE>"),
+                )
+            },
+        );
+    }
+    sources
+}
+
 /// Seals the single-component project with the reference echo application:
 /// the composition fixture's `Ingress` without its removed local `Value` port.
 /// Returns the project directory and its sealed closure.
@@ -952,10 +1006,10 @@ pub(crate) fn verify_production_owner_binary(
     spec.stdin_stream = true;
     let owner = tooling::execution_owner();
     let mut process = owner.spawn(spec, None).unwrap();
-    process.write_stdin(b"BEGIN 0\nRX 800 4 78563412\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 1\nCOMMIT\nBEGIN 10\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 10\nCOMMIT\nBEGIN 20\nRX 1792 8 0322123400000000\nCOMMIT\n").unwrap();
+    process.write_stdin(b"PROTOCOL HostBatchV2\nBEGIN 0\nRX 0 STANDARD 0 800 4 78563412\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\nBEGIN 1\nCOMMIT\nBEGIN 10\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\nBEGIN 10\nCOMMIT\nBEGIN 20\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\n").unwrap();
     if p2_star.is_some() {
         process
-            .write_stdin(b"BEGIN 30\nRX 1792 8 0210030000000000\nCOMMIT\n")
+            .write_stdin(b"BEGIN 30\nRX 0 STANDARD 0 1792 8 0210030000000000\nCOMMIT\n")
             .unwrap();
     }
     process.close_stdin();
@@ -973,7 +1027,7 @@ pub(crate) fn verify_production_owner_binary(
             (
                 fields["epoch"].parse::<u64>().unwrap(),
                 fields["id"].parse::<u32>().unwrap(),
-                fields["dlc"].parse::<u8>().unwrap(),
+                fields["length"].parse::<u8>().unwrap(),
                 fields["data"].to_string(),
             )
         })

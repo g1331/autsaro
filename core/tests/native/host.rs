@@ -21,6 +21,8 @@ fn host_batch_codec_keeps_boundaries_numeric_sequence_and_recovery() {
         .arg(root.join("runtime/bsw/include"))
         .arg("-I")
         .arg(root.join("runtime/host/include"))
+        .arg("-I")
+        .arg(root.join("core/tests/fixtures/bsw-contracts"))
         .arg(root.join("runtime/ecu/src/Ecu_HostBatch.c"))
         .arg(root.join("core/tests/fixtures/host-batch/host_batch_codec.c"))
         .arg("-o")
