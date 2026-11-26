@@ -1438,8 +1438,8 @@ pub(super) fn files(
         case COMM_FULL_COMMUNICATION:
             for (uint16 index = 0u; index < COMM_CHANNEL_CAPACITY; ++index) {
                 if (bus_channels[index].channel == channel) {
-                    (void)Ecu_HostBusSM_ApplyControllerMode(channel, bus_channels[index].controller,
-                                                           requested);
+                    (void)Ecu_HostBusSM_ApplyControllerMode(
+                        channel, bus_channels[index].controller, requested);
                     result = E_OK;
                     break;
                 }
@@ -1481,7 +1481,8 @@ pub(super) fn files(
     for (uint16 i = 0u; i < COMM_CHANNEL_CAPACITY; ++i) {
         ComM_CommunicationAllowed(bus_channels[i].channel, TRUE);
     }
-    for (uint16 i = 0u; (i < (sizeof(starter_users) / sizeof(starter_users[0]))) && (result == E_OK);
+    for (uint16 i = 0u;
+         (i < (sizeof(starter_users) / sizeof(starter_users[0]))) && (result == E_OK);
          ++i) {
         result = ComM_RequestComMode(starter_users[i], COMM_FULL_COMMUNICATION);
     }
@@ -1712,11 +1713,11 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
     }
     config.push_str(
         r#"typedef struct {
-    Can_IdType id;     /**< Encoded configured identifier. */
-    uint8 channel;     /**< Driver controller for this endpoint. */
-    uint8 length;      /**< Configured payload length. */
-    boolean receive;   /**< TRUE for an admissible Rx endpoint. */
-    boolean dual;      /**< TRUE for Classical and FD with the same format. */
+    Can_IdType id;   /**< Encoded configured identifier. */
+    uint8 channel;   /**< Driver controller for this endpoint. */
+    uint8 length;    /**< Configured payload length. */
+    boolean receive; /**< TRUE for an admissible Rx endpoint. */
+    boolean dual;    /**< TRUE for Classical and FD with the same format. */
 } Ecu_HostFramePolicyType;
 
 "#,
