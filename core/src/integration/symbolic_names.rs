@@ -103,7 +103,7 @@ impl Names {
         {
             result.add("Com", "ComSignal", &handle.path, handle.handle);
         }
-        for signal in &plan.signals {
+        for signal in super::signals::pdus(&plan.signals) {
             let route = plan
                 .routes
                 .iter()

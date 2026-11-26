@@ -1,8 +1,9 @@
-use super::component::milliseconds;
+use super::component::{SignalInteger, milliseconds};
 use super::graph::Graph;
 use super::schedule::{definition_is, value, values};
 use super::{DiagnosticCategory, PlanDiagnostic};
 use serde::Serialize;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,6 +29,15 @@ pub struct SignalChannel {
     pub dlc: u8,
     pub start_bit: u16,
     pub bit_length: u16,
+    pub big_endian: bool,
+    pub native_type: String,
+    pub initial_value: i64,
+    pub pdu_length: u8,
+    pub frame_mapping: String,
+    pub frame_start_bit: u16,
+    pub frame_big_endian: bool,
+    pub frame_offset: u8,
+    pub unused_byte: u8,
     pub deadline_ms: Option<u32>,
     pub transmit_period_ms: Option<u32>,
 }
@@ -172,16 +182,18 @@ pub(super) fn check_trigger(
         }
     }
     if let Some(signal) = signal {
-        let reference = one(
+        let signal_trigger = one(
             graph,
             pdu_trigger,
-            graph.descendants(pdu_trigger, "I-SIGNAL-TRIGGERING-REF"),
+            graph
+                .descendants(pdu_trigger, "I-SIGNAL-TRIGGERING-REF")
+                .into_iter()
+                .filter_map(|reference| graph.objects.get(&graph.elements[reference].text).copied())
+                .filter(|target| graph.target(*target, "I-SIGNAL-REF") == Some(signal))
+                .collect(),
             "SIGNAL_MAPPING",
         )?;
-        let signal_trigger = graph.index(&graph.elements[reference].text)?;
-        if graph.target(signal_trigger, "I-SIGNAL-REF") != Some(signal)
-            || graph.ancestor(signal_trigger, "CAN-PHYSICAL-CHANNEL") != Some(channel)
-        {
+        if graph.ancestor(signal_trigger, "CAN-PHYSICAL-CHANNEL") != Some(channel) {
             return Err(reject(
                 graph,
                 signal_trigger,
@@ -309,20 +321,19 @@ pub(super) fn inspect_ports(
                 crate::product_message!("backend.integration.communication.untransformed_uint32_communication_profile_required"),
             )]);
         }
-        if graph
-            .text(signal, "LENGTH")
-            .and_then(|value| value.parse::<u16>().ok())
-            != Some(32)
-        {
-            return Err(reject(
+        let implementation = SignalInteger::read(graph, graph.index(&port.implementation_type)?)?;
+        let network = SignalInteger::read(graph, signal)?;
+        if implementation != network {
+            return Err(field(
                 graph,
                 signal,
-                "LENGTH_CONFLICT",
-                crate::product_message!(
-                    "backend.integration.communication.uint32_application_signal_bit_length_mismatch"
-                ),
+                "TYPE_CONFLICT",
+                "NETWORK-REPRESENTATION-PROPS",
             ));
         }
+        let bit_length = number(graph.text(signal, "LENGTH"))
+            .filter(|width| (1..=network.bits).contains(width))
+            .ok_or_else(|| field(graph, signal, "LENGTH_CONFLICT", "LENGTH"))?;
         let signal_mapping = one(
             graph,
             signal,
@@ -345,18 +356,16 @@ pub(super) fn inspect_ports(
                     ),
                 )
             })?;
-        if graph.text(signal_mapping, "START-POSITION") != Some("0")
-            || graph.text(signal_mapping, "PACKING-BYTE-ORDER")
-                != Some("MOST-SIGNIFICANT-BYTE-LAST")
-            || graph.text(pdu, "LENGTH") != Some("4")
+        let (start_bit, big_endian) = mapping_position(graph, signal_mapping)?;
+        let pdu_length = payload_length(graph, pdu, "LENGTH")?;
+        if occupied_bits(start_bit, bit_length, big_endian)
+            .any(|bit| bit >= u32::from(pdu_length) * 8)
         {
-            return Err(reject(
+            return Err(field(
                 graph,
                 signal_mapping,
                 "LENGTH_CONFLICT",
-                crate::product_message!(
-                    "backend.integration.communication.uint32_four_byte_little_endian_pdu_mapping_required"
-                ),
+                "START-POSITION",
             ));
         }
         let frame_mapping = one(
@@ -379,19 +388,43 @@ pub(super) fn inspect_ports(
                 ),
             )
         })?;
-        if graph.text(frame, "FRAME-LENGTH") != Some("4")
-            || graph.text(frame_mapping, "START-POSITION") != Some("0")
-            || graph.text(frame_mapping, "PACKING-BYTE-ORDER") != Some("MOST-SIGNIFICANT-BYTE-LAST")
-        {
-            return Err(reject(
+        let dlc = payload_length(graph, frame, "FRAME-LENGTH")?;
+        let (frame_start_bit, frame_big_endian) = mapping_position(graph, frame_mapping)?;
+        let mut frame_bits = BTreeSet::new();
+        let frame_mappings = graph.descendants(frame, "PDU-TO-FRAME-MAPPING");
+        for mapping in &frame_mappings {
+            let target = graph
+                .target(*mapping, "PDU-REF")
+                .ok_or_else(|| field(graph, *mapping, "SIGNAL_MAPPING", "PDU-REF"))?;
+            let (start, big) = mapping_position(graph, *mapping)?;
+            let length = payload_length(graph, target, "LENGTH")?;
+            if start % 8 != if big { 7 } else { 0 } {
+                return Err(field(graph, *mapping, "LENGTH_CONFLICT", "START-POSITION"));
+            }
+            for bit in occupied_bits(start, u16::from(length) * 8, big) {
+                if bit >= u32::from(dlc) * 8 {
+                    return Err(field(graph, *mapping, "LENGTH_CONFLICT", "START-POSITION"));
+                }
+                if !frame_bits.insert(bit) {
+                    return Err(field(
+                        graph,
+                        *mapping,
+                        "PDU_FRAME_OVERLAP",
+                        "START-POSITION",
+                    ));
+                }
+            }
+        }
+        // The selected CanIf profile has one I-PDU route per frame.
+        if frame_mappings.len() != 1 {
+            return Err(field(
                 graph,
-                frame,
-                "LENGTH_CONFLICT",
-                crate::product_message!(
-                    "backend.integration.communication.can_frame_length_or_pdu_position_mismatch"
-                ),
+                frame_mapping,
+                "PDU_FRAME_MULTIPLEX_UNSUPPORTED",
+                "PDU-REF",
             ));
         }
+        let frame_offset = (frame_start_bit / 8) as u8;
         let trigger = one(
             graph,
             frame,
@@ -413,6 +446,9 @@ pub(super) fn inspect_ports(
                 ),
             )
         })?;
+        if !super::can_id::wire_length(can_id, dlc) {
+            return Err(field(graph, frame, "LENGTH_CONFLICT", "FRAME-LENGTH"));
+        }
         let frame_port_ref = one(
             graph,
             trigger,
@@ -444,22 +480,49 @@ pub(super) fn inspect_ports(
                 .collect(),
             "SIGNAL_MAPPING",
         )?;
-        if value(graph, com_signal, "ComBitPosition", false) != Some("0")
-            || value(graph, com_signal, "ComBitSize", false) != Some("32")
-            || value(graph, com_signal, "ComSignalType", false) != Some("UINT32")
-            || value(graph, com_signal, "ComSignalEndianness", false) != Some("LITTLE_ENDIAN")
-            || value(graph, com_signal, "ComSignalInitValue", false) != Some("0")
-            || value(graph, com_signal, "ComTransferProperty", false) != Some("PENDING")
-        {
-            return Err(reject(
-                graph,
-                com_signal,
-                "TYPE_CONFLICT",
-                crate::product_message!(
-                    "backend.integration.communication.com_signal_application_extract_mapping_mismatch"
-                ),
-            ));
+        for (name, matches) in [
+            (
+                "ComBitPosition",
+                number(value(graph, com_signal, "ComBitPosition", false)) == Some(start_bit),
+            ),
+            (
+                "ComBitSize",
+                number(value(graph, com_signal, "ComBitSize", false)) == Some(bit_length),
+            ),
+            (
+                "ComSignalType",
+                value(graph, com_signal, "ComSignalType", false)
+                    .is_some_and(|name| name.eq_ignore_ascii_case(network.native)),
+            ),
+            (
+                "ComSignalEndianness",
+                value(graph, com_signal, "ComSignalEndianness", false)
+                    == Some(if big_endian {
+                        "BIG_ENDIAN"
+                    } else {
+                        "LITTLE_ENDIAN"
+                    }),
+            ),
+            (
+                "ComTransferProperty",
+                value(graph, com_signal, "ComTransferProperty", false) == Some("PENDING"),
+            ),
+        ] {
+            if !matches {
+                return Err(field(graph, com_signal, "TYPE_CONFLICT", name));
+            }
         }
+        let initial_value = value(graph, com_signal, "ComSignalInitValue", false)
+            .and_then(|text| i64::try_from(super::rte_types::integer_constant(text)?).ok())
+            .filter(|value| network.contains(*value, bit_length))
+            .ok_or_else(|| {
+                field(
+                    graph,
+                    com_signal,
+                    "INIT_VALUE_REQUIRED",
+                    "ComSignalInitValue",
+                )
+            })?;
         let com_pdu = one(
             graph,
             com_signal,
@@ -474,7 +537,6 @@ pub(super) fn inspect_ports(
         )?;
         if value(graph, com_pdu, "ComIPduDirection", false)
             != Some(if port.read { "RECEIVE" } else { "SEND" })
-            || values(graph, com_pdu, "ComIPduSignalRef", true).len() != 1
         {
             return Err(reject(
                 graph,
@@ -496,7 +558,7 @@ pub(super) fn inspect_ports(
                 )
             })?;
         if !definition_is(graph, global_pdu, "Pdu")
-            || value(graph, global_pdu, "PduLength", false) != Some("4")
+            || number(value(graph, global_pdu, "PduLength", false)) != Some(u16::from(pdu_length))
         {
             return Err(reject(
                 graph,
@@ -550,7 +612,8 @@ pub(super) fn inspect_ports(
             })?;
         // The Rx data length check is enabled per PDU (SWS_CANIF_00026, 00902).
         if port.read
-            && (value(graph, can_if, "CanIfRxPduDataLength", false) != Some("4")
+            && (number(value(graph, can_if, "CanIfRxPduDataLength", false))
+                != Some(u16::from(pdu_length))
                 || !matches!(
                     value(graph, can_if, "CanIfRxPduDataLengthCheck", false),
                     Some("true" | "1")
@@ -602,8 +665,8 @@ pub(super) fn inspect_ports(
             }
             None
         };
-        let transmit_period = if port.read {
-            None
+        let (transmit_period, unused_byte) = if port.read {
+            (None, 0)
         } else {
             let mode = one(
                 graph,
@@ -628,7 +691,20 @@ pub(super) fn inspect_ports(
                     ),
                 ));
             }
-            Some(period_ms)
+            let tx = one(
+                graph,
+                com_pdu,
+                graph
+                    .descendants(com_pdu, "ECUC-CONTAINER-VALUE")
+                    .into_iter()
+                    .filter(|index| definition_is(graph, *index, "ComTxIPdu"))
+                    .collect(),
+                "SIGNAL_MAPPING",
+            )?;
+            let unused = value(graph, tx, "ComTxIPduUnusedAreasDefault", false)
+                .and_then(|text| text.parse::<u8>().ok())
+                .ok_or_else(|| field(graph, tx, "TYPE_CONFLICT", "ComTxIPduUnusedAreasDefault"))?;
+            (Some(period_ms), unused)
         };
         channels.push(SignalChannel {
             port: port.path.clone(),
@@ -648,29 +724,154 @@ pub(super) fn inspect_ports(
             fd: can_id & super::can_id::FD != 0,
             can_if_handle: can_handle,
             receive: port.read,
-            dlc: 4,
-            start_bit: 0,
-            bit_length: 32,
+            dlc,
+            start_bit,
+            bit_length,
+            big_endian,
+            native_type: network.native.into(),
+            initial_value,
+            pdu_length,
+            frame_mapping: graph.elements[frame_mapping].object.clone(),
+            frame_start_bit,
+            frame_big_endian,
+            frame_offset,
+            unused_byte,
             deadline_ms: deadline,
             transmit_period_ms: transmit_period,
         });
     }
-    if channels
-        .iter()
-        .map(SignalChannel::encoded_id)
-        .collect::<std::collections::BTreeSet<_>>()
-        .len()
-        != channels.len()
-    {
-        return Err(reject(
-            graph,
-            system,
-            "CAN_ID_CONFLICT",
-            crate::product_message!(
-                "backend.integration.communication.sr_channels_physical_can_identifier_conflict"
-            ),
-        ));
-    }
     channels.sort_by(|left, right| left.port.cmp(&right.port));
     Ok(channels)
+}
+
+pub(super) fn field(graph: &Graph, index: usize, code: &str, name: &str) -> Vec<PlanDiagnostic> {
+    reject(
+        graph,
+        index,
+        code,
+        crate::product_message!("backend.integration.communication.invalid_signal_layout_field", "field" => name),
+    )
+}
+
+fn number(value: Option<&str>) -> Option<u16> {
+    u16::try_from(crate::definitions::integer(value?).ok()?).ok()
+}
+
+fn payload_length(graph: &Graph, object: usize, tag: &str) -> Result<u8, Vec<PlanDiagnostic>> {
+    graph
+        .text(object, tag)
+        .and_then(|value| value.parse::<u8>().ok())
+        .filter(|length| (1..=64).contains(length))
+        .ok_or_else(|| field(graph, object, "LENGTH_CONFLICT", tag))
+}
+
+fn mapping_position(graph: &Graph, object: usize) -> Result<(u16, bool), Vec<PlanDiagnostic>> {
+    let start = number(graph.text(object, "START-POSITION"))
+        .ok_or_else(|| field(graph, object, "LENGTH_CONFLICT", "START-POSITION"))?;
+    let big_endian = match graph.text(object, "PACKING-BYTE-ORDER") {
+        Some("MOST-SIGNIFICANT-BYTE-FIRST") => true,
+        Some("MOST-SIGNIFICANT-BYTE-LAST") => false,
+        _ => return Err(field(graph, object, "TYPE_CONFLICT", "PACKING-BYTE-ORDER")),
+    };
+    Ok((start, big_endian))
+}
+
+/// AUTOSAR System Template R24-11, TPS_SYST_01068/01069, figures 6.10–6.12.
+fn occupied_bits(start: u16, length: u16, big_endian: bool) -> impl Iterator<Item = u32> {
+    let first = u32::from(if big_endian { start ^ 7 } else { start });
+    (first..first + u32::from(length)).map(move |bit| if big_endian { bit ^ 7 } else { bit })
+}
+
+pub(super) fn validate_layouts(
+    graph: &Graph,
+    channels: &[SignalChannel],
+) -> Result<(), Vec<PlanDiagnostic>> {
+    struct Layout<'a> {
+        first: &'a SignalChannel,
+        mapped: BTreeSet<&'a str>,
+        members: BTreeSet<&'a str>,
+    }
+    let mut pdus = BTreeMap::new();
+    let mut owners = BTreeMap::new();
+    for signal in channels {
+        let index = graph.index(&signal.signal_mapping)?;
+        let Layout {
+            first,
+            mapped,
+            members,
+        } = pdus
+            .entry(signal.com_pdu.as_str())
+            .or_insert_with(|| Layout {
+                first: signal,
+                mapped: BTreeSet::new(),
+                members: BTreeSet::new(),
+            });
+        if first.system_pdu != signal.system_pdu || first.receive != signal.receive {
+            return Err(field(graph, index, "SIGNAL_MAPPING", "I-SIGNAL-REF"));
+        }
+        if let Some(previous) = owners.insert(&signal.system_pdu, &signal.com_pdu)
+            && previous != &signal.com_pdu
+        {
+            return Err(field(graph, index, "SIGNAL_MAPPING", "I-SIGNAL-REF"));
+        }
+        mapped.insert(signal.signal_mapping.as_str());
+        members.insert(signal.com_signal.as_str());
+    }
+    for (
+        path,
+        Layout {
+            first,
+            mapped,
+            members,
+            ..
+        },
+    ) in pdus
+    {
+        let com_pdu = graph.index(path)?;
+        let actual = values(graph, com_pdu, "ComIPduSignalRef", true);
+        if members.len() != actual.len()
+            || !actual.into_iter().all(|member| members.contains(member))
+        {
+            return Err(field(graph, com_pdu, "SIGNAL_MAPPING", "ComIPduSignalRef"));
+        }
+        let mappings =
+            graph.descendants(graph.index(&first.system_pdu)?, "I-SIGNAL-TO-I-PDU-MAPPING");
+        let mut used = BTreeSet::new();
+        for mapping in &mappings {
+            let signal = graph
+                .target(*mapping, "I-SIGNAL-REF")
+                .ok_or_else(|| field(graph, *mapping, "SIGNAL_MAPPING", "I-SIGNAL-REF"))?;
+            let length = number(graph.text(signal, "LENGTH"))
+                .filter(|length| (1..=64).contains(length))
+                .ok_or_else(|| field(graph, signal, "LENGTH_CONFLICT", "LENGTH"))?;
+            let (start, big_endian) = mapping_position(graph, *mapping)?;
+            for bit in occupied_bits(start, length, big_endian) {
+                if bit >= u32::from(first.pdu_length) * 8 {
+                    return Err(field(graph, *mapping, "LENGTH_CONFLICT", "START-POSITION"));
+                }
+                if !used.insert(bit) {
+                    return Err(field(
+                        graph,
+                        *mapping,
+                        "CAN_SIGNAL_OVERLAP",
+                        "START-POSITION",
+                    ));
+                }
+            }
+        }
+        for mapping in mappings {
+            if !mapped.contains(graph.elements[mapping].object.as_str()) {
+                return Err(field(graph, mapping, "SIGNAL_MAPPING", "I-SIGNAL-REF"));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Route producers and handle validation use each PDU once, even for a shared payload.
+pub(super) fn pdus(channels: &[SignalChannel]) -> impl Iterator<Item = &SignalChannel> {
+    let mut seen = BTreeSet::new();
+    channels
+        .iter()
+        .filter(move |signal| seen.insert(signal.com_pdu.as_str()))
 }

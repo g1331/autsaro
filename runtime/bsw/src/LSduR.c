@@ -19,8 +19,7 @@ static const LSduR_PBConfigType *lsdur_configuration
 static LSDUR_CODE boolean LSduR_Valid(const LSduR_PBConfigType *config)
 {
     boolean valid = FALSE;
-    if ((config != NULL_PTR) && (config->receive_count <= 32u) && (config->transmit_count <= 32u) &&
-        ((config->receive_count == 0u) || (config->receive != NULL_PTR)) &&
+    if ((config != NULL_PTR) && ((config->receive_count == 0u) || (config->receive != NULL_PTR)) &&
         ((config->transmit_count == 0u) || (config->transmit != NULL_PTR))) {
         uint16 i;
         valid = TRUE;

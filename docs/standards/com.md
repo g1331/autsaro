@@ -8,8 +8,10 @@
 
 主线只接受 `VARIANT-PRE-COMPILE` 的 Com 配置。`ComGeneral` 的三个开关（安全事件、信号组数组 API、版本信息 API）均为 `false`，`ComSupportedIPduGroups` 为 1；其余 `ComGeneral` 参数不在所选目录中。
 
-- 每个 I-PDU 是 `NORMAL`、`IMMEDIATE` 的 4 字节 PDU，恰含一个从第 0 位开始、32 位、小端、初值 0、`PENDING` 的 `UINT32` 信号，没有未用区域、更新位、callout、过滤器或 metadata；句柄号由生成器分配，显式的 `ComHandleId`／`ComIPduHandleId` 在生成前拒绝。
-- 全部 Rx I-PDU 属于唯一的 I-PDU group（句柄 0），只按 I-PDU 做接收截止监控：首次超时为 0、超时动作为 `NONE`，`ComTimeout` 等于接收端口的存活超时且是 Rx 主函数周期的整数倍。
+- 非队列 S/R 支持 Intel／Motorola、1–32 位网络宽度、8／16／32 位有符号和无符号整数。I-PDU 可含多个 `PENDING` 信号，生成器按配置分配句柄和容量。仅接受恒等数值映射。越界发送返回 `E_NOT_OK`，保留旧值。
+- 按实际位集合验证两级映射。LE 起点 8、BE 起点 15 均从 Frame 第 1 字节开始（图 6.11／6.12）。PDU 未用位取 `ComTxIPduUnusedAreasDefault`。
+- 0 位宽、64 位整数、布尔、浮点、数组、信号组、更新位和其它数值转换在生成前拒绝。
+- 全部 Rx I-PDU 属于唯一的 I-PDU group（句柄 0），接收时按 I-PDU 重装期限，取同一 PDU 内最小非零超时，只向该 PDU 内启用期限监控的信号发送超时通知：首次超时为 0、超时动作为 `NONE`，`ComTimeout` 等于接收端口的存活超时且是 Rx 主函数周期的整数倍。
 - Tx I-PDU 不属于任何 group，由 `Com_Init` 启动（SWS_Com_00840），`ComMinimumDelayTime` 为 0，只有 `ComTxModeTrue` 下周期等于 Tx 主函数周期的 `PERIODIC` 模式；没有 `ComTxModeFalse`，其缺省模式 NONE 只经 `Com_SwitchIpduTxMode(…, FALSE)` 选中。发送信号不做截止监控。
 - 唯一用户是 RTE：`ComUserModuleCnf` 位于 `Rte/RteComUser` 下，回调只有 `COM_RX_ACK`（`Rte_COMCbk`）与 `COM_RX_TOUT`（`Rte_COMCbkRxTOut`），按 `ComUserCbkHandleId` 区分接收信号；RTE 在 `Rte_Cfg.h` 唯一导出 `RteConf_ComUserSignal_*`，COM 配置与 RTE 回调使用该符号。
 - 各有一个 `ComMainFunctionRx` 与 `ComMainFunctionTx`，生成为 `Com_MainFunctionRx_<名>`／`Com_MainFunctionTx_<名>`（声明在 `SchM_Com.h`），每个 I-PDU 由其 `ComIPduMainFunctionRef` 引用的主函数处理。
@@ -23,12 +25,12 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 | 分组 | 处置与条目 |
 | --- | --- |
 | 总括与 ISO 17356 | 已核对（规范原文：总括条款，义务由本规范各条目展开并在本篇逐条处置）：SWS_Com_00010、00011、00012；已核对（源码：没有实现 ISO 17356-4 的可选特性）：SWS_Com_00013；已核对（配置模型：参数以 ECUC ARXML 提供）：SWS_Com_00006；已核对（规范原文：规范自身列出的不适用 SRS，没有实现义务）：SWS_Com_NA_00999 |
-| 数据类型与端序 | 不适用（配置：ECUC_Com_00127=BOOLEAN／UINT8／UINT16／UINT64／SINT8–SINT64／FLOAT32／FLOAT64／UINT8_N／UINT8_DYN、ECUC_Com_00157=BIG_ENDIAN／OPAQUE）：SWS_Com_00675、00007、00810、00472、00674、00008、00723、00579、00580；已核对（源码：`Com_RxIndication` 先拆装并更新信号值，再登记通知）：SWS_Com_00352 |
+| 数据类型与端序 | 已核对（源码：`Com_Pack` 按 Intel／Motorola 位图发送，`Com_Unpack` 先解码并扩展有符号值再登记通知）：SWS_Com_00007、00008、00352；已核对（源码：初值进入存储时符号扩展）：SWS_Com_00723；不适用（配置：布尔、浮点、64 位及字节数组未纳入）：SWS_Com_00675、00810、00472、00674、00579、00580 |
 | 信号组 | 不适用（配置：ECUC_Com_00345）：SWS_Com_00829、00741、00769、00742、00743、00770、00682、00683、00718、00575、00513、00876、00484、00050、00051、00821、00200、00635、00637、00201、00638、00639、00461、00557、00645、00860 |
 | 信号组数组访问 | 不适用（配置：ECUC_Com_10002=true）：SWS_Com_00841、00842、00843、00848、00844、00845、00850、00846、00847、00849、00851、00852、00853、00854、00855、00856、00857 |
 | 过滤与 TMS 计算 | 不适用（配置：ECUC_Com_00339）：SWS_Com_00694、00695、00602、00325、00380、00439、00764、00866、00273、00836、00132、00603、00604、00302、00303、00231、00793、00676、00678、00679、00763、00813、00245、00229、00495、00535；已核对（源码：没有过滤器，所有 I-PDU 的 TMS 恒为 true，只有 `Com_SwitchIpduTxMode` 显式改变发送模式）：SWS_Com_00677、00605 |
 | 信号网关 | 已核对（源码：没有信号网关代码）：SWS_Com_00370；不适用（配置：ECUC_Com_00544）：SWS_Com_00377、00872、00873、00357、00360、00361、00383、00735、00833、00362、00701、00702、00703、00704、00705、00706、00359、00466、00539、00365、00384、00598；不适用（配置：ECUC_Com_10013）：SWS_Com_00400、00666、00890 |
-| 初始化 | 已核对（源码：`Com_Init` 以信号初值装入每个 I-PDU；所选 I-PDU 由一个 32 位信号占满，没有未用区域）：SWS_Com_00217、00015；已核对（配置模型：同一 I-PDU 只有一个信号，位于第 0 位且占满 4 字节）：SWS_Com_00102、00785；已核对（配置模型：初值只接受字符串 `0`）：SWS_Com_00790 |
+| 初始化与位布局 | 已核对（`Com_Init` 按信号装入配置初值，`Com_Pack` 从配置填充字节生成未用位）：SWS_Com_00217、00015；已核对（`signals.rs` 使用实际占用位集合，检查交叠及 PDU、Frame 边界）：SWS_Com_00102、00785；已核对（配置模型：整数初值解析后按网络宽度校验）：SWS_Com_00790 |
 | 传输属性与发送模式 | 不适用（配置：ECUC_Com_00560=TRIGGERED／TRIGGERED_ON_CHANGE 等）：SWS_Com_00330、00767、00734、00768、00762、00625；不适用（配置：ECUC_Com_00137=DIRECT／MIXED）：SWS_Com_00582、00467；不适用（配置：ECUC_Com_00281）：SWS_Com_00279、00305、00494；已核对（配置模型：只组合 `PENDING` 信号与 `PERIODIC` 模式）：SWS_Com_00238；已核对（配置模型：每个 `ComTxIPdu` 都有 `ComTxModeTrue`，TMS 恒为 true，不会选到未配置的模式）：SWS_Com_00465、00497 |
 | 显式模式切换 | 不适用（配置：ECUC_Com_00180）：SWS_Com_00881 |
 | 发送失败重试 | 不适用（配置：ECUC_Com_00780）：SWS_Com_00773、00774、00775、00776 |
@@ -36,7 +38,7 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 | I-PDU group | 已核对（配置模型：每个 Rx I-PDU 恰属于唯一的 group，group 只含 Rx I-PDU）：SWS_Com_00771、00871、00534；已核对（源码：`Com_IpduGroupStart` 重新开始接收截止监控，与 `Initialize` 无关；首次超时为 0，接收到之前不监控）：SWS_Com_00787、00733 |
 | 不属于 group 的 Tx I-PDU | 已核对（配置模型：Tx I-PDU 不属于任何 group，初始化后一直处于启动状态，没有停止、未写入信号或按内容选模式的情形）：SWS_Com_00223、00228、00334、00777、00800、00884 |
 | 停止与截止监控 | 不适用（配置：ECUC_Com_10034=COM_TX_ERR）：SWS_Com_00479 |
-| 接收截止监控 | 已核对（配置模型：每个 I-PDU 只有一个信号，没有更新位）：SWS_Com_00291；已核对（源码：计时只由接收与主函数推进，不读取信号值）：SWS_Com_00738；不适用（配置：ECUC_Com_00412=REPLACE／SUBSTITUTE）：SWS_Com_00470、00875、00744 |
+| 接收截止监控 | 已核对（配置模型：信号无更新位，按同一 PDU 的最小非零期限计时，仅通知配置了期限的信号）：SWS_Com_00291；已核对（源码：计时只由接收与主函数推进，不读取信号值）：SWS_Com_00738；不适用（配置：ECUC_Com_00412=REPLACE／SUBSTITUTE）：SWS_Com_00470、00875、00744 |
 | 发送截止监控 | 不适用（配置：ECUC_Com_00263、ECUC_Com_00183）：SWS_Com_00481、00445、00878、00879、00880、00696、00835、00697、00304、00308、00739、00392、00115；不适用（配置：ECUC_Com_00709）：SWS_Com_00708 |
 | 最小发送间隔 | 已核对（配置模型：`ComMinimumDelayTime` 只接受 0，不做 MDT 监控）：SWS_Com_00471；不适用（配置：ECUC_Com_00181）：SWS_Com_00698、00828、00469、00812、00388、00475；不适用（配置：ECUC_Com_00788）：SWS_Com_00789 |
 | 解包 | 不适用（配置：ECUC_Com_00119=DEFERRED）：SWS_Com_00301；不适用（配置：ECUC_Com_00158=0）：SWS_Com_00870 |
@@ -88,13 +90,13 @@ Com 只在自己的 `COM_STATE` 区内读写信号值、计时器与待送通知
 | `runtime/bsw/include/Com.h`，同一指令第1／2次，行70／235 | 配置类型之后的十五个公开服务／回调原型，均为 `COM_CODE`。定义侧的段不替代声明侧的属性和完整请求对。 |
 | `runtime/bsw/src/Com_Internal.h`，同一指令第2次，行13 | 关闭 `Ecu_ComReceptionBeforeMain`、`Ecu_ComMainFunctionRx/Tx` 三个私有适配原型的 `COM_CODE`；生成的周期包装器调用后两者，接收顺序适配调用前者。第一处在本文件声明前。 |
 | `generated/include/SchM_Com.h` 的 `#include "Rte_MemMap.h"` 第3／4次，行33／54 | 两个已配置周期接口原型的 `RTE_Com_CODE`。第2次行30关闭的是共享 Enter/Exit 的 `RTE_Rte_CODE`，另沿 RTE 责任核对，不混算为 COM。 |
-| `generated/src/Ecu_RuntimeConfig.c`，同一指令紧随四个 `RTE_Com` 请求 | 标准／用户样本行279／300开启／关闭配置对，行383／387为周期包装定义的 CODE 对；组件样本为281／302、385／389，无诊断样本为266／287、324／328。配置对包围已合并的 com_pdus／com_config；Bootstrap 将其交给 Com_Init 并启动组及期限监测，周期包装器进入实际 Rx／Tx 实现。 |
+| `generated/src/Ecu_RuntimeConfig.c`，同一指令紧随四个 `RTE_Com` 请求 | 标准／用户样本行279／300开启／关闭配置对，行383／387为周期包装定义的 CODE 对；组件样本为281／302、385／389，无诊断样本为266／287、324／328。配置对包围 com_pdus、com_signals 和 com_config；Bootstrap 将其交给 Com_Init 并启动组及期限监测，周期包装器进入实际 Rx／Tx 实现。 |
 
 上述共十二个真实 R20.1 位置；RuntimeConfig 的配置对已经合并，不再以旧逐对象开闭计数。其生成来源为 `ecu_config::config_data` 及实际主函数 emitter，SchM 原型来自同一配置选择；公共签名、对象顺序和回调地址保持。
 
 `Com_MemMap.h` 的四个关键词撤销位于模板行7／14／21／28，连接00011；行18／19／32／33撤销内部 active／属性宏，属于选定实现的清理，不能冒充标准强制的宏名。模板由 MEMMAP producer 交付到 generated/include，不能因字节相同就称为直接原件映射。D4.10对应该可重入头及上述真实请求：一次性 guard 会吞掉 STOP，顶部一次性 include 或默认段不能保留同一配置与段继承。缺请求／多请求／错配拒绝、真实头部属性继承、版本边和正常 COM 下层消费者分别控制风险；这不等于 MISRA 允许条件或整体符合。最终逐处记录、累计复核及 BSW00115 注释仍须对应，当前不新增 Approved／MR12。
 
-R21.15（AMD1，Required、C99，页6／PDF14；AMD2增加C11适用性）的复制实参类型核查覆盖 `Com_SendSignal`／`Com_ReceiveSignal`：`SWS_Com_00197／00198` 的 `const void *`／`void *` 接口保持，内部 UINT32 状态以 object-to-void 视图与之配对，不将不兼容的原始实参交给库形参自动转换。COM 原文页106–107、109 的 `SWS_Com_00624／00631` 信号复制语义、4字节长度、COM_STATE、返回码及调用者类型／对齐责任不变；生成 RTE 仍传递对应 uint32 对象。该处没有 void-to-object 恢复或新偏离，实参兼容性与实际读写消费者分别核查；其他库、资源及采用代码义务不由此结论代替。
+R21.15（AMD1，Required、C99，页6／PDF14；AMD2增加C11适用性）的复制实参类型核查覆盖 `Com_SendSignal`／`Com_ReceiveSignal`。`SWS_Com_00197／00198` 的 `const void *`／`void *` 接口沿用，生成 RTE 提供 DataTypeMap 对应的本地类型对象。复制的两端以 void 指针视图交给 `memcpy`，尺寸由配置确定的本地对象决定。Rx 先按网络宽度扩展，再以该本地类型写入调用方对象。
 
 | 规则 | 范围 | 依据与风险控制 | 批准 |
 | --- | --- | --- | --- |

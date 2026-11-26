@@ -721,3 +721,148 @@ fn actual_partition_owns_all_instances_and_all_com_producers() {
     );
     rejects_in_both(&sources, "RTE_PARTITION_CONFIGURATION");
 }
+
+#[test]
+fn com_integer_plan_keeps_two_levels_and_locates_invalid_fields() {
+    let sources = integer_signal_sources();
+    let plan = build(&sources).unwrap();
+    let channels = &plan.description().signals;
+    let rx = channels.iter().find(|channel| channel.receive).unwrap();
+    let tx = channels.iter().find(|channel| !channel.receive).unwrap();
+    assert_eq!(
+        (
+            rx.start_bit,
+            rx.big_endian,
+            rx.frame_start_bit,
+            rx.frame_offset
+        ),
+        (5, false, 8, 1)
+    );
+    assert_eq!(
+        (
+            tx.start_bit,
+            tx.big_endian,
+            tx.frame_start_bit,
+            tx.frame_offset
+        ),
+        (5, true, 15, 1)
+    );
+    assert_eq!(
+        (tx.bit_length, tx.pdu_length, tx.dlc, tx.initial_value),
+        (10, 2, 4, -7)
+    );
+
+    for (tag, object, field, replacement, path) in [
+        (
+            "I-SIGNAL",
+            "TxValueSignal",
+            "LENGTH",
+            "17",
+            "/Extract/TxValueSignal",
+        ),
+        (
+            "I-SIGNAL-TO-I-PDU-MAPPING",
+            "TxValueMap",
+            "START-POSITION",
+            "13",
+            "/Extract/TxValuePdu/TxValueMap",
+        ),
+        (
+            "PDU-TO-FRAME-MAPPING",
+            "TxValuePduMap",
+            "START-POSITION",
+            "31",
+            "/Extract/TxValueFrame/TxValuePduMap",
+        ),
+        (
+            "PDU-TO-FRAME-MAPPING",
+            "TxValuePduMap",
+            "START-POSITION",
+            "8",
+            "/Extract/TxValueFrame/TxValuePduMap",
+        ),
+    ] {
+        let mut invalid = sources.clone();
+        xml_edit(
+            &mut invalid,
+            "extract.arxml",
+            |node| named(node, tag, object),
+            |block| {
+                let start = block.find(&format!("<{field}>")).unwrap() + field.len() + 2;
+                let end = start + block[start..].find('<').unwrap();
+                format!("{}{replacement}{}", &block[..start], &block[end..])
+            },
+        );
+        let issues = build(&invalid).err().expect("invalid layout accepted");
+        assert!(
+            issues.iter().any(|issue| issue.code == "LENGTH_CONFLICT"
+                && issue.file.as_deref() == Some("extract.arxml")
+                && issue.object.as_deref() == Some(path)),
+            "{issues:?}"
+        );
+    }
+
+    let mut overlap = sources.clone();
+    xml_edit(
+        &mut overlap,
+        "extract.arxml",
+        |node| named(node, "I-SIGNAL", "TxValueSignal"),
+        |block| {
+            let extra = block
+                .replace("TxValueSignal", "ExtraSignal")
+                .replace("TxValueSystemSignal", "ExtraSystemSignal");
+            format!(
+                "{block}{extra}<SYSTEM-SIGNAL><SHORT-NAME>ExtraSystemSignal</SHORT-NAME></SYSTEM-SIGNAL>"
+            )
+        },
+    );
+    xml_edit(
+        &mut overlap,
+        "extract.arxml",
+        |node| named(node, "I-SIGNAL-TO-I-PDU-MAPPING", "TxValueMap"),
+        |block| {
+            let extra = block
+                .replace("TxValueMap", "OverlappingMap")
+                .replace("TxValueSignal", "ExtraSignal");
+            format!("{block}{extra}")
+        },
+    );
+    let issues = build(&overlap).err().expect("overlapping signal accepted");
+    assert!(
+        issues.iter().any(|issue| issue.code == "CAN_SIGNAL_OVERLAP"
+            && issue.file.as_deref() == Some("extract.arxml")
+            && issue.object.as_deref() == Some("/Extract/TxValuePdu/OverlappingMap")),
+        "{issues:?}"
+    );
+
+    let mapping = |node| named(node, "DATA-TYPE-MAPPING-SET", "ApplicationTypes");
+    let mut ambiguous = sources.clone();
+    xml_edit(&mut ambiguous, "types.arxml", mapping, |block| {
+        let start = block.find("<DATA-TYPE-MAP>").unwrap();
+        let end = block.find("</DATA-TYPE-MAP>").unwrap() + "</DATA-TYPE-MAP>".len();
+        format!("{}{}{}", &block[..end], &block[start..end], &block[end..])
+    });
+    let issues = build(&ambiguous)
+        .err()
+        .expect("ambiguous DataTypeMap accepted");
+    assert!(
+        issues.iter().any(|issue| issue.code == "TYPE_MAP_MISSING"
+            && issue.file.as_deref() == Some("types.arxml")
+            && issue.object.as_deref() == Some("/Types/ApplicationTypes")),
+        "{issues:?}"
+    );
+
+    let mut missing = sources.clone();
+    xml_edit(&mut missing, "types.arxml", mapping, |block| {
+        let start = block.find("<DATA-TYPE-MAPS>").unwrap();
+        let end = block.find("</DATA-TYPE-MAPS>").unwrap() + "</DATA-TYPE-MAPS>".len();
+        format!("{}{}", &block[..start], &block[end..])
+    });
+    let issues = build(&missing).err().expect("missing DataTypeMap accepted");
+    assert!(
+        issues.iter().any(|issue| issue.code == "TYPE_MAP_MISSING"
+            && issue.file.as_deref() == Some("types.arxml")
+            && issue.object.as_deref() == Some("/Types/ApplicationTypes")),
+        "{issues:?}"
+    );
+}

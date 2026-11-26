@@ -365,7 +365,17 @@ typedef const Rte_CDS_{scope} *Rte_Instance;
                 .map(|port| {
                     (
                         format!("Rte_InitValue_{}_{}", port.name, port.element_name),
-                        format!("{}UL", port.initial_value),
+                        {
+                            let value = port.initial_value;
+                            if composition.types.iter().any(|datatype| {
+                                datatype.symbol == port.c_type
+                                    && datatype.native_type.starts_with("sint")
+                            }) {
+                                format!("({value}L)")
+                            } else {
+                                format!("{value}UL")
+                            }
+                        },
                     )
                 })
                 .collect();

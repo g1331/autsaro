@@ -8,6 +8,8 @@
 | --- | --- |
 | `SWS_CANInterface` 全部 493 条（374 条 `SWS_CANIF`，含 CONSTR 与 NA；119 条 `ECUC_CanIf`）逐条处置：适用条目由测试以 `Verifies:` 标注，其余条目的已核对、不适用与差距见下表；`SWS_Comtype_00007`（句柄连续） | Init 取 `CanIf_ConfigType*`，无效配置保持未初始化，未初始化时服务返回 `E_NOT_OK`、回调不处理；`CanIf.h` 只含标准声明；Transmit 服务 ID 0x49（RxIndication 0x14），不同 PduId 可重入、同 PduId 不可重入；Init 后 PDU mode 为 OFFLINE，STOPPED／BusOff→TX_OFFLINE，SLEEP→OFFLINE，SetPduMode 须在 STARTED；只有 OFFLINE 的 Tx 报告 `CANIF_E_STOPPED`，长度拒绝报告 62／90，短 DLC 报告 61；Rx 按 controller、HRH、ID 宽度、数值及 Classical／FD 策略路由。同一 ID 的互斥策略可各有一条 Rx 路由；每个被接受的发送至多一次上层确认，PDU 模式抑制的确认结束请求；Rx／Tx 句柄按方向从 0 连续；controller ID 从 0 起；BusOff／模式通知按 dispatch 送往 host CDD |
 
+COM 路由的 Frame 映射由生成配置给出。CanIf 以 Frame 长度检查接收，在交给 LSduR 前取出逻辑 PDU。发送时先验证逻辑 PDU 长度，再按生成的字节偏移填入 Frame，交给 Can driver。诊断路由使用恒等映射。
+
 ## 主机帧格式
 
 CanIf Rx 在匹配后检查配置的最小字节数，并向 LSduR 传递收到的线帧长度。Tx 从配置的标识符取格式，驱动负责将 FD 请求补到可编码的线帧长度。FD controller 上连接 CanTp 的 Rx 配置须选择 Classical-only，生成路由继续使用 Classical N-PDU。

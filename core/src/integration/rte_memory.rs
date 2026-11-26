@@ -6,7 +6,7 @@ pub(super) struct Receiver {
     pub scope: String,
     pub name: String,
     pub native_type: String,
-    pub initial_value: u32,
+    pub initial_value: i64,
     pub received: bool,
     pub expired: bool,
 }

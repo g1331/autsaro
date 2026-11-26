@@ -397,6 +397,19 @@ fn strict_consumer(scratch: &Path, module: &str, fixture: &str, flags: &[&str]) 
 }
 
 #[test]
+fn com_integer_layout_matches_independent_network_vectors() {
+    let scratch = Scratch::new();
+    let executable = strict_consumer(&scratch.0, "Com", "com_layout_contract.c", &[]);
+    let result = tooling::run_public_command(
+        &mut std::process::Command::new(executable),
+        &scratch.0,
+        "com-layout-vectors",
+        std::time::Duration::from_secs(30),
+    );
+    assert!(result.status.success(), "{result:?}");
+}
+
+#[test]
 fn com_standard_consumer_executes_group_and_reception_monitoring() {
     let scratch = Scratch::new();
     let executable = strict_consumer(&scratch.0, "Com", "com_contract.c", &[]);
@@ -533,6 +546,8 @@ fn chain_consumer(scratch: &Path, fixture: &str, flags: &[&str]) -> PathBuf {
     }
     for name in [
         "ComStack_Cfg.h",
+        "Com_Cfg.h",
+        "CanIf_Cfg.h",
         "Ecu_ProfileConfig.h",
         "SchM_CanIf.h",
         "SchM_ComM.h",

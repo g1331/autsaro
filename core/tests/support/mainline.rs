@@ -2194,3 +2194,98 @@ pub(crate) fn swc_managed_mode_inputs() -> Vec<InputSource> {
     );
     sources
 }
+
+/// Two-byte integer I-PDUs at byte 1 of four-byte frames (R24-11 figures 6.11/6.12).
+pub(crate) fn integer_signal_sources() -> Vec<InputSource> {
+    let mut sources = single_component_sources();
+    xml_edit(
+        &mut sources,
+        "types.arxml",
+        |node| named(node, "SW-BASE-TYPE", "Base_uint32"),
+        |block| {
+            block
+                .replace("Base_uint32", "Base_sint16")
+                .replace(">32<", ">16<")
+                .replace(">NONE<", ">2C<")
+                .replace(">uint32<", ">sint16<")
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "types.arxml",
+        |node| named(node, "IMPLEMENTATION-DATA-TYPE", "uint32"),
+        |block| {
+            block
+                .replace(">uint32<", ">sint16<")
+                .replace("Base_uint32", "Base_sint16")
+        },
+    );
+    change(
+        &mut sources,
+        "types.arxml",
+        "/Types/uint32<",
+        "/Types/sint16<",
+    );
+    for (signal, big) in [("RxValue", false), ("TxValue", true)] {
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| named(node, "I-SIGNAL", &format!("{signal}Signal")),
+            |block| {
+                block
+                    .replace(">32<", ">10<")
+                    .replace("Base_uint32", "Base_sint16")
+            },
+        );
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| named(node, "I-SIGNAL-I-PDU", &format!("{signal}Pdu")),
+            |block| {
+                let block = block
+                    .replace("<LENGTH>4<", "<LENGTH>2<")
+                    .replace("<START-POSITION>0<", "<START-POSITION>5<");
+                if big {
+                    block.replace("MOST-SIGNIFICANT-BYTE-LAST", "MOST-SIGNIFICANT-BYTE-FIRST")
+                } else {
+                    block
+                }
+            },
+        );
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| named(node, "PDU-TO-FRAME-MAPPING", &format!("{signal}PduMap")),
+            |block| {
+                if big {
+                    block
+                        .replace("MOST-SIGNIFICANT-BYTE-LAST", "MOST-SIGNIFICANT-BYTE-FIRST")
+                        .replace("<START-POSITION>0<", "<START-POSITION>15<")
+                } else {
+                    block.replace("<START-POSITION>0<", "<START-POSITION>8<")
+                }
+            },
+        );
+        for (name, value) in [
+            ("ComBitPosition", "5"),
+            ("ComBitSize", "10"),
+            ("ComSignalType", "SINT16"),
+            (
+                "ComSignalEndianness",
+                if big { "BIG_ENDIAN" } else { "LITTLE_ENDIAN" },
+            ),
+            ("ComSignalInitValue", if big { "-7" } else { "7" }),
+        ] {
+            parameter(&mut sources, signal, name, value);
+        }
+        parameter(&mut sources, &format!("{signal}Pdu"), "PduLength", "2");
+    }
+    parameter(&mut sources, "RxValue", "CanIfRxPduDataLength", "2");
+    xml_edit(
+        &mut sources,
+        "ingress.arxml",
+        |node| named(node, "R-PORT-PROTOTYPE", "RxValue"),
+        |block| block.replace("<VALUE>0<", "<VALUE>-9<"),
+    );
+    sources
+}

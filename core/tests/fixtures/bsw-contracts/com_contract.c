@@ -8,6 +8,7 @@
  * Verifies[Com]: SWS_BSW_00037、00071、00186
  */
 #include "Com.h"
+#include "Com_Cfg.h"
 #include "Com_Internal.h"
 #include <assert.h>
 #include <stddef.h>
@@ -30,8 +31,12 @@ static unsigned handle_index(CbkHandleIdType handle)
 static void receive(CbkHandleIdType handle) { ++acknowledgments[handle_index(handle)]; }
 static void timeout(CbkHandleIdType handle) { ++timeouts[handle_index(handle)]; }
 static const Com_PduConfigType pdus[] = {
-    {0u, 10u, TRUE, 7u, 30u, 17u}, {1u, 11u, TRUE, 9u, 50u, 43u}, {2u, 12u, TRUE, 1u, 0u, 59u}};
-static const Com_ConfigType configuration = {pdus, 3u, 0u, receive, timeout, NULL_PTR, NULL_PTR};
+    {0u, TRUE, 4u, 0u, 0u, 1u}, {1u, TRUE, 4u, 0u, 1u, 1u}, {2u, TRUE, 4u, 0u, 2u, 1u}};
+static const Com_SignalConfigType signals[] = {{10u, COM_UINT32, 0u, 32u, FALSE, 7u, 30u, 17u},
+                                               {11u, COM_UINT32, 0u, 32u, FALSE, 9u, 50u, 43u},
+                                               {12u, COM_UINT32, 0u, 32u, FALSE, 1u, 0u, 59u}};
+static const Com_ConfigType configuration = {
+    pdus, 3u, signals, 3u, 0u, receive, timeout, NULL_PTR, NULL_PTR};
 
 static Std_ReturnType unexpected_transmit(PduIdType id, const PduInfoType *info)
 {
@@ -58,29 +63,25 @@ static void reject_configuration(const Com_ConfigType *config)
 
 static void reject_configurations(void)
 {
-    const Com_PduConfigType duplicate_pdu[] = {pdus[0], {0u, 11u, TRUE, 9u, 50u, 43u}};
-    const Com_PduConfigType duplicate_signal[] = {pdus[0], {1u, 10u, TRUE, 9u, 50u, 43u}};
-    const Com_PduConfigType duplicate_handle[] = {pdus[0], {1u, 11u, TRUE, 9u, 50u, 17u}};
-    const Com_PduConfigType tx_pdu[] = {{0u, 10u, FALSE, 7u, 0u, 0u}};
+    const Com_PduConfigType duplicate_pdu[] = {pdus[0], {0u, TRUE, 4u, 0u, 1u, 1u}};
+    const Com_SignalConfigType duplicate_signal[] = {
+        signals[0], {10u, COM_UINT32, 0u, 32u, FALSE, 9u, 50u, 43u}};
+    const Com_SignalConfigType duplicate_handle[] = {
+        signals[0], {11u, COM_UINT32, 0u, 32u, FALSE, 9u, 50u, 17u}};
+    const Com_PduConfigType tx_pdu[] = {{0u, FALSE, 4u, 0u, 0u, 1u}};
     const Com_ConfigType invalid[] = {
-        {NULL_PTR, 3u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
-        {pdus, 0u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
-        {pdus, 3u, 0u, NULL_PTR, timeout, NULL_PTR, NULL_PTR},
-        {pdus, 3u, 0u, receive, NULL_PTR, NULL_PTR, NULL_PTR},
-        {duplicate_pdu, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
-        {duplicate_signal, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
-        {duplicate_handle, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
-        {tx_pdu, 1u, 0u, NULL_PTR, NULL_PTR, NULL_PTR, unexpected_rejection},
-        {tx_pdu, 1u, 0u, NULL_PTR, NULL_PTR, unexpected_transmit, NULL_PTR},
+        {NULL_PTR, 3u, signals, 3u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
+        {pdus, 0u, signals, 3u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
+        {pdus, 3u, signals, 3u, 0u, NULL_PTR, timeout, NULL_PTR, NULL_PTR},
+        {pdus, 3u, signals, 3u, 0u, receive, NULL_PTR, NULL_PTR, NULL_PTR},
+        {duplicate_pdu, 2u, signals, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
+        {pdus, 2u, duplicate_signal, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
+        {pdus, 2u, duplicate_handle, 2u, 0u, receive, timeout, NULL_PTR, NULL_PTR},
+        {tx_pdu, 1u, signals, 1u, 0u, NULL_PTR, NULL_PTR, NULL_PTR, unexpected_rejection},
+        {tx_pdu, 1u, signals, 1u, 0u, NULL_PTR, NULL_PTR, unexpected_transmit, NULL_PTR},
     };
-    Com_PduConfigType too_many[33];
     Com_ConfigType over_capacity = configuration;
-    for (unsigned index = 0u; index < 33u; ++index) {
-        too_many[index] = (Com_PduConfigType){
-            (PduIdType)index, (Com_SignalIdType)index, TRUE, 7u, 30u, (CbkHandleIdType)index};
-    }
-    over_capacity.pdus = too_many;
-    over_capacity.pdu_count = 33u;
+    over_capacity.pdu_count = COM_PDU_CAPACITY + 1u;
     reject_configuration(NULL_PTR);
     reject_configuration(&over_capacity);
     for (unsigned index = 0u; index < sizeof(invalid) / sizeof(invalid[0]); ++index) {

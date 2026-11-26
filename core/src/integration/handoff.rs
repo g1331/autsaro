@@ -56,10 +56,15 @@ pub(super) fn reference_shape(plan: &ValidatedIntegrationPlan) -> Option<Referen
         .data_ports
         .iter()
         .find(|port| !port.read && port.path == tx.port)?;
-    if [rx, tx]
-        .iter()
-        .any(|signal| signal.dlc != 4 || signal.bit_length != 32)
-    {
+    if [rx, tx].iter().any(|signal| {
+        signal.dlc != 4
+            || signal.pdu_length != 4
+            || signal.frame_offset != 0
+            || signal.start_bit != 0
+            || signal.bit_length != 32
+            || signal.big_endian
+            || signal.native_type != "uint32"
+    }) {
         return None;
     }
     Some(ReferenceShape {

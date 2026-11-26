@@ -172,6 +172,7 @@ pub(super) fn inspect_composition(
         .iter()
         .map(|endpoint| endpoint.transport.clone())
         .collect();
+    super::signals::validate_layouts(graph, &signals)?;
     let data = graph
         .of_kind("ECUC-CONTAINER-VALUE")
         .into_iter()
@@ -465,6 +466,14 @@ pub(super) fn inspect_composition(
     ] {
         let paths: BTreeSet<String> = paths.into_iter().collect();
         for (handle, path) in paths.into_iter().enumerate() {
+            if domain == "com_signal" && handle >= usize::from(u16::MAX) {
+                return Err(super::signals::field(
+                    graph,
+                    graph.index(&path)?,
+                    "COM_SIGNAL_HANDLE_WIDTH",
+                    "ComHandleId",
+                ));
+            }
             let native = if domain == "com_signal" {
                 super::com::symbolic_name(&path)
             } else {
@@ -493,8 +502,7 @@ pub(super) fn inspect_composition(
     }
     let mut can_ids = BTreeSet::new();
     let mut can_handles = BTreeSet::new();
-    for (object, id, handle, receive, dual, fd_trigger) in signals
-        .iter()
+    for (object, id, handle, receive, dual, fd_trigger) in super::signals::pdus(&signals)
         .map(|signal| {
             (
                 signal.can_if_pdu.as_str(),
@@ -584,17 +592,14 @@ pub(super) fn inspect_composition(
     })
 }
 
-/// CanIf Rx and Tx handles each number 0..N-1 (SWS_Comtype_00007) within
-/// the runtime's 32 PDUs per direction. Runs after the uniqueness check.
+/// CanIf Rx and Tx handles each number 0..N-1 (SWS_Comtype_00007) per direction. Runs after the uniqueness check.
 fn can_if_handle_sequence(
     graph: &super::graph::Graph,
     signals: &[SignalChannel],
     transport: Option<&super::diagnostic::DiagnosticTransportContract>,
 ) -> Result<(), Vec<PlanDiagnostic>> {
-    const CAPACITY: u16 = 32;
     for receive in [true, false] {
-        let mut handles: Vec<(u16, &str)> = signals
-            .iter()
+        let mut handles: Vec<(u16, &str)> = super::signals::pdus(signals)
             .filter(|signal| signal.receive == receive)
             .map(|signal| (signal.can_if_handle, signal.can_if_pdu.as_str()))
             .collect();
@@ -617,13 +622,6 @@ fn can_if_handle_sequence(
                     crate::product_message!(
                         "backend.integration.plan.number_canif_handles_consecutively"
                     ),
-                )
-            } else if handle >= CAPACITY {
-                (
-                    DiagnosticCategory::Unsupported,
-                    "CANIF_PDU_CAPACITY",
-                    crate::product_message!("backend.integration.plan.canif_pdu_capacity_exceeded"),
-                    crate::product_message!("backend.integration.plan.reduce_canif_pdus"),
                 )
             } else {
                 continue;
