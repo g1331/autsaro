@@ -1168,6 +1168,19 @@ jobs:
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - run: uv sync --locked
       - uses: ./.github/actions/native-analysis-compiler
+      - name: Install pinned Linux UAPI headers
+        id: linux-uapi-headers
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          # Separate runners must compare the same searchable linux-libc-dev headers.
+          archive=$(mktemp --suffix=.deb)
+          trap 'rm -f -- "$archive"' EXIT
+          curl --fail --silent --show-error --location --output "$archive" \
+            https://snapshot.ubuntu.com/ubuntu/20261126T000000Z/pool/main/l/linux/linux-libc-dev_6.8.0-151.151_amd64.deb
+          # SHA-256 from the signed noble-security package index in this snapshot.
+          printf '%s  %s\n' badd744a9dc7e43c53975ac08d88e23dd13223f2334637c25fd9b9e9bb5d236d "$archive" | sha256sum --check --strict
+          sudo dpkg --install "$archive"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: c-analysis-tools-${{ matrix.target }}
