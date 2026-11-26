@@ -72,12 +72,18 @@ pub struct DiagnosticTransportContract {
     pub request_accepts_fd: bool,
     pub response_can_id: u32,
     pub response_extended: bool,
-    pub request_fd: bool,
-    pub response_fd: bool,
-    pub rx_max_dl: u8,
-    pub rx_min_dl: u8,
-    pub tx_dl: u8,
-    pub padding: u8,
+    #[serde(skip)]
+    pub(super) request_fd: bool,
+    #[serde(skip)]
+    pub(super) response_fd: bool,
+    #[serde(skip)]
+    pub(super) rx_max_dl: u8,
+    #[serde(skip)]
+    pub(super) rx_min_dl: u8,
+    #[serde(skip)]
+    pub(super) tx_dl: u8,
+    #[serde(skip)]
+    pub(super) padding: u8,
     pub request_can_if_handle: u16,
     pub response_can_if_handle: u16,
     pub p2_ms: u32,
