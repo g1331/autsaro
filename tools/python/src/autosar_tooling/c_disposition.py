@@ -39,7 +39,8 @@ def load(root: Path, target: str, sample: str, binary: str | None = None) -> dic
                            object_pairs_hook=c_standard.unique_assessment_members)
     except (ValueError, RecursionError) as error:
         raise ValueError(f"Cannot parse diagnostic disposition registry {path}: {error}") from error
-    if (set(value) != {"format", "target", "sample", "proofs"}
+    if (not isinstance(value, dict)
+            or set(value) != {"format", "target", "sample", "proofs"}
             or (value["format"], value["target"], value["sample"]) != (FORMAT, target, sample)):
         raise ValueError(f"Diagnostic disposition matrix identity differs: {path}")
     bindings = {}
