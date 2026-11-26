@@ -129,9 +129,9 @@ fn mode_callout(xml: &str, channel: usize) -> String {
         format!("Controller{channel}")
     };
     xml.replace(
-        "Ecu_HostBusSM_ApplyMode(0u, ",
+        "Ecu_HostBusSM_ConfirmMode(0u, ",
         &format!(
-            "Ecu_HostBusSM_ApplyControllerMode({channel}u, CanIfConf_CanIfCtrlCfg_{controller}, "
+            "Ecu_HostBusSM_ConfirmControllerMode({channel}u, CanIfConf_CanIfCtrlCfg_{controller}, "
         ),
     )
 }

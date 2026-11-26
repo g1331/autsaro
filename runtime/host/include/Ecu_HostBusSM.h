@@ -76,40 +76,61 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_RequestComMode(NetworkHandleType
  */
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleType Channel,
                                                                   ComM_ModeType *ComMode);
-/** Actual BswM user-callout action; controls directions, never COM groups.
+/** Apply the requested CAN directions for a BusSM operation.
  * @param[in] Channel Configured channel.
  * @param[in] ComMode NO, SILENT or FULL.
  * @return E_OK when CanIf applied the PDU mode, or for NO on a stopped controller;
  * E_NOT_OK otherwise, including SILENT/FULL on a stopped controller.
  * Preconditions: initialized; otherwise E_NOT_OK.
- * Context: BswM action; not inside an exclusive area.
+ * Context: task or callback; not inside an exclusive area.
  * Reentrancy: reentrant.
  * Ownership: None.
  */
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Channel,
                                                           ComM_ModeType ComMode);
-/** Apply the configured BswM direction action for this channel and CanIf controller.
- * @param[in] Channel ComM network handle selected by the BswM indication.
- * @param[in] ControllerId Explicit CanIf binding from the configured callout.
- * @param[in] ComMode NO, SILENT or FULL.
- * @return Direction action status, or E_NOT_OK for a mismatched binding.
- * Preconditions: Provider initialized.
- * Context: BswM action outside exclusive areas.
- * Reentrancy: Reentrant for different channels.
- * Ownership: No pointer retained.
+/** Confirm the actual mode of a ComM indication without changing CAN directions.
+ * @param[in] Channel Indicated channel.
+ * @param[in] ComMode Indicated NO, SILENT or FULL mode.
+ * @return E_OK if the actual mode can be read and matches the indication; E_NOT_OK otherwise.
+ * Preconditions: initialized; otherwise E_NOT_OK.
+ * Context: BswM user callout; not inside an exclusive area.
+ * Reentrancy: reentrant.
+ * Ownership: None.
  */
-ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyControllerMode(NetworkHandleType Channel,
-                                                                    uint8 ControllerId,
-                                                                    ComM_ModeType ComMode);
-/** Put the selected CanIf PDU channel offline and publish its resulting mode.
- * @param[in] ControllerId Initialized CanIf controller bound to this provider.
- * @return E_OK on transition, E_NOT_OK if the controller refuses it.
- * Preconditions: Provider initialized and selected controller started.
- * Context: Owner executing an admitted HostBatch mode input.
- * Reentrancy: Reentrant for different channels.
- * Ownership: No pointer retained.
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ConfirmMode(NetworkHandleType Channel,
+                                                            ComM_ModeType ComMode);
+/** Schedule a fresh observation after a BswM action fails.
+ * @param[in] Channel Channel to observe again.
+ * @par Return
+ * None.
+ * Preconditions: initialized; otherwise no action.
+ * Context: BswM failure callout; not inside an exclusive area.
+ * Reentrancy: reentrant.
+ * Ownership: None.
  */
-ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_HostOffline(uint8 ControllerId);
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_QueueModePublication(NetworkHandleType Channel);
+/** Publish a queued actual mode to ComM, once per observation if readable.
+ * @par Return
+ * None.
+ * Preconditions: None.
+ * Context: ECU cycle or BusSM completion; not inside an exclusive area.
+ * Reentrancy: reentrant; the active publisher handles new observations.
+ * Ownership: None.
+ */
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_PublishPendingMode(void);
+/** Confirm the actual mode for an explicitly bound channel and CanIf controller.
+ * @param[in] Channel Indicated channel.
+ * @param[in] ControllerId Expected CanIf controller for Channel.
+ * @param[in] ComMode Indicated NO, SILENT or FULL mode.
+ * @return E_OK if the binding and actual mode match. E_NOT_OK otherwise.
+ * Preconditions: initialized; otherwise E_NOT_OK.
+ * Context: BswM user callout; outside exclusive areas.
+ * Reentrancy: reentrant.
+ * Ownership: None.
+ */
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ConfirmControllerMode(NetworkHandleType Channel,
+                                                                      uint8 ControllerId,
+                                                                      ComM_ModeType ComMode);
 /** CanIf controller mode indication (CanIfDispatchUserCtrlModeIndicationName): applies
  * the requested directions on STARTED and indicates the completed mode to ComM.
  * @param[in] ControllerId Configured controller; others are ignored.

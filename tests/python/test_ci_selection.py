@@ -171,11 +171,10 @@ class CiSelectionTests(unittest.TestCase):
                 run.return_value = subprocess.CompletedProcess([], 0)
                 run_script(preflight["run"])
                 self.assertEqual(output.read_text(), "sha=" + release_sha + "\n")
-        for job in ("c-analysis-gates", "c-analysis-gates-windows", "c-analysis"):
-            step = next(row for row in workflow["jobs"][job]["steps"] if "GATE_MODE" in row.get("env", {}))
-            self.assertEqual(expression_value(step["env"]["GATE_MODE"], {
-                "github.event_name": "workflow_dispatch",
-            }), "strict")
+        self.assertEqual(expression_value(workflow["env"]["GATE_MODE"], {
+            "github.event_name": "workflow_dispatch", "github.ref": "refs/heads/master",
+            "inputs.release-revision": release_sha,
+        }), "strict")
         detect = workflow["jobs"]["changes"]["steps"][1]
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "output"

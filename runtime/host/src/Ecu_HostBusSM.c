@@ -30,18 +30,19 @@ static Ecu_HostBusSM_StateType
 #include "Ecu_HostBusSM_MemMap.h"
 static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Enter(void) { Can_HostAreaEnter(CAN_HOST_AREA_BUSSM); }
 static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Exit(void) { Can_HostAreaExit(CAN_HOST_AREA_BUSSM); }
-/* Publish the actual mode after a completion; a concurrent or reentrant completion is
- * published by the running publisher. Each round reads the actual mode, so a completion
- * that raced a later one cannot leave ComM with a stale mode. Repeated factual
- * publication lets a restarted ComM obtain the actual mode; ComM filters repeats. */
+/* A completion queues a fresh observation for this channel. A concurrent
+ * or reentrant request is processed by the publisher that already owns it. */
 static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(Ecu_HostBusSM_StateType *state,
-                                                     NetworkHandleType channel)
+                                                     NetworkHandleType channel,
+                                                     boolean completed)
 {
     boolean owner = FALSE;
     Ecu_HostBusSM_Enter();
     if (bussm_configuration != NULL_PTR) {
-        state->due = TRUE;
-        if (!state->publishing) {
+        if (completed) {
+            state->due = TRUE;
+        }
+        if (state->due && !state->publishing) {
             state->publishing = TRUE;
             owner = TRUE;
         }
@@ -95,6 +96,31 @@ static ECU_HOSTBUSSM_CODE Ecu_HostBusSM_BindingType Ecu_HostBusSM_Channel(Networ
     const Ecu_HostBusSM_BindingType binding = Ecu_HostBusSM_Binding(channel, FALSE);
     Ecu_HostBusSM_Exit();
     return binding;
+}
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_QueueModePublication(NetworkHandleType Channel)
+{
+    Ecu_HostBusSM_Enter();
+    const Ecu_HostBusSM_BindingType binding = Ecu_HostBusSM_Binding(Channel, FALSE);
+    if (binding.state != NULL_PTR) {
+        binding.state->due = TRUE;
+    }
+    Ecu_HostBusSM_Exit();
+}
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_PublishPendingMode(void)
+{
+    for (uint16 index = 0u; index < COMM_CHANNEL_CAPACITY; ++index) {
+        NetworkHandleType channel = 0u;
+        Ecu_HostBusSM_Enter();
+        const boolean configured =
+            (bussm_configuration != NULL_PTR) && (index < bussm_configuration->channel_count);
+        if (configured) {
+            channel = bussm_configuration->channels[index].channel;
+        }
+        Ecu_HostBusSM_Exit();
+        if (configured) {
+            Ecu_HostBusSM_Publish(&bussm_channels[index], channel, FALSE);
+        }
+    }
 }
 static ECU_HOSTBUSSM_CODE boolean Ecu_HostBusSM_Valid(const Ecu_HostBusSM_ConfigType *config)
 {
@@ -197,14 +223,21 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Chan
 {
     return Ecu_HostBusSM_Apply(Ecu_HostBusSM_Channel(Channel).config, ComMode);
 }
-ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyControllerMode(NetworkHandleType Channel,
-                                                                    uint8 ControllerId,
-                                                                    ComM_ModeType ComMode)
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ConfirmMode(NetworkHandleType Channel,
+                                                            ComM_ModeType ComMode)
+{
+    ComM_ModeType actual = COMM_NO_COMMUNICATION;
+    const Std_ReturnType observed = Ecu_HostBusSM_GetCurrentComMode(Channel, &actual);
+    return ((observed == E_OK) && (actual == ComMode)) ? E_OK : E_NOT_OK;
+}
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ConfirmControllerMode(NetworkHandleType Channel,
+                                                                      uint8 ControllerId,
+                                                                      ComM_ModeType ComMode)
 {
     Std_ReturnType result = E_NOT_OK;
     const Ecu_HostBusSM_ChannelConfigType *config = Ecu_HostBusSM_Channel(Channel).config;
     if ((config != NULL_PTR) && (config->controller == ControllerId)) {
-        result = Ecu_HostBusSM_Apply(config, ComMode);
+        result = Ecu_HostBusSM_ConfirmMode(Channel, ComMode);
     }
     return result;
 }
@@ -217,7 +250,7 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_HostOffline(uint8 ControllerId)
     if (binding.config != NULL_PTR) {
         result = CanIf_SetPduMode(ControllerId, CANIF_OFFLINE);
         if (result == E_OK) {
-            Ecu_HostBusSM_Publish(binding.state, binding.config->channel);
+            Ecu_HostBusSM_Publish(binding.state, binding.config->channel, TRUE);
         }
     }
     return result;
@@ -272,7 +305,7 @@ static ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_Request(Ecu_HostBusSM_Bin
             Ecu_HostBusSM_Enter();
             binding.state->requested = ComMode;
             Ecu_HostBusSM_Exit();
-            Ecu_HostBusSM_Publish(binding.state, binding.config->channel);
+            Ecu_HostBusSM_Publish(binding.state, binding.config->channel, TRUE);
         }
     } else {
         result = Ecu_HostBusSM_Transition(binding, ComMode);
@@ -315,10 +348,10 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerModeIndication(
     if (config != NULL_PTR) {
         if (ControllerMode == CAN_CS_STARTED) {
             if (Ecu_HostBusSM_ApplyMode(config->channel, requested) == E_OK) {
-                Ecu_HostBusSM_Publish(binding.state, binding.config->channel);
+                Ecu_HostBusSM_Publish(binding.state, binding.config->channel, TRUE);
             }
         } else if ((ControllerMode == CAN_CS_STOPPED) || (ControllerMode == CAN_CS_SLEEP)) {
-            Ecu_HostBusSM_Publish(binding.state, binding.config->channel);
+            Ecu_HostBusSM_Publish(binding.state, binding.config->channel, TRUE);
         } else {
             /* No completed communication mode for UNINIT. */
         }
@@ -341,7 +374,7 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerBusOff(uint8 ControllerId)
             binding.state->pending = FALSE;
             ++binding.state->revision;
             Ecu_HostBusSM_Exit();
-            Ecu_HostBusSM_Publish(binding.state, binding.config->channel);
+            Ecu_HostBusSM_Publish(binding.state, binding.config->channel, TRUE);
         } else if (actual == CAN_CS_STARTED) {
             ComM_ModeType requested;
             Ecu_HostBusSM_Enter();

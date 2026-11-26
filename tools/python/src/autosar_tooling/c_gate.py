@@ -44,6 +44,23 @@ def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=ROOT).decode("utf-8").strip()
 
 
+def _bswm_baseline_inputs(baseline: Path) -> dict[str, bytes]:
+    """Keep the first parent's callouts when its validator predates ConfirmMode."""
+    originals = {}
+    for name in ("core/resources/templates/standard-ecu/ecuc.arxml",
+                 "core/tests/fixtures/component-pipeline/arxml/ecuc.arxml"):
+        current, previous = ROOT / name, baseline / name
+        if not current.is_file() or not previous.is_file():
+            return {}
+        original = previous.read_bytes()
+        updated = c_comparison.upgraded_bswm_callouts(original, 0)
+        if (updated is None
+                or updated.replace(b"\r\n", b"\n") != current.read_bytes().replace(b"\r\n", b"\n")):
+            return {}
+        originals[name] = original
+    return originals
+
+
 def stage(baseline: Path) -> None:
     """Use current sample inputs with the first parent's generator and runtime."""
     parent = git("rev-parse", "HEAD^1")
@@ -52,6 +69,7 @@ def stage(baseline: Path) -> None:
     ).strip()
     if actual != parent:
         raise ValueError("Baseline checkout must be the tested commit's first parent")
+    baseline_callouts = _bswm_baseline_inputs(baseline)
     # Tests and fixtures define the sample selection; production Rust/runtime stay old.
     inputs = ("core/tests", "core/resources", "Cargo.toml", "Cargo.lock",
               "core/Cargo.toml", "src-tauri/Cargo.toml", "rust-toolchain.toml", ".cargo")
@@ -66,6 +84,8 @@ def stage(baseline: Path) -> None:
         elif source.exists():
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+    for name, content in baseline_callouts.items():
+        (baseline / name).write_bytes(content)
 
 
 def prepare(baseline: Path, output: Path | None = None) -> None:

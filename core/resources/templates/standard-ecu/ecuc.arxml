@@ -3986,7 +3986,7 @@
                               <PARAMETER-VALUES>
                                 <ECUC-TEXTUAL-PARAM-VALUE>
                                   <DEFINITION-REF DEST="ECUC-STRING-PARAM-DEF">/AUTOSAR/EcucDefs/BswM/BswMConfig/BswMModeControl/BswMAction/BswMAvailableActions/BswMUserCallout/BswMUserCalloutFunction</DEFINITION-REF>
-                                  <VALUE>Ecu_HostBusSM_ApplyMode(0u, COMM_NO_COMMUNICATION)</VALUE>
+                                  <VALUE>Ecu_HostBusSM_ConfirmMode(0u, COMM_NO_COMMUNICATION)</VALUE>
                                 </ECUC-TEXTUAL-PARAM-VALUE>
                               </PARAMETER-VALUES>
                             </ECUC-CONTAINER-VALUE>
@@ -4040,7 +4040,7 @@
                               <PARAMETER-VALUES>
                                 <ECUC-TEXTUAL-PARAM-VALUE>
                                   <DEFINITION-REF DEST="ECUC-STRING-PARAM-DEF">/AUTOSAR/EcucDefs/BswM/BswMConfig/BswMModeControl/BswMAction/BswMAvailableActions/BswMUserCallout/BswMUserCalloutFunction</DEFINITION-REF>
-                                  <VALUE>Ecu_HostBusSM_ApplyMode(0u, COMM_SILENT_COMMUNICATION)</VALUE>
+                                  <VALUE>Ecu_HostBusSM_ConfirmMode(0u, COMM_SILENT_COMMUNICATION)</VALUE>
                                 </ECUC-TEXTUAL-PARAM-VALUE>
                               </PARAMETER-VALUES>
                             </ECUC-CONTAINER-VALUE>
@@ -4094,7 +4094,7 @@
                               <PARAMETER-VALUES>
                                 <ECUC-TEXTUAL-PARAM-VALUE>
                                   <DEFINITION-REF DEST="ECUC-STRING-PARAM-DEF">/AUTOSAR/EcucDefs/BswM/BswMConfig/BswMModeControl/BswMAction/BswMAvailableActions/BswMUserCallout/BswMUserCalloutFunction</DEFINITION-REF>
-                                  <VALUE>Ecu_HostBusSM_ApplyMode(0u, COMM_FULL_COMMUNICATION)</VALUE>
+                                  <VALUE>Ecu_HostBusSM_ConfirmMode(0u, COMM_FULL_COMMUNICATION)</VALUE>
                                 </ECUC-TEXTUAL-PARAM-VALUE>
                               </PARAMETER-VALUES>
                             </ECUC-CONTAINER-VALUE>

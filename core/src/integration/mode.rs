@@ -279,6 +279,7 @@ pub(super) fn inspect(
         return Err(fail(graph, arbitration, "MODE_REFERENCE"));
     }
     let mut rules = Vec::new();
+    let mut legacy_callouts = Vec::new();
     let mut modes = BTreeSet::new();
     let mut conditions = BTreeSet::new();
     let mut expressions = BTreeSet::new();
@@ -349,6 +350,22 @@ pub(super) fn inspect(
             "COMM_SILENT_COMMUNICATION",
             "COMM_FULL_COMMUNICATION",
         ][usize::from(mode)];
+        let expected = format!("Ecu_HostBusSM_ConfirmMode({channel_handle}u, {mode_name})");
+        let text = if text == format!("Ecu_HostBusSM_ApplyMode({channel_handle}u, {mode_name})") {
+            legacy_callouts.push(graph.diagnostic(
+                callout,
+                DiagnosticCategory::Input,
+                "MODE_LEGACY_CALLOUT",
+                crate::product_message!("backend.integration.mode.legacy_callout"),
+                crate::product_message!(
+                    "backend.integration.mode.replace_callout",
+                    "callout" => expected.clone()
+                ),
+            ));
+            expected.as_str()
+        } else {
+            text
+        };
         // ECUC_BswM_00843 carries a complete static C call. The symbolic CanIf
         // handle is resolved against the configured CanIfCtrlCanCtrlRef entries.
         let controller = communication
@@ -361,13 +378,12 @@ pub(super) fn inspect(
                     &controller.can_if_controller,
                 );
                 text == format!(
-                    "Ecu_HostBusSM_ApplyControllerMode({channel_handle}u, {symbol}, {mode_name})"
+                    "Ecu_HostBusSM_ConfirmControllerMode({channel_handle}u, {symbol}, {mode_name})"
                 )
             })
             .or_else(|| {
-                (communication.channels.len() == 1
-                    && text == format!("Ecu_HostBusSM_ApplyMode({channel_handle}u, {mode_name})"))
-                .then(|| &communication.channels[0])
+                (communication.channels.len() == 1 && text == expected)
+                    .then(|| &communication.channels[0])
             })
             .ok_or_else(|| fail(graph, callout, "MODE_STATIC_CALLOUT"))?;
         if !config.can_if_controller.is_empty()
@@ -404,6 +420,9 @@ pub(super) fn inspect(
         || containers(graph, "BswMAction").len() != actions.len()
     {
         return Err(fail(graph, config, "MODE_RULE"));
+    }
+    if !legacy_callouts.is_empty() {
+        return Err(legacy_callouts);
     }
     let mut bound = BTreeSet::new();
     for (source, channel) in &channels {

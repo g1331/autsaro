@@ -30,6 +30,8 @@ def main() -> None:
     capture = link_flags[-len(CAPTURE_FLAGS):] == CAPTURE_FLAGS
     checked_flags = link_flags[:-len(CAPTURE_FLAGS)] if capture else link_flags
     if checked_flags not in ([], ["-Wl,--wrap=pthread_detach"],
+                          ["-Wl,--wrap=BswM_Init", "-Wl,--wrap=Ecu_StackRunCycle",
+                           "-Wl,--wrap=ComM_BusSM_ModeIndication"],
                           ["-Wl,--wrap=Os_TargetTakeInput", "-Wl,--wrap=Os_TargetPostInput",
                            "-Wl,--wrap=vApplicationTickHook"],
                           ["-Wl,--wrap=Os_TargetWaitTick", "-Wl,--wrap=Os_TargetNotifyNative",

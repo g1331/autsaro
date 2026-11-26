@@ -1373,7 +1373,7 @@ pub(super) fn files(
         "BswM",
         "static const BswM_ConfigType bswm_config",
         &values(&format!(
-            "bswm_comm_channels, {}u, &Ecu_BswMAction",
+            "bswm_comm_channels, {}u, &Ecu_BswMAction, &Ecu_HostBusSM_QueueModePublication",
             bswm_channels.len()
         )),
     );
@@ -1425,10 +1425,40 @@ pub(super) fn files(
         &values("NULL_PTR, 0u, det_runtime_callouts, 1u"),
     );
     config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
-    // The validator requires the same three direction actions for each channel.
-    // The controller argument is taken from their validated symbolic binding.
-    config.push_str(
-        r#"static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,
+    if mode.channels.len() == 1 {
+        // The validated callout text contains the complete preconfigured arguments.
+        config.push_str(&format!(
+            r#"static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,
+                                                  ComM_ModeType requested)
+{{
+    Std_ReturnType result;
+    if (channel != {}) {{
+        return E_NOT_OK;
+    }}
+    switch (requested) {{
+"#,
+            name("ComM", "ComMChannel", &mode.channels[0].channel)
+        ));
+        for rule in &mode.rules {
+            config.push_str(&format!(
+                "        case {}u:\n            result = {};\n            break;\n",
+                rule.mode, rule.callout
+            ));
+        }
+        config.push_str(
+            r#"        default:
+            result = E_NOT_OK;
+            break;
+    }
+    return result;
+}
+"#,
+        );
+    } else {
+        // The validator requires the same three confirmation actions for each channel.
+        // The controller argument is taken from their validated symbolic binding.
+        config.push_str(
+            r#"static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,
                                                   ComM_ModeType requested)
 {
     Std_ReturnType result = E_NOT_OK;
@@ -1438,9 +1468,8 @@ pub(super) fn files(
         case COMM_FULL_COMMUNICATION:
             for (uint16 index = 0u; index < COMM_CHANNEL_CAPACITY; ++index) {
                 if (bus_channels[index].channel == channel) {
-                    (void)Ecu_HostBusSM_ApplyControllerMode(
+                    result = Ecu_HostBusSM_ConfirmControllerMode(
                         channel, bus_channels[index].controller, requested);
-                    result = E_OK;
                     break;
                 }
             }
@@ -1452,7 +1481,8 @@ pub(super) fn files(
     return result;
 }
 "#,
-    );
+        );
+    }
     config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", false));
     let mut startup_users = std::collections::BTreeSet::new();
     for channel in &mode.channels {
@@ -1593,6 +1623,7 @@ pub(super) fn files(
     if ((Ecu_TargetIsOwner() == 0) || (Ecu_SchMTimingActive() == FALSE)) {
         return E_NOT_OK;
     }
+    Ecu_HostBusSM_PublishPendingMode();
 "#,
         );
         let mut active_mask = None;

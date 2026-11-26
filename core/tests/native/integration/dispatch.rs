@@ -34,6 +34,7 @@ fn generated_cycle_preserves_event_groups_order_and_flush_failures() {
         "Can_MainFunction_Write",
         "Can_MainFunction_Mode",
         "Can_MainFunction_BusOff",
+        "Ecu_HostBusSM_PublishPendingMode",
     ];
     let mut harness = String::from(
         r#"#include <string.h>
@@ -70,13 +71,13 @@ static int Can_HostFlush(void) {
     return Ecu_StackRunCycle(events) == expected && strcmp(trace, sequence) == 0;
 }
 int main(void) {
-    if (!check(0u, 0u, 1, 1, E_OK, "||")) { return 1; }
-    if (!check(1u, 0u, 1, 1, E_OK, "abcd|ijklm|")) { return 2; }
-    if (!check(2u, 0u, 1, 1, E_OK, "efgh||")) { return 3; }
-    if (!check(3u, 0u, 1, 1, E_OK, "abcdefgh|ijklm|")) { return 4; }
-    if (!check(4u, 0u, 1, 1, E_OK, "||")) { return 5; }
-    if (!check(3u, 1u, 1, 1, E_NOT_OK, "abcdefgh|")) { return 6; }
-    if (!check(3u, 2u, 1, 1, E_NOT_OK, "abcdefgh|ijklm|")) { return 7; }
+    if (!check(0u, 0u, 1, 1, E_OK, "n||")) { return 1; }
+    if (!check(1u, 0u, 1, 1, E_OK, "nabcd|ijklm|")) { return 2; }
+    if (!check(2u, 0u, 1, 1, E_OK, "nefgh||")) { return 3; }
+    if (!check(3u, 0u, 1, 1, E_OK, "nabcdefgh|ijklm|")) { return 4; }
+    if (!check(4u, 0u, 1, 1, E_OK, "n||")) { return 5; }
+    if (!check(3u, 1u, 1, 1, E_NOT_OK, "nabcdefgh|")) { return 6; }
+    if (!check(3u, 2u, 1, 1, E_NOT_OK, "nabcdefgh|ijklm|")) { return 7; }
     if (!check(3u, 0u, 0, 1, E_NOT_OK, "")) { return 8; }
     if (!check(3u, 0u, 1, 0, E_NOT_OK, "")) { return 9; }
     return 0;

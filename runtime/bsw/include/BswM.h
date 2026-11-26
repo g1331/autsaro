@@ -33,6 +33,7 @@ typedef struct {
     const NetworkHandleType *channels; /**< Indicated channels (BswMComMChannelRef). */
     uint16 channel_count;              /**< Number of entries in channels. */
     BswM_ModeActionType action;        /**< Rule action lists (BswMRuleTrueActionList). */
+    void (*action_failed)(NetworkHandleType Network); /**< Optional channel failure callout. */
 } BswM_ConfigType;
 /** Start arbitrating ComM indications (SWS_BswM_00002).
  * @param[in] ConfigPtr Configuration with an action; otherwise BswM is unchanged.

@@ -52,7 +52,7 @@ clang 作为第二编译器检查同一批样本：`uv run --locked python -B -m
 
 CI 工具 prepare 与两树生成独立并行，每侧扫描仅依赖共享工具与本侧生成，Windows 共用分析器。各入口基准均为实际 checkout 第一父提交，PR 检出测试合并提交。双方共用 PR 样本配置、依赖与驱动，源码及生成器来自各自树；生成／扫描失败或不可比均阻断。
 
-PR 的 `c-analysis-gates` 比较双树范围内的原始诊断。改写诊断行算新增，Git 改名回接路径。`gate.json.inScopeNew` 有新增即阻断。指纹及处置留给[项目验收](source-acceptance.md)，主线、手动分析和发版仍严格核对。
+PR 和 `master` 推送的 `c-analysis-gates` 比较双树范围内的原始诊断。改写诊断行算新增，Git 改名回接路径。`gate.json.inScopeNew` 有新增即阻断。指纹及处置保留在[项目验收报告](source-acceptance.md)，手动分析和发版仍严格核对。
 
 基准复用同 SHA、完整身份一致的 master 原件，否则现场扫描。门和验收每轮重算。`gate.json` 记双树身份、差集和基准来源。八份门回执进入 `CI required`，上游跳过、取消、失败或样本漏重均阻断。文档选择见 [CI](README.md#ci)。
 

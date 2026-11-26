@@ -3,6 +3,48 @@ use super::*;
 use std::path::Path;
 
 #[test]
+fn generated_bswm_action_reconciles_rejected_mode_and_recovers() {
+    let scratch = Scratch::new();
+    let plan = build(&comm_service_inputs()).unwrap();
+    let project = scratch.0.join("project");
+    write_files(
+        &project,
+        &prepared_pipeline_files_for_target(&plan, tooling::native_target()),
+    );
+    let control = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/bsw-contracts/generated_bswm_failure.c");
+    let output = scratch.0.join("bswm-build");
+    let kinds = std::env::var_os("AUTOSAR_SANITIZE").unwrap_or_default();
+    let mut build =
+        tooling::ecu_sanitizer_build_command(&project, &output, "probe", Some(&control), &kinds);
+    build.args([
+        "-Wl,--wrap=BswM_Init",
+        "-Wl,--wrap=Ecu_StackRunCycle",
+        "-Wl,--wrap=ComM_BusSM_ModeIndication",
+    ]);
+    let result = tooling::run_public_command(
+        &mut build,
+        &scratch.0,
+        "build-bswm-probe",
+        std::time::Duration::from_secs(180),
+    );
+    assert!(result.status.success(), "{result:?}");
+    let directory = if kinds.is_empty() {
+        output.join("production")
+    } else {
+        output
+    };
+    let executable = tooling::native_binary(&directory, "ecu_probe");
+    let result = tooling::run_public_command(
+        &mut std::process::Command::new(executable),
+        &scratch.0,
+        "run-bswm-probe",
+        std::time::Duration::from_secs(30),
+    );
+    assert!(result.status.success(), "{result:?}");
+}
+
+#[test]
 fn comm_services_execute_real_user_calls_and_mode_publications() {
     let plan = build(&comm_service_inputs()).unwrap_or_else(|issues| panic!("{issues:#?}"));
     let scratch = Scratch::new();

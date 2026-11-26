@@ -43,6 +43,8 @@ static ComM_ModeType actions[8];
 static NetworkHandleType action_channels[8];
 static unsigned action_count;
 static unsigned action_depth;
+static unsigned failures;
+static NetworkHandleType failed_channel;
 
 static Std_ReturnType action(NetworkHandleType Network, ComM_ModeType Mode)
 {
@@ -54,10 +56,17 @@ static Std_ReturnType action(NetworkHandleType Network, ComM_ModeType Mode)
     actions[action_count] = Mode;
     ++action_count;
     --action_depth;
-    return E_OK;
+    return (Network == 89u) ? E_NOT_OK : E_OK;
+}
+static void action_failed(NetworkHandleType Network)
+{
+    SchM_Enter_ComM_COMM_STATE();
+    SchM_Exit_ComM_COMM_STATE();
+    failed_channel = Network;
+    ++failures;
 }
 static const NetworkHandleType channels[] = {7u, 89u};
-static const BswM_ConfigType configuration = {channels, 2u, action};
+static const BswM_ConfigType configuration = {channels, 2u, &action, &action_failed};
 
 void __real_SchM_Exit_BswM_BSWM_STATE(void);
 void __wrap_SchM_Exit_BswM_BSWM_STATE(void)
@@ -172,10 +181,12 @@ int main(void)
     window(indicate_while_acting);
     assert(action_count == 3u && actions[0] == COMM_FULL_COMMUNICATION &&
            actions[1] == COMM_SILENT_COMMUNICATION && actions[2] == COMM_SILENT_COMMUNICATION);
+    assert(failures == 0u);
     window(indicate_distinct_ports);
     assert(action_count == 3u && action_channels[0] == 7u && action_channels[1] == 7u &&
            action_channels[2] == 89u && actions[0] == COMM_FULL_COMMUNICATION &&
            actions[1] == COMM_NO_COMMUNICATION && actions[2] == COMM_SILENT_COMMUNICATION);
+    assert(failures == 1u && failed_channel == 89u);
     window(deinitialize_while_acting);
     assert(action_count == 1u && actions[0] == COMM_FULL_COMMUNICATION);
     BswM_ComM_CurrentMode(7u, COMM_NO_COMMUNICATION);

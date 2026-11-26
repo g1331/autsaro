@@ -298,7 +298,7 @@ fn mode_configuration_preserves_channel_users_rules_and_static_callouts() {
     assert_eq!(mode.dcm_connections.len(), 1);
     assert!(mode.rules.iter().all(|rule| {
         rule.callout
-            .starts_with("Ecu_HostBusSM_ApplyMode(0u, COMM_")
+            .starts_with("Ecu_HostBusSM_ConfirmMode(0u, COMM_")
     }));
     let mut sources = inputs();
     replace_all(&mut sources, "/Config/Host/", "/Config/Vehicle/");
@@ -330,8 +330,8 @@ fn mode_configuration_preserves_channel_users_rules_and_static_callouts() {
     parameter(&mut sources, "General", "ComMEcuGroupClassification", "1");
     replace_all(
         &mut sources,
-        "Ecu_HostBusSM_ApplyMode(0u,",
-        "Ecu_HostBusSM_ApplyMode(7u,",
+        "Ecu_HostBusSM_ConfirmMode(0u,",
+        "Ecu_HostBusSM_ConfirmMode(7u,",
     );
     let renamed = build(&sources).unwrap();
     let mode = renamed.description().mode_runtime.as_ref().unwrap();
@@ -343,6 +343,72 @@ fn mode_configuration_preserves_channel_users_rules_and_static_callouts() {
     assert_eq!(mode.channels[0].channel_handle, 7);
     assert_eq!(mode.users[0].handle, 19);
     assert!(normal_validation(&sources).diagnostics.is_empty());
+}
+
+#[test]
+fn legacy_mode_callouts_import_and_report_each_replacement_before_generation() {
+    let mut sources = inputs();
+    replace_all(
+        &mut sources,
+        "Ecu_HostBusSM_ConfirmMode(",
+        "Ecu_HostBusSM_ApplyMode(",
+    );
+    let scratch = Scratch::new();
+    let workspace = live_pipeline_workspace(&scratch.0, &sources);
+    let source = sources
+        .iter()
+        .find(|source| source.logical_path() == "ecuc.arxml")
+        .unwrap();
+    assert_eq!(
+        std::fs::read(scratch.0.join("ecuc.arxml")).unwrap(),
+        source.bytes()
+    );
+    let issues = workspace.saved_integration_plan().err().unwrap();
+    assert_eq!(issues.len(), 3, "{issues:?}");
+    for (action, mode) in [
+        ("NoAction", "COMM_NO_COMMUNICATION"),
+        ("SilentAction", "COMM_SILENT_COMMUNICATION"),
+        ("FullAction", "COMM_FULL_COMMUNICATION"),
+    ] {
+        let object = format!("/Configuration/BswM/Config/Control/{action}/Available/Callout");
+        let issue = issues
+            .iter()
+            .find(|issue| issue.object.as_ref() == Some(&object))
+            .unwrap();
+        assert_eq!(issue.file.as_deref(), Some("ecuc.arxml"));
+        assert_eq!(issue.code, "MODE_LEGACY_CALLOUT");
+        let expected = format!("Ecu_HostBusSM_ConfirmMode(0u, {mode})");
+        // The source gate also compiles this suite with the first parent's message catalog.
+        let autosar_config_core::message::LocalizedText::Message(remedy) = &issue.remedy else {
+            panic!("expected a localized replacement: {:?}", issue.remedy);
+        };
+        assert_eq!(remedy.key, "backend.integration.mode.replace_callout");
+        assert_eq!(remedy.params["callout"].as_str(), Some(expected.as_str()));
+    }
+    let validation = normal_validation(&sources);
+    assert_eq!(
+        validation
+            .diagnostics
+            .iter()
+            .filter(|issue| issue.code == "MODE_LEGACY_CALLOUT" && issue.path.is_some())
+            .count(),
+        3,
+    );
+    replace_all(
+        &mut sources,
+        "Ecu_HostBusSM_ApplyMode(",
+        "Ecu_HostBusSM_ConfirmMode(",
+    );
+    let plan = build(&sources).unwrap();
+    let files = prepared_pipeline_files(&plan);
+    let config = files
+        .iter()
+        .find(|(name, _)| name == "generated/src/Ecu_RuntimeConfig.c")
+        .unwrap();
+    let config = std::str::from_utf8(&config.1).unwrap();
+    for rule in &plan.description().mode_runtime.as_ref().unwrap().rules {
+        assert!(config.contains(&format!("result = {};", rule.callout)));
+    }
 }
 
 #[test]
@@ -394,13 +460,13 @@ fn selected_mode_configuration_rejects_unbound_features_and_dynamic_callouts() {
         (
             "FullAction",
             "BswMUserCalloutFunction",
-            "Ecu_HostBusSM_ApplyMode(0u, currentMode)",
+            "Ecu_HostBusSM_ConfirmMode(0u, currentMode)",
             "MODE_STATIC_CALLOUT",
         ),
         (
             "SilentAction",
             "BswMUserCalloutFunction",
-            "Ecu_HostBusSM_ApplyMode(0u, COMM_FULL_COMMUNICATION)",
+            "Ecu_HostBusSM_ConfirmMode(0u, COMM_FULL_COMMUNICATION)",
             "MODE_STATIC_CALLOUT",
         ),
     ] {
@@ -579,7 +645,7 @@ fn mode_structures_outside_the_selection_are_refused_at_their_source() {
         (
             "FullAction",
             "BswMUserCalloutFunction",
-            "Ecu_HostBusSM_ApplyMode(0u, currentMode)",
+            "Ecu_HostBusSM_ConfirmMode(0u, currentMode)",
             "MODE_STATIC_CALLOUT",
             format!("{control}/FullAction/Available/Callout"),
         ),

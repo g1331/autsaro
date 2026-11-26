@@ -35,12 +35,14 @@ static unsigned action_depth;
 static boolean postpone;
 static Std_ReturnType action_result;
 const EcuPolicyConfig Ecu_Policy = {.tx_confirmation = ECU_TX_SYNCHRONOUS};
-static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
+static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8])
+{
     assert(id == 0x456u && length == 4u && data[0] == 42u && data[1] == 0u);
     ++frames;
     return ECU_OK;
 }
-static void receive(CbkHandleIdType handle) {
+static void receive(CbkHandleIdType handle)
+{
     assert(handle == 17u);
     ++receptions;
 }
@@ -57,7 +59,8 @@ static void indication(uint8 NetworkId, ComM_ModeType ComMode)
 static void no_entered(uint8 NetworkId) { indication(NetworkId, COMM_NO_COMMUNICATION); }
 static void silent_entered(uint8 NetworkId) { indication(NetworkId, COMM_SILENT_COMMUNICATION); }
 static void full_entered(uint8 NetworkId) { indication(NetworkId, COMM_FULL_COMMUNICATION); }
-static Std_ReturnType action(NetworkHandleType Network, ComM_ModeType Mode) {
+static Std_ReturnType action(NetworkHandleType Network, ComM_ModeType Mode)
+{
     last_action = Mode;
     ++action_depth;
     assert(action_depth == 1u); /* IMMEDIATE reentrant input is postponed, not recursive. */
@@ -70,7 +73,8 @@ static Std_ReturnType action(NetworkHandleType Network, ComM_ModeType Mode) {
     --action_depth;
     return action_result;
 }
-static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code) {
+static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code)
+{
     assert(module == 60u && instance == 0u && api == 0x49u && code == 70u);
     ++errors;
     return E_NOT_OK;
@@ -119,11 +123,11 @@ static const ComM_ConfigType comm = {
     channels, 1u, users, 2u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode};
 static const Ecu_HostBusSM_ChannelConfigType bus_channels[] = {{7u, 9u}};
 static const Ecu_HostBusSM_ConfigType cdd = {bus_channels, 1u};
-static const BswM_ConfigType bswm = {user_channels, 1u, action};
+static const BswM_ConfigType bswm = {user_channels, 1u, action, NULL_PTR};
 
 static void reject_bswm_configurations(void)
 {
-    const BswM_ConfigType missing_action = {user_channels, 1u, NULL_PTR};
+    const BswM_ConfigType missing_action = {user_channels, 1u, NULL_PTR, NULL_PTR};
     BswM_Init(NULL_PTR);
     BswM_ComM_CurrentMode(7u, COMM_FULL_COMMUNICATION);
     assert(actions == 0u);
@@ -191,11 +195,13 @@ static void reject_comm_configurations(void)
     reject_comm_configuration(&invalid);
 }
 
-static void current(ComM_ModeType expected) {
+static void current(ComM_ModeType expected)
+{
     ComM_ModeType value = 99u;
     assert(ComM_GetCurrentComMode(17u, &value) == E_OK && value == expected);
 }
-static void buffer(void) {
+static void buffer(void)
+{
     uint32 value = 0u;
     uint32 sent = 42u;
     assert(Com_ReceiveSignal(10u, &value) == E_OK && value == 42u);

@@ -117,7 +117,7 @@ static const ComM_ConfigType comm = {
     channels, 1u, users, 1u, Ecu_HostBusSM_RequestComMode, Ecu_HostBusSM_GetCurrentComMode};
 static const Ecu_HostBusSM_ChannelConfigType bus_channels[] = {{7u, 0u}};
 static const Ecu_HostBusSM_ConfigType cdd = {bus_channels, 1u};
-static const BswM_ConfigType bswm = {user_channels, 1u, Ecu_HostBusSM_ApplyMode};
+static const BswM_ConfigType bswm = {user_channels, 1u, &Ecu_HostBusSM_ConfirmMode, NULL_PTR};
 static uint8 authentication_mode = 255u;
 static void publish_authentication(uint8 state) { authentication_mode = state; }
 static const Dcm_ConfigType dcm = {

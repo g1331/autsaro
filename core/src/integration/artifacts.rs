@@ -1160,7 +1160,7 @@ pub(super) fn files(
             let callout = hook
                 || matches!(
                     name.as_str(),
-                    "Ecu_DetRuntimeCallout" | "Ecu_HostBusSM_ApplyMode"
+                    "Ecu_DetRuntimeCallout" | "Ecu_HostBusSM_ConfirmMode"
                 );
             let main = scheduled.is_some() || name.contains("_MainFunction");
             let call_type = if callout {
