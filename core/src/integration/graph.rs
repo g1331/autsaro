@@ -31,7 +31,75 @@ impl Graph {
         sources: &[InputSource],
         catalog: &crate::definitions::DefinitionCatalog,
     ) -> Result<Self, Vec<PlanDiagnostic>> {
-        Self::build(sources, Self::catalog_external(catalog))
+        let mut graph = Self::build(sources, Self::catalog_external(catalog))?;
+        if sources
+            .iter()
+            .any(|source| source.project_identity().is_some())
+        {
+            graph.select_value_collection()?;
+        }
+        Ok(graph)
+    }
+
+    fn select_value_collection(&mut self) -> Result<(), Vec<PlanDiagnostic>> {
+        let collections = self.of_kind("ECUC-VALUE-COLLECTION");
+        let Some(&collection) = collections.first() else {
+            return Ok(());
+        };
+        let error = |object: usize, message: &str| {
+            vec![self.diagnostic(
+                object,
+                DiagnosticCategory::Input,
+                "ECUC_VALUE_COLLECTION",
+                message.into(),
+                "Use one ECUC value collection with absolute module references.".into(),
+            )]
+        };
+        if collections.len() != 1 {
+            return Err(error(
+                collection,
+                "Layered generation requires one active ECUC value collection.",
+            ));
+        }
+        if !self.descendants(collection, "VARIATION-POINT").is_empty() {
+            return Err(error(
+                collection,
+                "Binding expressions in the ECUC value collection are unsupported.",
+            ));
+        }
+        let mut selected = std::collections::BTreeSet::new();
+        for reference in self.descendants(collection, "ECUC-MODULE-CONFIGURATION-VALUES-REF") {
+            let path = &self.elements[reference].text;
+            if !self.objects.get(path).is_some_and(|index| {
+                self.elements[*index].tag == "ECUC-MODULE-CONFIGURATION-VALUES"
+            }) {
+                return Err(error(
+                    reference,
+                    "The ECUC value collection references an unavailable module configuration.",
+                ));
+            }
+            if !selected.insert(path.clone()) {
+                return Err(error(
+                    reference,
+                    "The ECUC value collection references a module more than once.",
+                ));
+            }
+        }
+        let excluded: Vec<_> = self
+            .of_kind("ECUC-MODULE-CONFIGURATION-VALUES")
+            .into_iter()
+            .filter(|index| !selected.contains(&self.elements[*index].object))
+            .collect();
+        if !excluded.is_empty() {
+            let retained = self
+                .objects
+                .iter()
+                .filter(|(_, index)| !excluded.iter().any(|module| self.within(**index, *module)))
+                .map(|(path, index)| (path.clone(), *index))
+                .collect();
+            self.objects = retained;
+        }
+        Ok(())
     }
 
     fn catalog_external(
@@ -52,7 +120,8 @@ impl Graph {
         sources: &[InputSource],
         external: BTreeMap<String, String>,
     ) -> Result<Self, Vec<PlanDiagnostic>> {
-        let documents = sources
+        let included: Vec<_> = sources.iter().filter(|source| !source.excluded).collect();
+        let documents = included
             .iter()
             .map(|source| {
                 let text = source.text().map_err(|diagnostic| vec![*diagnostic])?;
@@ -67,7 +136,7 @@ impl Graph {
             })
             .collect::<Result<Vec<_>, _>>()?;
         Self::build_documents(
-            sources
+            included
                 .iter()
                 .zip(&documents)
                 .map(|(source, document)| (source.logical_path.as_str(), document)),

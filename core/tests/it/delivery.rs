@@ -1058,7 +1058,7 @@ fn retired_project_identities_are_refused_without_loading_or_rewriting() {
         assert_eq!(message.params["profile"], profile);
         assert_eq!(fs::read(&manifest_path).unwrap(), bytes);
     }
-    for version in [0, 2] {
+    for version in [0, 1, 3] {
         let mut value = current_value.clone();
         value["formatVersion"] = version.into();
         let bytes = serde_json::to_vec_pretty(&value).unwrap();

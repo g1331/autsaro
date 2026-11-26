@@ -5,7 +5,7 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 
-FORMAT = "autosar-workbench-handoff-v4"
+FORMAT = "autosar-workbench-handoff-v5"
 HANDOFF_PATH = "meta/handoff.json"
 OWNERS = {"configuration", "user-application", "product", "generated", "target", "build"}
 
@@ -101,8 +101,8 @@ def validate(
     manifest = _keys(json.loads((project / metadata["projectPath"]).read_text(encoding="utf-8")), {
         "formatVersion", "declaredRelease", "profileHint", "inputs",
         "applicationInputs", "acceptedExtensionDefinitions",
-    })
-    if type(manifest["formatVersion"]) is not int or manifest["formatVersion"] != 1:
+    }, {"layers"})
+    if type(manifest["formatVersion"]) is not int or manifest["formatVersion"] != 2:
         raise ValueError("Unknown native member manifest version")
     if manifest["declaredRelease"] != "R24-11" or manifest["acceptedExtensionDefinitions"] != resources["requiredExtensionDefinitions"]:
         raise ValueError("Native member manifest is bound to different release/required definitions")
@@ -118,7 +118,14 @@ def validate(
         logical = _relative(source["path"])
         if logical.lower() in mappings or logical not in applications or source["producerSlot"] != applications[logical]["producer"]:
             raise ValueError("Unknown or conflicting live application member")
-        mappings[logical.lower()] = {"path": logical, "kind": "application", "role": "user-application", "producerSlot": source["producerSlot"]}
+        package = applications[logical]["package"]
+        inactive = "layers" in manifest and package == "inputs/inactive/" + logical
+        mappings[logical.lower()] = {
+            "path": logical,
+            "kind": "inactive-application" if inactive else "application",
+            "role": "inactive-application" if inactive else "user-application",
+            "producerSlot": source["producerSlot"],
+        }
     seen: set[str] = set()
     for source in metadata["inputSnapshots"]:
         source = _keys(source, {"logicalPath", "packagePath", "kind", "sha256", "role"}, {"producerSlot"})
@@ -132,7 +139,7 @@ def validate(
             raise ValueError("Native input kind/role/producer membership differs")
         if source["kind"] == "arxml" and package != "inputs/" + logical:
             raise ValueError("Configuration snapshot escaped its owned package boundary")
-        if source["kind"] == "application" and package != applications[logical]["package"]:
+        if source["kind"] in {"application", "inactive-application"} and package != applications[logical]["package"]:
             raise ValueError("Application snapshot escaped its actual compiled producer path")
         if package not in names or _digest(project / package) != source["sha256"]:
             raise ValueError("Actual source/application snapshot identity differs")

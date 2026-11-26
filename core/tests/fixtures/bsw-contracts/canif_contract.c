@@ -44,16 +44,19 @@ static PduLengthType indicated_length;
 static unsigned successes;
 static unsigned failures;
 static unsigned frames;
+static Can_IdType expected_tx_id = 0x200u;
 static unsigned errors[100];
 static unsigned modes;
 static unsigned started;
 static unsigned bus_offs;
-static void indicated(PduIdType id, const PduInfoType *info) {
+static void indicated(PduIdType id, const PduInfoType *info)
+{
     assert((id == 10u || id == 11u) && info != NULL_PTR && info->SduDataPtr != NULL_PTR);
     indicated_length = info->SduLength;
     ++indications[id - 10u];
 }
-static void confirmed(PduIdType id, Std_ReturnType result) {
+static void confirmed(PduIdType id, Std_ReturnType result)
+{
     assert(id == 20u);
     if (result == E_OK) {
         ++successes;
@@ -62,29 +65,33 @@ static void confirmed(PduIdType id, Std_ReturnType result) {
         ++failures;
     }
 }
-static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
+static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8])
+{
     /* Written through the HTH with the configured CAN ID and classic
      * standard-frame flags (Verifies: SWS_CANIF_00292, 00666, 00318, 00243). */
-    assert(id == 0x200u && length == 4u && data[0] == 0x11u);
+    assert(id == expected_tx_id && length == 4u && data[0] == 0x11u);
     ++frames;
     return ECU_OK;
 }
 /* The configured CDD dispatch targets (Verifies: SWS_CANIF_00711／00724). */
-static void mode(uint8 id, Can_ControllerStateType state) {
+static void mode(uint8 id, Can_ControllerStateType state)
+{
     assert(id == 0u);
     ++modes;
     if (state == CAN_CS_STARTED) {
         ++started;
     }
 }
-static void bus_off(uint8 id) {
+static void bus_off(uint8 id)
+{
     assert(id == 0u);
     ++bus_offs;
 }
 /* uint8 runtime errors reported to Det (Verifies[CanIf]: SWS_BSW_00219, 00222). */
 /* Runtime errors only (Verifies: SWS_CANIF_91007); module 60, instance 0, API 0x49
  * Transmit and 0x14 RxIndication. */
-static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code) {
+static Std_ReturnType error(uint16 module, uint8 instance, uint8 api, uint8 code)
+{
     assert(module == 60u && instance == 0u && code < 100u);
     assert((api == 0x49u && (code == 62u || code == 70u || code == 90u)) ||
            (api == 0x14u && code == 61u));
@@ -96,31 +103,35 @@ static const Det_ConfigType det = {NULL_PTR, 0u, hooks, 1u};
 static const LSduR_RxRouteType ls_rx[] = {{0u, 10u, indicated}, {1u, 11u, indicated}};
 static const LSduR_TxRouteType ls_tx[] = {{LSDUR_UP_PDUR, 20u, 0u, confirmed, NULL_PTR}};
 static const LSduR_PBConfigType ls = {1u, ls_rx, 2u, ls_tx, 1u};
-static const CanIf_RxPduConfigType rx[] = {{0x100u, 0u, 4u}, {0x101u, 1u, 2u}};
+static const CanIf_RxPduConfigType rx[] = {{0x100u, 0u, 4u, FALSE}, {0x101u, 1u, 2u, FALSE}};
 static const CanIf_TxPduConfigType tx[] = {{0x200u, 0u, 4u}};
 /* Verifies: SWS_CANIF_00144／00523: the set carries every L-PDU and the dispatch targets. */
 static const CanIf_ConfigType canif = {rx, 2u, tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u};
 /* Two Rx PDUs on one CAN ID cannot be routed. */
-static const CanIf_RxPduConfigType ambiguous[] = {{0x100u, 0u, 4u}, {0x100u, 1u, 4u}};
+static const CanIf_RxPduConfigType ambiguous[] = {{0x100u, 0u, 4u, FALSE}, {0x100u, 1u, 4u, FALSE}};
 static const CanIf_ConfigType invalid = {ambiguous, 2u, tx, 1u, mode, bus_off, 0u, 0u, 0u, 0u};
-static const Can_ConfigType can = {sink};
-static uint8 payload[9] = {0x11u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u};
+static const Can_ConfigType can = {.sink = sink};
+static uint8 payload[64] = {0x11u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u};
 
-static void receive(uint8 controller, Can_HwHandleType hoh, Can_IdType id, PduLengthType length) {
+static void receive(uint8 controller, Can_HwHandleType hoh, Can_IdType id, PduLengthType length)
+{
     const Can_HwType mailbox = {id, hoh, controller};
     const PduInfoType info = {payload, NULL_PTR, length};
     rx_indication(&mailbox, &info);
 }
-static Std_ReturnType send(PduLengthType length) {
+static Std_ReturnType send(PduLengthType length)
+{
     const PduInfoType info = {payload, NULL_PTR, length};
     return transmit(0u, &info);
 }
-static void controller(Can_ControllerStateType state) {
+static void controller(Can_ControllerStateType state)
+{
     /* Verifies: SWS_CANIF_00308: forwarded to the driver, which reports the transition. */
     assert(set_controller(0u, state) == E_OK);
     Can_MainFunction_Wakeup(); /* Host driver completes the transition asynchronously. */
 }
-static void uninitialized(void) {
+static void uninitialized(void)
+{
     Can_ControllerStateType state = CAN_CS_UNINIT;
     Can_ErrorStateType error_status = CAN_ERRORSTATE_ACTIVE;
     CanIf_PduModeType pdu = CANIF_ONLINE;
@@ -151,10 +162,10 @@ static void reject_configuration(const CanIf_ConfigType *configuration)
 static void reject_configurations(void)
 {
     const CanIf_RxPduConfigType bad_rx[] = {
-        {0x800u, 0u, 4u},
-        {0x100u, 0u, 9u},
+        {0x800u, 0u, 4u, FALSE},
+        {0x100u, 0u, 9u, FALSE},
     };
-    const CanIf_RxPduConfigType duplicate_rx[] = {rx[0], {0x101u, 0u, 4u}};
+    const CanIf_RxPduConfigType duplicate_rx[] = {rx[0], {0x101u, 0u, 4u, FALSE}};
     const CanIf_TxPduConfigType bad_tx[] = {
         {0x800u, 0u, 4u},
         {0x200u, 0u, 0u},
@@ -173,7 +184,7 @@ static void reject_configurations(void)
     CanIf_TxPduConfigType too_many_tx[33];
     CanIf_ConfigType config = canif;
     for (unsigned index = 0u; index < 33u; ++index) {
-        too_many_rx[index] = (CanIf_RxPduConfigType){0x100u + index, (PduIdType)index, 4u};
+        too_many_rx[index] = (CanIf_RxPduConfigType){0x100u + index, (PduIdType)index, 4u, FALSE};
         too_many_tx[index] = (CanIf_TxPduConfigType){0x200u + index, (PduIdType)index, 4u};
     }
     config.receive = too_many_rx;
@@ -200,7 +211,77 @@ static void reject_configurations(void)
     }
 }
 
-int main(void) {
+static void check_fd_policies(void)
+{
+    static const Can_ConfigType fd = {
+        .sink = sink,
+        .nominal_bitrate = 500000u,
+        .data_bitrate = 2000000u,
+    };
+    static const Can_IdType formats[] = {0x123u, 0x40000123u, 0x80000123u, 0xc0000123u};
+    CanIf_ConfigType config = canif;
+    CanIf_RxPduConfigType pair[2] = {{0x123u, 0u, 4u, FALSE}, {0x40000123u, 1u, 4u, FALSE}};
+    CanIf_TxPduConfigType fd_tx = tx[0];
+    config.receive = pair;
+    config.transmit = &fd_tx;
+    pair[0].accepts_fd = TRUE;
+    reject_configuration(&config);
+    pair[0].accepts_fd = FALSE;
+
+    Can_Init(&fd);
+    init(&config);
+    controller(CAN_CS_STARTED);
+    assert(set_pdu(0u, CANIF_ONLINE) == E_OK);
+    /* Verifies: SWS_CANIF_00877, ECUC_CanIf_00596, ECUC_CanIf_00590 */
+    unsigned standard = indications[0];
+    unsigned extended = indications[1];
+    assert(Can_Inject(0x123u, 4u, payload, 0u) == ECU_OK);
+    assert(Can_Inject(0x40000123u, 12u, payload, 0u) == ECU_OK);
+    assert(indications[0] == standard + 1u && indications[1] == extended + 1u);
+    assert(indicated_length == 12u);
+    controller(CAN_CS_STOPPED);
+    deinit();
+
+    for (unsigned i = 0u; i < sizeof(formats) / sizeof(formats[0]); ++i) {
+        const unsigned before = indications[0];
+        pair[0].can_id = formats[i];
+        pair[0].accepts_fd = FALSE;
+        fd_tx.can_id = formats[i];
+        config.receive_count = 1u;
+        init(&config);
+        controller(CAN_CS_STARTED);
+        assert(set_pdu(0u, CANIF_ONLINE) == E_OK);
+        for (unsigned j = 0u; j < sizeof(formats) / sizeof(formats[0]); ++j) {
+            assert(Can_Inject(formats[j], 4u, payload, 0u) == ECU_OK);
+        }
+        assert(indications[0] == before + 1u);
+        expected_tx_id = formats[i];
+        const unsigned sent = successes;
+        assert(send(4u) == E_OK && Can_HostFlush() == ECU_OK);
+        Can_MainFunction_Write();
+        assert(successes == sent + 1u);
+        controller(CAN_CS_STOPPED);
+        deinit();
+    }
+    for (unsigned i = 0u; i < sizeof(formats) / sizeof(formats[0]); i += 2u) {
+        const unsigned before = indications[0];
+        pair[0].can_id = formats[i];
+        pair[0].accepts_fd = TRUE;
+        init(&config);
+        controller(CAN_CS_STARTED);
+        assert(set_pdu(0u, CANIF_ONLINE) == E_OK);
+        for (unsigned j = 0u; j < sizeof(formats) / sizeof(formats[0]); ++j) {
+            assert(Can_Inject(formats[j], 4u, payload, 0u) == ECU_OK);
+        }
+        assert(indications[0] == before + 2u);
+        controller(CAN_CS_STOPPED);
+        deinit();
+    }
+    Can_DeInit();
+}
+
+int main(void)
+{
     /* R24-11 BSWGeneral Appendix A.2 and the module API tables, independent of runtime. */
     assert(CANIF_MODULE_ID == 60u && CANIF_SID_TRANSMIT == 0x49u &&
            CANIF_SID_RX_INDICATION == 0x14u);
@@ -324,5 +405,31 @@ int main(void) {
     deinit();
     uninitialized();
     Can_DeInit();
+
+    /* Verifies: SWS_CANIF_00877. A caller reporting FD can match *_CAN,
+     * while the same numeric ID in *_NO_FD_CAN matches Classical only. */
+    {
+        static const CanIf_RxPduConfigType mixed[] = {
+            {0x7ffu, 0u, 4u, TRUE},
+            {0x800007ffu, 1u, 4u, FALSE},
+        };
+        CanIf_ConfigType mixed_config = canif;
+        const unsigned standard = indications[0];
+        const unsigned extended = indications[1];
+        mixed_config.receive = mixed;
+        init(&mixed_config);
+        Can_Init(&can);
+        controller(CAN_CS_STARTED);
+        assert(set_pdu(0u, CANIF_ONLINE) == E_OK);
+        receive(0u, 0u, 0x400007ffu, 4u);
+        receive(0u, 0u, 0xc00007ffu, 4u);
+        assert(indications[0] == standard + 1u && indications[1] == extended);
+        receive(0u, 0u, 0x800007ffu, 4u);
+        assert(indications[1] == extended + 1u);
+        controller(CAN_CS_STOPPED);
+        deinit();
+        Can_DeInit();
+    }
+    check_fd_policies();
     return 0;
 }

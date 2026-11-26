@@ -3,6 +3,198 @@ use super::*;
 use autosar_config_core::integration::InputSource;
 use std::path::Path;
 
+/// Verifies: ECUC_Can_00473, ECUC_Can_00475, ECUC_Can_00481, ECUC_Can_00485
+#[test]
+fn fd_configuration_requires_the_selected_controller_and_preserves_brs_and_padding() {
+    let sources = fd_can_sources();
+    let validation = normal_validation(&sources);
+    assert!(
+        validation.diagnostics.is_empty(),
+        "{:?}",
+        validation.diagnostics
+    );
+    for brs in ["true", "false"] {
+        let mut configured = sources.clone();
+        parameter(&mut configured, "Fd", "CanControllerTxBitRateSwitch", brs);
+        let plan = build(&configured).unwrap_or_else(|issues| panic!("{issues:?}"));
+        let can = serde_json::to_value(&plan.description().communication_runtime).unwrap();
+        assert_eq!(can["can"]["nominalBitrate"], 500_000);
+        assert_eq!(can["can"]["dataBitrate"], 2_000_500);
+        assert_eq!(can["can"]["brs"], brs == "true");
+        assert_eq!(can["can"]["fdPadding"], 165);
+    }
+    for (owner, key, bad_value, code) in [
+        (
+            "DiagRequest",
+            "CanIfRxPduCanIdType",
+            "STANDARD_CAN",
+            "CAN_FD_CONFIGURATION",
+        ),
+        ("Fd", "CanControllerFdBaudRate", "0", "CAN_FD_CONFIGURATION"),
+        (
+            "Fd",
+            "CanControllerFdBaudRate",
+            "2000.0001",
+            "CAN_FD_CONFIGURATION",
+        ),
+        (
+            "Fd",
+            "CanControllerFdBaudRate",
+            "16001",
+            "CAN_FD_CONFIGURATION",
+        ),
+        ("Transmit", "CanFdPaddingValue", "256", "CAN_FD_PADDING"),
+    ] {
+        let mut invalid = sources.clone();
+        parameter(&mut invalid, owner, key, bad_value);
+        let issues = build(&invalid).err().unwrap();
+        assert!(
+            issues.iter().any(|issue| issue.code == code
+                && issue
+                    .object
+                    .as_deref()
+                    .is_some_and(|path| path.rsplit('/').next() == Some(owner))),
+            "{issues:?}"
+        );
+    }
+    let mut without_fd = sources;
+    xml_edit(
+        &mut without_fd,
+        "ecuc.arxml",
+        |node| {
+            node.tag_name().name() == "SUB-CONTAINERS"
+                && node
+                    .children()
+                    .any(|child| named(child, "ECUC-CONTAINER-VALUE", "Fd"))
+        },
+        |_| String::new(),
+    );
+    let issues = build(&without_fd).err().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "CAN_FD_CONFIGURATION"),
+        "{issues:?}"
+    );
+}
+
+#[test]
+fn mixed_can_configuration_validates_width_format_and_conflicts() {
+    let sources = mixed_can_sources();
+    let validation = normal_validation(&sources);
+    assert!(
+        validation.diagnostics.is_empty(),
+        "{:?}",
+        validation.diagnostics
+    );
+    let plan = build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"));
+    let description = plan.description();
+    let receive = description
+        .signals
+        .iter()
+        .find(|signal| signal.receive)
+        .unwrap();
+    let diagnostic = description.diagnostic.as_ref().unwrap();
+    // The analysis baseline compiles these test sources with the old generator.
+    // Check the new serialized fields without requiring them on its Rust types.
+    let receive = serde_json::to_value(receive).unwrap();
+    let diagnostic = serde_json::to_value(diagnostic).unwrap();
+    assert_eq!(receive["canId"], 0x7ff);
+    assert_eq!(receive["extended"], false);
+    assert_eq!(receive["acceptsFd"], true);
+    assert_eq!(diagnostic["requestCanId"], 0x7ff);
+    assert_eq!(diagnostic["requestExtended"], true);
+    assert_eq!(diagnostic["requestAcceptsFd"], false);
+    assert_eq!(diagnostic["responseCanId"], 0x1fff_ffff);
+    assert_eq!(diagnostic["responseExtended"], true);
+
+    for (owner, key, invalid) in [
+        ("RxValue", "CanIfRxPduCanId", "2048"),
+        ("DiagResponse", "CanIfTxPduCanId", "536870912"),
+        ("DiagRequest", "CanIfRxPduCanIdType", "EXTENDED_FD_CAN"),
+        ("DiagResponse", "CanIfTxPduCanIdType", "EXTENDED_FD_CAN"),
+        ("Receive", "CanIdType", "STANDARD"),
+    ] {
+        let mut rejected = sources.clone();
+        parameter(&mut rejected, owner, key, invalid);
+        let expected = if owner == "Receive" {
+            "DiagRequest"
+        } else {
+            owner
+        };
+        let diagnostics = build(&rejected).err().unwrap();
+        assert!(
+            diagnostics.iter().any(|issue| {
+                issue.code == "CAN_ID_CONFLICT"
+                    && issue
+                        .object
+                        .as_deref()
+                        .is_some_and(|path| path.rsplit('/').next() == Some(expected))
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    let mut signal_pair = single_component_sources();
+    parameter(&mut signal_pair, "Transmit", "CanIdType", "MIXED");
+    parameter(
+        &mut signal_pair,
+        "TxValue",
+        "CanIfTxPduCanIdType",
+        "EXTENDED_CAN",
+    );
+    parameter(&mut signal_pair, "TxValue", "CanIfTxPduCanId", "800");
+    xml_edit(
+        &mut signal_pair,
+        "extract.arxml",
+        |node| named(node, "CAN-FRAME-TRIGGERING", "TxValueTrigger"),
+        |xml| {
+            xml.replace(
+                "<CAN-ADDRESSING-MODE>STANDARD",
+                "<CAN-ADDRESSING-MODE>EXTENDED",
+            )
+            .replace(
+                "<IDENTIFIER>801</IDENTIFIER>",
+                "<IDENTIFIER>800</IDENTIFIER>",
+            )
+        },
+    );
+    let plan = build(&signal_pair).unwrap_or_else(|issues| panic!("{issues:?}"));
+    assert!(
+        plan.description()
+            .signals
+            .iter()
+            .all(|signal| signal.can_id == 800)
+    );
+    let transmit = plan
+        .description()
+        .signals
+        .iter()
+        .find(|signal| !signal.receive)
+        .unwrap();
+    assert_eq!(serde_json::to_value(transmit).unwrap()["extended"], true);
+
+    let mut ambiguous = sources;
+    parameter(
+        &mut ambiguous,
+        "DiagRequest",
+        "CanIfRxPduCanIdType",
+        "STANDARD_NO_FD_CAN",
+    );
+    xml_edit(
+        &mut ambiguous,
+        "extract.arxml",
+        |node| named(node, "CAN-FRAME-TRIGGERING", "DiagRequestTrigger"),
+        |xml| {
+            xml.replace(
+                "<CAN-ADDRESSING-MODE>EXTENDED",
+                "<CAN-ADDRESSING-MODE>STANDARD",
+            )
+        },
+    );
+    rejects_in_both(&ambiguous, "CAN_ID_CONFLICT");
+}
+
 #[test]
 fn single_application_component_is_planned_by_the_mainline() {
     let sources = single_component_sources();
@@ -188,17 +380,33 @@ fn reference_shape_records_independent_verification_inputs() {
     // Configured endpoints of the fixture, not values read back from the plan.
     for (name, value) in [
         ("periodMs", 10),
-        ("receiveCanId", 0x320),
-        ("transmitCanId", 0x321),
-        ("requestCanId", 0x700),
-        ("responseCanId", 0x708),
         ("did", 0x1234),
         ("initialReceiveValue", 0),
         ("receiveTimeoutMs", 200),
     ] {
         assert_eq!(inputs[name], value, "{name}");
     }
-    assert_eq!(inputs["format"], "autosar-ecu-test-inputs-v1");
+    assert_eq!(
+        inputs["channels"],
+        serde_json::json!({"0": "/Extract/ReferenceCan/Channel"})
+    );
+    for (role, direction, handle, id, length) in [
+        ("receive", "RX", 0, 0x320, 4),
+        ("transmit", "TX", 0, 0x321, 4),
+        ("request", "RX", 1, 0x700, 8),
+        ("response", "TX", 1, 0x708, 8),
+    ] {
+        assert_eq!(
+            inputs["endpoints"][role],
+            serde_json::json!({
+                "module": "CanIf", "direction": direction, "handle": handle, "channel": 0,
+                "format": "STANDARD", "fdPolicy": "CLASSICAL", "id": id,
+                "logicalLength": length, "wireLength": length,
+            }),
+            "{role}"
+        );
+    }
+    assert_eq!(inputs["format"], "autosar-ecu-test-inputs-v2");
     let readme = std::fs::read_to_string(project.join("README.md")).unwrap();
     assert!(readme.contains("tools/ecu-tool.py verify"), "{readme}");
     let config =
@@ -1092,7 +1300,7 @@ fn source_preparation_is_target_complete_without_native_tools() {
                 .bytes,
         )
         .unwrap();
-        assert_eq!(metadata["format"], "autosar-build-target-v3");
+        assert_eq!(metadata["format"], "autosar-build-target-v4");
         // Each mode's main is sealed, recorded once and never a shared translation unit.
         for (mode, entry) in metadata["entries"].as_object().unwrap() {
             assert!(has(entry.as_str().unwrap()), "{mode}");
@@ -1378,7 +1586,7 @@ fn canif_parameters_outside_the_selection_are_refused_at_their_source() {
         (
             "RxValue",
             "CanIfRxPduCanIdType",
-            "STANDARD_CAN",
+            "STANDARD_FD_CAN",
             "CAN_ID_CONFLICT",
             rx,
         ),
@@ -1803,12 +2011,10 @@ fn can_parameters_outside_the_selection_are_refused_at_their_source() {
             "CAN_PROCESSING",
             controller,
         ),
-        // One BasicCAN standard-identifier object per direction
+        // One BasicCAN object per direction
         // (Verifies: ECUC_Can_00323／00065／00467).
         // Rejects: ECUC_Can_00323
         ("Receive", "CanHandleType", "FULL", unsupported, receive),
-        // Rejects: ECUC_Can_00065
-        ("Receive", "CanIdType", "EXTENDED", unsupported, receive),
         // Rejects: ECUC_Can_00467
         ("Receive", "CanHwObjectCount", "2", unsupported, receive),
     ] {
@@ -1853,7 +2059,7 @@ fn can_definitions_outside_the_selection_are_refused_at_their_source() {
         "TARGET_PARAMETER_UNSUPPORTED",
     );
     // Unselected features (Verifies: ECUC_Can_00482／00434／00357／00491／00431／00524／
-    // 00492／00359／00530／00001／00499／00473／00512／00490／00485／00468／00002／00526／
+    // 00492／00359／00530／00001／00499／00512／00490／00468／00002／00526／
     // 00495／00486); partition mappings are refused (Verifies: SWS_Can_00507).
     // (owner, definition, "" for a container or "KIND:value", codes)
     for (owner, name, value, codes) in [
@@ -1894,8 +2100,6 @@ fn can_definitions_outside_the_selection_are_refused_at_their_source() {
         ("Controller", "CanTTController", "", unknown),
         // Rejects: ECUC_Can_00499
         ("Controller", "CanXLController", "", unknown),
-        // Rejects: ECUC_Can_00473
-        ("Baudrate", "CanControllerFdBaudrateConfig", "", unknown),
         // Rejects: ECUC_Can_00512
         ("Baudrate", "CanXLBaudrateConfig", "", unknown),
         // Rejects: ECUC_Can_00490
@@ -1905,8 +2109,6 @@ fn can_definitions_outside_the_selection_are_refused_at_their_source() {
             "BOOLEAN:true",
             unknown,
         ),
-        // Rejects: ECUC_Can_00485
-        ("Transmit", "CanFdPaddingValue", "INTEGER:0", unknown),
         // Rejects: ECUC_Can_00468
         ("Receive", "CanHwFilter", "", unknown),
         // Rejects: ECUC_Can_00002

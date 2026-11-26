@@ -34,11 +34,56 @@ Os_Backend.c:1730–1736 的 getenv／strtoul／errno 属 OS_HOST_FAILURE_TESTS
 本次新增例外批准为零。原始诊断、passed／error、程序退出码、221 项 assessment 和
 completeCompliance 保持原义；全组为 71 satisfied、3 not_applicable、70 not_assessed。
 
+## R21.1／R21.2 保留名称接续核查
+
+[#539](https://github.com/g1331/autsaro/issues/539) 取 master `dc1ce02b` 的
+[必需 CI 工件](https://github.com/g1331/autsaro/actions/runs/44814255256)。
+Linux／Windows 各四个 profile，含 HostBatch 和 probe 的 888 个程序 TU 实例，
+对应 452 份独立 GCC C99 展开。每份封存源码取 GCC `-MD` 与 Cppcheck 项目文件并集，
+集成头按八份目标 TU 的依赖并集判定。最终内核中的项目补丁按物理
+`patchedLines` 选取，端口补丁按 ADR 0030 归主机层，内核原行按 ADR 0025 归采用代码。
+
+名称目录从 [WG14 N1256](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1256.pdf)
+§7.2–§7.25 建候选，Annex B 辅助定位，按 §7.1.3 和 §6.2.1–3 记录标准中名字的
+作用域、名称空间和链接。比较覆盖标准宏、文件作用域普通名与 tag，含
+stdint／inttypes 的宽度族。§7.26 Future Library Directions 排除在本规则目录之外。
+`NDEBUG` 是 §7.2 允许调用者提供的控制宏，单独核对。MISRA 的前导下划线条件
+和 `defined` 指令条件另外检查。比如 `int32_t` 属标准 typedef，
+`uint32` 是项目 typedef，`mode` 只是 fopen 的形参名。
+
+R21.1 的物理指令经续行拼接、去注释及原行回查，包含未选分支。八份样本的自有
+及目标补丁 define／undef 次数按 profile 为 2,108／2,108／2,252／2,171，
+两平台一致，均无保留名命中。活动定义和撤销按 GCC `-dD` 行标记核查，
+与 `-dM` 的期末状态交叉检查。Linux 的 `_FORTIFY_SOURCE`、`_REENTRANT`
+和 Windows 的 `_REENTRANT` 来自编译器命令行环境。Cppcheck 的发现宏参数
+反映 GCC 或头文件提供的名字。两种来源均单独归属。
+
+R21.2 的声明候选按对象、函数、typedef、tag、成员、枚举常量、形参及标签核对，
+记录名字位置与其声明作用域。实际 GCC 展开中的项目位置另按标识符核对，
+以区分宏生成的声明、标准库引用与自有声明。Linux 的辅助解析覆盖全部 TU，
+Windows 的 GCC intrinsic 使辅助解析在工具链头内报错，SDK 的声明全集仍待
+用目标 GCC 的声明与作用域记录补齐。项目声明候选未发现当前需要改名的源位置。
+`memcpy`／`memset` 是对标准头所声明函数的调用，`__atomic_*_n` 是
+GCC 内建引用；Windows `_Interlocked*` 来自主机接口展开。项目范围内所见
+`__attribute__`／`__thread` 属编译器语法。未选故障分支的 `errno`、
+`getenv`、`strtoul` 也只作引用。
+
+`Os_Backend.c` 的实际 TU 在 Linux 导入 `pthread.h`，在 Windows 导入
+`windows.h`。Linux `pthread.h:19` 的 `_PTHREAD_H` guard 和
+`pthread.h:548` 的 `__pthread_unwind_buf_t` typedef，以及 Windows
+`windows.h:7` 的 `_WINDOWS_` guard 和 `minwinbase.h:13` 的
+`_SECURITY_ATTRIBUTES` tag，均随非 ISO SDK 原头进入两种程序。这些声明和
+定义按 SDK 来源及集成责任处理。Linux `unwind.h` 与 futex UAPI 的所核实例
+从主机实现进入，具体已核位置和待决定事项见
+[SDK 供应方边界](../../os/implementation.md#非iso-sdk的保留名字)。
+八份报告的这两条原始诊断均为零，`passed=false`、`completeCompliance=false`
+和项目验收 `blocked` 照原始报告保留。
+
 <!-- misra-checker-obligations-begin -->
 | 规则 | 类别 | 评估范围 | 状态 | 结论 |
 | --- | --- | --- | --- | --- |
-| R21.1 | Required | 物理 define／undef 与保留名称 | not_assessed | 主文 165–166／PDF 173–174；TC1 补 R20.5 引用，AMD2.27 扩展语言。全部物理宏已定位，但固定 addon 的部分下划线正则与库名表缺完整性证明。#539 承接 C99 §7 全部宏／文件作用域保留名与活动定义、撤销的比较，排除 Future Library Directions，NDEBUG 单列；继续归 #443。 |
-| R21.2 | Required | 对象／类型／tag／函数等声明 | not_assessed | 主文 166–167／PDF 174–175；TC1 修正 reserved macro 标题及 BUILTIN 示例，AMD2.27。使用与自行声明分别判断；固定 addon 只查函数库名和少量 BUILTIN 宏。#539 承接全部 namespace／scope、typedef／tag／成员及条件声明集合与独立保留名目录比较，分清 SDK、内核原行及 patch；继续归 #443。 |
+| R21.1 | Required | 物理 define／undef 与保留名称 | not_assessed | 主文 165–166／PDF 173–174，TC1 补 R20.5 引用，AMD2.27 扩展语言。#539 的八份物理指令与 GCC 活动宏未发现自有保留名定义或撤销，排除 Future Library Directions，NDEBUG 单列。非 ISO SDK 的 _PTHREAD_H／_WINDOWS_ 等实际引入待完成集成处置，继续归 #443。 |
+| R21.2 | Required | 对象／类型／tag／函数等声明 | not_assessed | 主文 166–167／PDF 174–175，TC1 修正 reserved macro 标题及 BUILTIN 示例，AMD2.27。使用与声明分开，namespace／scope 回查实际 GCC 项目声明。#539 的非 ISO SDK 声明需补齐 Windows 目标 GCC 的声明集合及集成处置，继续归 #443。 |
 | R21.3 | Required | 标准动态分配标识符及宏 | satisfied | 主文 167／PDF 175；AMD2.78 加 aligned_alloc。物理及实际展开没有 calloc／malloc／realloc／aligned_alloc／free 引用、取址或同名替换表。内核原件的 pvPortMalloc／vPortFree 沿采用责任，项目补丁无标准分配入口；主机 stack 实现按 ADR 0030。固定入口只查四个直接调用，独立扫描补 aligned_alloc 和间接入口。 |
 | R21.4 | Required | setjmp 头与全部设施 | satisfied | 主文 168／PDF 176；AMD3.67 明确禁止包含 setjmp.h 及其全部设施。物理 include 含引号形式、替换表与实际展开均无 setjmp／longjmp／jmp_buf；GCC／analyzer 文件回执中项目无该包含。目标 Backend 调用 Os_Stack／port 的接缝保留，平台上下文实现沿 ADR 0030；同号 findInclude 的单一尖括号检查由独立证据补齐。 |
 | R21.5 | Required | signal 头与 ISO 信号设施 | satisfied | 主文 168／PDF 176；AMD3.68 同时禁止 signal.h 包含和设施。范围内物理／展开无该 include、signal／raise／sig_atomic_t 或 SIG_DFL／SIG_ERR／SIG_IGN 等 ISO 信号宏。POSIX 信号处理集中于 host／port；Os_Backend 的平台适配声明与调用未自行引入 ISO 信号设施。固定入口只找 include，独立引用扫描同时覆盖取址及宏。 |

@@ -201,7 +201,7 @@ impl Workspace {
         let project = self.project.as_ref().ok_or_else(|| {
             crate::product_message!("backend.arxml.application.portable_project_required")
         })?;
-        if !project.manifest.application_inputs.is_empty() {
+        if project.manifest.layers.is_none() && !project.manifest.application_inputs.is_empty() {
             return Err(crate::product_message!(
                 "backend.arxml.application.live_ownership_already_declared"
             ));
@@ -253,6 +253,13 @@ impl Workspace {
         let mut manifest = project.manifest.clone();
         let mut files = Vec::with_capacity(seeds.len());
         for (path, bytes) in seeds {
+            if manifest
+                .application_inputs
+                .iter()
+                .any(|member| member.path == path)
+            {
+                continue;
+            }
             target(root, &path)?;
             manifest.application_inputs.push(ApplicationInput {
                 path: path.clone(),
@@ -269,6 +276,11 @@ impl Workspace {
                     crate::product_message!("backend.arxml.application.source_not_utf_eight")
                 })?,
             });
+        }
+        if files.is_empty() {
+            return Err(crate::product_message!(
+                "backend.arxml.application.live_ownership_already_declared"
+            ));
         }
         super::project::validate_manifest(&manifest)?;
         let manifest_after = super::project::render_manifest(&manifest)?;
@@ -560,7 +572,8 @@ mod tests {
         }
         inputs.sort_by(|left, right| left.path.cmp(&right.path));
         let manifest = ProjectManifest {
-            format_version: 1,
+            format_version: 2,
+            layers: None,
             declared_release: "R24-11".into(),
             profile_hint: crate::integration::PROFILE.into(),
             inputs,

@@ -4,9 +4,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { Tabs, tabPanelProps } from '../src/workbench/Tabs';
-import { objectRole } from '../src/workbench/objectRole';
+import { Tabs, tabPanelProps } from '../src/features/project/Tabs';
+import { objectRole } from '../src/features/project/objectRole';
 import { resources } from '../src/i18n';
+import { workbenchStyles } from './support/workbench-styles.mjs';
 
 afterEach(cleanup);
 
@@ -108,7 +109,7 @@ test('object roles follow the ECUC module or the element kind', () => {
 
 // DESIGN.md is the visual authority; the stylesheet must carry the same colour tokens.
 const design = readFileSync(path.join(import.meta.dirname, '../../DESIGN.md'), 'utf8');
-const css = readFileSync(path.join(import.meta.dirname, '../src/styles.css'), 'utf8');
+const css = workbenchStyles();
 const designColors = Object.fromEntries(
   [...design.split('\n---\n')[0].matchAll(/^ {2}([a-z-]+): '(#[0-9a-f]{6})'$/gm)].map((m) => [
     m[1],

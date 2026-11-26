@@ -78,14 +78,17 @@ pub(crate) fn fields_including_unchanged(
                     ),
                 )
             })?;
-        if *id > 0x7ff {
+        let maximum = if channel.extended {
+            super::can_id::EXTENDED_MAX
+        } else {
+            0x7ff
+        };
+        if *id > maximum {
             return Err(issue(
                 plan,
                 "EDIT_RANGE",
                 port,
-                crate::product_message!(
-                    "backend.integration.editor.standard_classical_can_id_out_of_range"
-                ),
+                crate::product_message!("backend.integration.editor.classical_can_id_out_of_range"),
             ));
         }
         if !include_unchanged && *id == channel.can_id {

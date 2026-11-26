@@ -1098,6 +1098,35 @@ class AcceptanceTests(unittest.TestCase):
         self.obligation_path.write_text(text, encoding="utf-8", newline="\n")
         self.assertEqual(self.identity(), identity)
 
+    def test_r82_target_scan_requires_the_exact_shared_approved_positions(self):
+        header = "generated/include/Rte_Process.h"
+        unit = "generated/src/Ecu_Config.c"
+        summary = {
+            "scope": {"profile": "ecu", "projectTranslationUnits": {unit: [unit, header]}},
+            "programs": [{"name": "target", "translationUnits": [unit]}],
+            "diagnostics": [{"sourceCategory": "project"}],
+        }
+        entity = {"file": header, "line": 90, "name": "Process_Transform",
+                  "diagnostics": {"host-batch": [36, 45], "probe": [36, 45]}}
+        occurrences = [{"rule": "misra-c2012-8.2", "status": "owned_record_matched", "diagnostic": 0,
+                        "location": {"file": header, "line": "90", "column": str(column)},
+                        "entity": entity["name"], "programs": ["target"]} for column in (36, 45)]
+        match = c_acceptance._retained_checker_entities
+        self.assertTrue(match(summary, occurrences, "R8.2", [entity]))
+        self.assertFalse(match(summary, occurrences[:1], "R8.2", [entity]))
+        changed = copy.deepcopy(occurrences)
+        changed[1]["location"]["column"] = "46"
+        self.assertFalse(match(summary, changed, "R8.2", [entity]))
+        changed[1]["location"]["column"] = "45"
+        changed[1]["entity"] = "OtherDeclaration"
+        self.assertFalse(match(summary, changed, "R8.2", [entity]))
+        self.assertFalse(match(summary, occurrences, "R8.2", [
+            {**entity, "diagnostics": {"host-batch": [36, 45], "probe": [36]}}]))
+        self.assertFalse(match(summary, occurrences, "R8.2", [
+            {**entity, "diagnostics": {"host-batch": [36, 45]}}]))
+        summary["scope"]["projectTranslationUnits"][unit].remove(header)
+        self.assertFalse(match(summary, occurrences, "R8.2", [entity]))
+
     def test_checker_retained_requires_current_entities_and_explicit_formal_approval(self):
         self.synthetic_complete_inputs()
         table = self.obligation_path.read_text(encoding="utf-8")
@@ -1234,20 +1263,18 @@ class AcceptanceTests(unittest.TestCase):
             "R1.2", "R1.3", "R2.1", "R2.2", "R2.3", "R2.4", "R2.5", "R5.6",
             "R5.9", "R8.3", "R8.7",
             "R8.9", "R8.13", "R10.4", "R10.7",
-            "R11.1", "R11.2", "R11.3", "R11.4", "R11.5", "R11.8", "R11.9",
+            "R11.4", "R11.5",
             "R12.1", "R12.2", "R12.4", "R13.2", "R14.2", "R14.3",
-            "R17.2", "R17.7", "R18.1", "R18.2", "R18.3", "R18.4",
-            "R18.5", "R18.6", "R19.1", "R20.5",
+            "R17.2", "R17.7", "R18.1", "R18.4", "R18.6", "R19.1", "R20.5",
             "R20.10", "R21.1",
             "R21.2",
         }
-        self.assertEqual(len(expected_gaps), 41)
         self.assertEqual({row["id"] for row in objects}, expected_gaps)
-        self.assertEqual(len(objects), 41)
+        self.assertEqual(len(objects), len(expected_gaps))
         self.assertEqual({row["reason"] for row in objects}, {"checker-obligation_not_assessed"})
         self.assertEqual({row["owner"] for row in objects}, {"#443"})
         located = [row for row in objects if row["source"] is not None]
-        self.assertEqual(len(located), 41)
+        self.assertEqual(len(located), len(expected_gaps))
         for row in located:
             self.assertTrue(row["source"]["file"].startswith(
                 "docs/standards/types/language-constructs/"))
@@ -1268,16 +1295,18 @@ class AcceptanceTests(unittest.TestCase):
                         "R9.1", "R9.2", "R9.3", "R9.4", "R9.5"}
         expressions = {"R10.2", "R10.5", "R10.8", "R11.6", "R11.7", "R13.1",
                        "R13.3", "R13.4", "R13.6"}
+        pointer_conversions = {"R11.1", "R11.2", "R11.3", "R11.8", "R11.9"}
         control_flow = {"R14.1", "R15.1", "R15.2", "R15.3", "R17.1", "R17.6", "R18.7",
                         "R19.2", "R16.1", "R16.2", "R16.3", "R16.4", "R16.5", "R16.6", "R16.7",
                         "R15.4", "R15.6", "R15.7", "R17.4", "R17.5", "R17.8", "R18.8"}
+        pointer_relationships = {"R18.2", "R18.3", "R18.5"}
         preprocessing = {"R20.2", "R20.3", "R20.4", "R20.6", "R20.11", "R20.12",
                          "R20.7", "R20.8", "R20.9", "R20.13", "R20.14"}
         library = {"R21." + str(n) for n in range(3, 22) if n != 8}
         library.update("R22." + str(n) for n in range(1, 11))
         self.assertEqual(set(satisfied),
-                         lexical | declarations | expressions | control_flow
-                         | preprocessing | library
+                         lexical | declarations | expressions | pointer_conversions | control_flow
+                         | pointer_relationships | preprocessing | library
                          | {"R2.7", "R5.8", "R7.1", "R7.2", "R7.3",
                             "R7.4", "R12.3", "R15.5"})
         self.assertIn("Disapplied", satisfied["R15.5"]["conclusion"])
@@ -1313,7 +1342,7 @@ class AcceptanceTests(unittest.TestCase):
             "R10.2": "TC2.19", "R10.4": "complete_activation", "R10.5": "AMD3.33",
             "R10.7": "HostBatch::number", "R10.8": "(LONG)~(uint32)1u",
             "R11.1": "(void)sink", "R11.2": "完整化", "R11.3": "AMD4.7–9",
-            "R11.4": "Os_HostStackRange", "R11.5": "mmap", "R11.6": "TC2.22",
+            "R11.4": "Os_HostStackRange", "R11.5": "pvOwner", "R11.6": "TC2.22",
             "R11.7": "Boolean、character、enum", "R11.8": "AMD4.10–14",
             "R11.9": "((void *)0)", "R12.1": "#if／#elif", "R12.2": "UTLR",
             "R12.4": "宽度≥64", "R13.1": "Os_ArtiCallerSave", "R13.2": "AMD4.17–23",
@@ -1324,11 +1353,12 @@ class AcceptanceTests(unittest.TestCase):
             with self.subTest(expression=guideline):
                 record = by_id[guideline]
                 self.assertEqual(record["status"],
-                                 "satisfied" if guideline in expressions else "not_assessed")
+                                 "satisfied" if guideline in expressions | pointer_conversions else "not_assessed")
+                filename = "pointer-conversions.md" if guideline in pointer_conversions else "expressions.md"
                 self.assertEqual(record["source"]["file"],
-                                 "docs/standards/types/language-constructs/expressions.md")
+                                 "docs/standards/types/language-constructs/" + filename)
                 self.assertIn(evidence, record["conclusion"])
-                if guideline not in expressions:
+                if guideline not in expressions | pointer_conversions:
                     self.assertIn("#443", record["conclusion"])
         self.assertEqual(by_id["R13.6"]["category"], "Required")
         self.assertIn("Os_CounterWorkType", by_id["R13.1"]["conclusion"])
@@ -1486,19 +1516,16 @@ class AcceptanceTests(unittest.TestCase):
             "R17.7": ("Can_TxSinkType", "表达式父节点", "D4.7", "#556"),
             "R17.8": ("0023-preserve-parameter-values.patch", "Com_SendSignal", "signal_values"),
             "R18.1": ("0020-bounded-queue-front.patch", "one-past", "#556"),
-            "R18.2": ("record-stacks", "ptrdiff_t", "#556"),
-            "R18.3": ("AMD4.52", "同结构成员关系", "#556"),
             "R18.4": ("R18.2", "五个位置", "环形存储", "#556"),
-            "R18.5": ("连续 pointer declarator", "typedef", "#556"),
             "R18.6": ("AMD4.24", "Os_ErrorContextSave", "静态 ISR frame", "#556"),
             "R18.7": ("configured_alarms",),
             "R18.8": ("AMD4.25–30", "Arti_Types.h", "-Werror=vla"),
             "R19.1": ("memmove", "Os_TargetPostInput", "Mandatory", "#556"),
             "R19.2": ("0015-typed-port-state.patch",),
         }
-        self.assertEqual(len(control_evidence), 33)
+        self.assertEqual(len(control_evidence), 30)
         self.assertEqual({key for key in by_id if 14 <= int(key[1:].split(".")[0]) <= 19},
-                         set(control_evidence) | {"R15.5", "R17.3"})
+                         set(control_evidence) | pointer_relationships | {"R15.5", "R17.3"})
         for guideline, evidence in control_evidence.items():
             with self.subTest(control_flow=guideline):
                 record = by_id[guideline]
@@ -1513,6 +1540,27 @@ class AcceptanceTests(unittest.TestCase):
                     self.assertIn(phrase, record["conclusion"])
                 if guideline not in control_flow:
                     self.assertIn("#443", record["conclusion"])
+        relationship_path = "docs/standards/types/language-constructs/pointer-relationships.md"
+        relationship_text = (self.root / relationship_path).read_text(encoding="utf-8")
+        relationship_evidence = {
+            "R18.2": ("ptrdiff_t", "八个实际配置无指针与指针相减", "`pcTail - uxItemSize`"),
+            "R18.3": ("AMD4.52", "`kernel/tasks.c:1945–1946`", "509／0 和 509／511",
+                      "`kernel/queue.c:2382,2438`"),
+            "R18.5": ("数组形参调整", "`TaskHandle_t *const`", "`RPC_EP_INQ_HANDLE *`"),
+        }
+        self.assertEqual(set(relationship_evidence), pointer_relationships)
+        for guideline, evidence in relationship_evidence.items():
+            with self.subTest(pointer_relationship=guideline):
+                record = satisfied[guideline]
+                self.assertEqual(record["source"]["file"], relationship_path)
+                self.assertTrue(relationship_text.splitlines()[record["source"]["line"] - 1]
+                                .startswith("| " + guideline + " |"))
+                for detail in evidence:
+                    self.assertIn(detail, relationship_text)
+        for detail in ("44851605791", "888 个程序 TU", "452 份独立 GCC 展开",
+                       "`patchedLines`", "16 份原始 XML", "`passed=false`",
+                       "`completeCompliance=false`", "`blocked`"):
+            self.assertIn(detail, relationship_text)
         self.assertEqual(by_id["R17.6"]["category"], "Mandatory")
         self.assertEqual(by_id["R17.5"]["category"], "Required")
         backend = (ROOT / "runtime/os/src/Os_Backend.c").read_text(encoding="utf-8")
@@ -1542,8 +1590,10 @@ class AcceptanceTests(unittest.TestCase):
 
 
         library_evidence = {
-            "R21.1": ("not_assessed", "#539", "Future Library Directions", "NDEBUG"),
-            "R21.2": ("not_assessed", "#539", "namespace／scope", "BUILTIN"),
+            "R21.1": ("not_assessed", "#539", "Future Library Directions", "NDEBUG",
+                      "_PTHREAD_H／_WINDOWS_", "待完成集成处置"),
+            "R21.2": ("not_assessed", "#539", "namespace／scope", "BUILTIN",
+                      "Windows 目标 GCC 的声明集合及集成处置"),
             "R21.3": ("satisfied", "AMD2.78", "aligned_alloc", "pvPortMalloc"),
             "R21.4": ("satisfied", "AMD3.67", "jmp_buf", "Os_Stack"),
             "R21.5": ("satisfied", "AMD3.68", "sig_atomic_t", "SIG_IGN"),
@@ -1579,6 +1629,21 @@ class AcceptanceTests(unittest.TestCase):
         self.assertIn("去注释保留其中全部换行", library_text)
         self.assertIn("每条记录均回查原文件对应标识符", library_text)
         self.assertIn("1,442 个自有文件实例", library_text)
+        heading = "## R21.1／R21.2 保留名称接续核查"
+        self.assertIn(heading, library_text)
+        reserved_names = library_text.split(heading, 1)[1].split(
+            "<!-- misra-checker-obligations-begin -->", 1)[0]
+        for detail in (
+            "44814255256", "888 个程序 TU", "452 份独立 GCC C99 展开",
+            "GCC `-MD` 与 Cppcheck 项目文件并集", "`patchedLines`",
+            "WG14 N1256", "§7.26 Future Library Directions", "`NDEBUG`",
+            "2,108／2,108／2,252／2,171", "`-dD`", "`-dM`",
+            "`mode` 只是 fopen 的形参名", "`__atomic_*_n`",
+            "`pthread.h:548`", "`minwinbase.h:13`", "Windows 的 GCC intrinsic",
+            "`passed=false`", "`completeCompliance=false`", "`blocked`",
+        ):
+            with self.subTest(reserved_names=detail):
+                self.assertIn(detail, reserved_names)
         for guideline, (status, *evidence) in library_evidence.items():
             with self.subTest(library=guideline):
                 row = by_id[guideline]
@@ -1595,15 +1660,15 @@ class AcceptanceTests(unittest.TestCase):
             "R10.5": ("satisfied", "AMD3.33", "result ? 1u : 0u"),
             "R10.7": ("not_assessed", "#544", "essential 宽度"),
             "R10.8": ("satisfied", "CanTp_DataLength", "(uint16)data[0] & 0x0fu"),
-            "R11.1": ("not_assessed", "#544", "兼容原型"),
-            "R11.2": ("not_assessed", "#544", "完整化"),
-            "R11.3": ("not_assessed", "#544", "AMD4.7–9"),
+            "R11.1": ("satisfied", "兼容原型", "(void)sink", "Exception 2"),
+            "R11.2": ("satisfied", "TaskHandle_t", "完整化", "Os_HostHandleType", "TC1", "Exception 1"),
+            "R11.3": ("satisfied", "AMD4.7–9", "configUSE_MINI_LIST_ITEM=0", "非原子字符例外"),
             "R11.4": ("not_assessed", "#544", "真实 Advisory 违反", "未批准新例外"),
-            "R11.5": ("not_assessed", "#544", "生命周期"),
+            "R11.5": ("not_assessed", "#544", "task_slot", "pvOwner", "生命周期"),
             "R11.6": ("satisfied", "TC2.22", "(void *)0"),
             "R11.7": ("satisfied", "Boolean、character、enum", "完整 cast 清单"),
-            "R11.8": ("not_assessed", "#544", "AMD4.10–14"),
-            "R11.9": ("not_assessed", "#544", "((void *)0)"),
+            "R11.8": ("satisfied", "AMD4.10–14", "C99 §6.5.9", "pxTaskOsPortStack", "volatile"),
+            "R11.9": ("satisfied", "((void *)0)", "Os_InterruptVectorTable", "TC1"),
             "R12.1": ("not_assessed", "#544", "#if／#elif"),
             "R12.2": ("not_assessed", "#544", "UTLR"),
             "R12.3": ("satisfied", "452", "(_assert(...),0)", "§6.7"),
@@ -1616,7 +1681,11 @@ class AcceptanceTests(unittest.TestCase):
             with self.subTest(essential=guideline):
                 record = by_id[guideline]
                 self.assertEqual(record["status"], status)
-                filename = "README.md" if guideline == "R12.3" else "expressions.md"
+                filename = {
+                    **dict.fromkeys(("R11.1", "R11.2", "R11.3", "R11.8", "R11.9"),
+                                    "pointer-conversions.md"),
+                    "R12.3": "README.md",
+                }.get(guideline, "expressions.md")
                 self.assertEqual(record["source"]["file"],
                                  "docs/standards/types/language-constructs/" + filename)
                 source = (self.root / record["source"]["file"]).read_text(encoding="utf-8")
@@ -1624,6 +1693,18 @@ class AcceptanceTests(unittest.TestCase):
                     "| " + guideline + " |"))
                 for phrase in evidence:
                     self.assertIn(phrase, record["conclusion"])
+        pointer_text = (self.root / by_id["R11.1"]["source"]["file"]).read_text(encoding="utf-8")
+        for evidence in (
+            "44835837239", "888 个程序 TU", "452 份独立展开", "`patchedLines`", "AMD2.58",
+            "`Det_ErrorHookType`", "`LPTHREAD_START_ROUTINE`", "`generated/src/Ecu_Execution.c:7:5`",
+            "两个比较方向", "包括未求值分支", "`CanTp_Perform`", "TC1 聚合初始化例外",
+            "Linux 228、Windows 224", "16 份原始 XML", "`Os_TimeClose` 一处空指针",
+            "`MiniListItem_t` 和 `ListItem_t` 同为 `struct xLIST_ITEM`",
+            "`Os_TargetTrace` 保留零终止位置", "`const void *` 与 `current` 比较",
+            "`pxTaskOsPortStack` 返回的 `volatile StackType_t *`", "`kernel/tasks.c:8943`",
+            "`passed=false`", "`completeCompliance=false`", "`blocked`",
+        ):
+            self.assertIn(evidence, pointer_text)
         expression_text = (self.root / by_id["R10.2"]["source"]["file"]).read_text(
             encoding="utf-8")
         for evidence in ("每条记录均回查", "去注释保留其中全部换行", "STLR／UTLR",
@@ -2296,6 +2377,38 @@ class AcceptanceTests(unittest.TestCase):
                 self.assertEqual(occurrence["assessment"],
                                  "accepted" if status == "owned_false_positive" else "blocked")
                 self.assertEqual(self.summary, raw)
+
+    def test_r24_false_positive_requires_the_reviewed_anonymous_enum_and_header_consumer(self):
+        self.owned_inputs()
+        shared, host_entry = self.summary["programs"][0]["translationUnits"]
+        for header in ("LSduR", "PduR"):
+            source = f"runtime/bsw/include/{header}.h"
+            delivered = source.removeprefix("runtime/")
+            path = self.root / source
+            original = path.read_bytes()
+            for tag, column, consumer, expected in (
+                (b"", 14, shared, "owned_false_positive"),
+                (b"R24Unused ", 14, shared, "unmatched"),
+                (b"", 13, shared, "unmatched"),
+                (b"", 14, host_entry, "unmatched"),
+                (b"", 14, None, "unmatched"),
+            ):
+                with self.subTest(header=header, tag=tag, column=column, consumer=consumer):
+                    path.write_bytes(original.replace(b"typedef enum {", b"typedef enum " + tag + b"{", 1))
+                    self.select_owned(source, "2.4", "typedef enum")
+                    report = self.summary["diagnostics"][0]
+                    report["locations"][0]["column"] = column
+                    report.update(severity="style",
+                                  message="misra violation (use --rule-texts=<file> to get proper output)")
+                    self.summary["scope"]["projectTranslationUnits"] = (
+                        {consumer: [consumer, delivered]} if consumer else {}
+                    )
+                    occurrence = c_acceptance._owned_positions(
+                        self.summary, self.project, {"originalBswSources": self.origins}, self.root,
+                    ).get((0, 0))
+                    self.assertEqual("owned_false_positive" if occurrence and occurrence["falsePositive"]
+                                     else "unmatched", expected)
+            path.write_bytes(original)
 
     def test_r89_resource_owner_false_positive_requires_the_file_scope_reference(self):
         self.owned_inputs()

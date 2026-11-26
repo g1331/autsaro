@@ -327,6 +327,7 @@ pub(super) fn selected_behavior(symbol: &str) -> (bool, bool) {
                 | "Ecu_HostBusSM_RequestComMode"
                 | "Ecu_HostBusSM_GetCurrentComMode"
                 | "Ecu_HostBusSM_ApplyMode"
+                | "Ecu_HostBusSM_ConfirmMode"
                 | "Ecu_HostBusSM_ControllerModeIndication"
                 | "Ecu_HostBusSM_ControllerBusOff"
                 | "isOsStarted"

@@ -44,6 +44,23 @@ def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=ROOT).decode("utf-8").strip()
 
 
+def _bswm_baseline_inputs(baseline: Path) -> dict[str, bytes]:
+    """Keep the first parent's callouts when its validator predates ConfirmMode."""
+    originals = {}
+    for name in ("core/resources/templates/standard-ecu/ecuc.arxml",
+                 "core/tests/fixtures/component-pipeline/arxml/ecuc.arxml"):
+        current, previous = ROOT / name, baseline / name
+        if not current.is_file() or not previous.is_file():
+            return {}
+        original = previous.read_bytes()
+        updated = c_comparison.upgraded_bswm_callouts(original, 0)
+        if (updated is None
+                or updated.replace(b"\r\n", b"\n") != current.read_bytes().replace(b"\r\n", b"\n")):
+            return {}
+        originals[name] = original
+    return originals
+
+
 def stage(baseline: Path) -> None:
     """Use current sample inputs with the first parent's generator and runtime."""
     parent = git("rev-parse", "HEAD^1")
@@ -52,6 +69,7 @@ def stage(baseline: Path) -> None:
     ).strip()
     if actual != parent:
         raise ValueError("Baseline checkout must be the tested commit's first parent")
+    baseline_callouts = _bswm_baseline_inputs(baseline)
     # Tests and fixtures define the sample selection; production Rust/runtime stay old.
     inputs = ("core/tests", "core/resources", "Cargo.toml", "Cargo.lock",
               "core/Cargo.toml", "src-tauri/Cargo.toml", "rust-toolchain.toml", ".cargo")
@@ -66,6 +84,8 @@ def stage(baseline: Path) -> None:
         elif source.exists():
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+    for name, content in baseline_callouts.items():
+        (baseline / name).write_bytes(content)
 
 
 def prepare(baseline: Path, output: Path | None = None) -> None:
@@ -157,6 +177,17 @@ def new_dispositions(current: dict, previous: dict, acceptance: dict, project: P
     return accepted
 
 
+def in_scope_additions(current: dict, previous: dict, project: Path, baseline_project: Path,
+                       renames: dict[str, str], *, headers: set[str] | None,
+                       previous_headers: set[str] | None) -> Counter:
+    inside = c_comparison.diagnostic_counts(current, project, in_scope_only=True, headers=headers)
+    before = Counter()
+    for (rule, name, source, program), count in c_comparison.diagnostic_counts(
+            previous, baseline_project, in_scope_only=True, headers=previous_headers).items():
+        before[rule, renames.get(name, name), source, program] += count
+    return inside - before
+
+
 def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str],
             *, baseline_matrix: dict | None = None, identifier_evidence: dict | None = None,
             identifier_evidence_error: str | None = None) -> dict:
@@ -177,13 +208,8 @@ def verdict(current: dict, output: Path, baseline: Path, renames: dict[str, str]
     headers = c_comparison.matrix_headers(current, current_matrix) if current_matrix is not None else None
     previous_headers = (c_comparison.matrix_headers(previous, baseline_matrix)
                         if baseline_matrix is not None else None)
-    inside = c_comparison.diagnostic_counts(
-        current, output / "project", in_scope_only=True, headers=headers)
-    before = Counter()
-    for (rule, name, source, program), count in c_comparison.diagnostic_counts(
-            previous, baseline / "project", in_scope_only=True, headers=previous_headers).items():
-        before[rule, renames.get(name, name), source, program] += count
-    additions = inside - before
+    additions = in_scope_additions(current, previous, output / "project", baseline / "project",
+                                   renames, headers=headers, previous_headers=previous_headers)
     accepted = new_dispositions(current, previous, acceptance, output / "project", baseline,
                                 renames, headers=headers, previous_headers=previous_headers)
     equivalent = Counter()
@@ -284,7 +310,9 @@ def fingerprint_comparison(summaries: dict, inventories: dict, matrices: dict, *
         approved = set(dispositions["accepted"])
         comparison = c_fingerprint.verdict(inside["current"], inside["baseline"], approved)
         comparison["staleDispositions"] = dispositions["stale"]
-        if comparison["status"] == "passed" and dispositions["stale"]:
+        if "error" in dispositions:
+            comparison.update(status="incomplete", dispositionError=dispositions["error"])
+        elif comparison["status"] == "passed" and dispositions["stale"]:
             comparison["status"] = "blocked"
         return {"format": c_fingerprint.FORMAT, "mode": mode, **comparison,
                 "current": inventories["current"], "baseline": inventories["baseline"]}
@@ -359,7 +387,8 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
         c_comparison.annotate_scope(summary, set(matrices["current"]["targetHeaders"]))
         summary["projectAcceptance"] = c_acceptance.evaluate(
             summary, current / "project", matrix_scope=matrices["current"],
-            **({"fingerprints": inventories["current"], "sample": sample} if mode is not None else {}))
+            **({"fingerprints": inventories["current"], "sample": sample,
+                "report_disposition_errors": mode == "pr"} if mode is not None else {}))
         (current / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     shutil.copy2(baseline / "summary.json", current / "baseline-summary.json")
     summaries = {side: read(path / "summary.json") for side, path in outputs.items()}
@@ -380,7 +409,18 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
         )
         result = {"comparison": comparison, "complianceScope": summary["complianceScope"],
                   "projectAcceptance": summary["projectAcceptance"]["status"]}
-        if mode == "strict":
+        if mode == "pr":
+            additions = in_scope_additions(
+                summary, summaries["baseline"], current / "project", baseline / "project", renames,
+                headers=set(matrices["current"]["targetHeaders"]),
+                previous_headers=set(matrices["baseline"]["targetHeaders"]),
+            )
+            result["inScopeNew"] = [
+                {"rule": rule, "file": name, "source": source, "program": program, "count": count}
+                for (rule, name, source, program), count in sorted(additions.items())
+            ]
+            result["status"] = "blocked" if additions else "passed"
+        else:
             result["analysisInputs"] = manifests
             result["analysisProducerSha256"] = producer_digests
     if matrices:
@@ -389,7 +429,7 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
         result["diagnosticFingerprints"] = fingerprint_comparison(
             summaries, inventories, matrices, mode=mode,
         )
-        if mode is not None:
+        if mode == "strict":
             result["status"] = result["diagnosticFingerprints"]["status"]
     result.update(format=FORMAT, target=target, sample=sample,
                   baselineSource=source,
@@ -403,10 +443,12 @@ def scan(target: str, sample: str, scope_directory: Path | None = None, *,
                      indent=2))
     if fingerprints:
         comparison = result["diagnosticFingerprints"]
-        print(f"Fingerprint gate: {comparison['status']}; {len(comparison['new'])} new; "
+        print(f"Fingerprint comparison: {comparison['status']}; {len(comparison['new'])} new; "
               f"{len(comparison['removed'])} removed; {comparison['unavailable']} unavailable; "
               f"{len(comparison.get('staleDispositions', []))} stale")
     if result["status"] != "passed":
+        if mode == "pr":
+            raise ValueError(f"New in-scope source diagnostics: {sample}")
         raise ValueError(f"New source diagnostics without current precise disposition: {sample}")
 
 
@@ -425,7 +467,7 @@ def aggregate(directory: Path, mode: str | None = None) -> None:
         baseline_source(gate["baselineSource"], gate["baseline"])
         if mode is not None:
             fingerprints = gate["diagnosticFingerprints"]
-            if fingerprints["mode"] != mode or fingerprints["status"] != "passed":
+            if fingerprints["mode"] != mode or (mode == "strict" and fingerprints["status"] != "passed"):
                 raise ValueError(f"Fingerprint gate mode or decision differs: {path}")
             if mode == "strict" and set(gate["analysisInputs"]) != {"baseline", "current"}:
                 raise ValueError(f"Strict analysis input identity missing: {path}")
@@ -502,7 +544,7 @@ def release_ready() -> None:
     from autosar_tooling import c_disposition
 
     for target in TARGETS:
-        binaries = c_disposition.WINDOWS_ANALYZERS.values() if target == c_disposition.WINDOWS else [None]
+        binaries = c_disposition.WINDOWS_DISPOSITION_BINARIES if target == c_disposition.WINDOWS else [None]
         for binary in binaries:
             for sample in SAMPLES:
                 c_disposition.load(ROOT, target, sample, binary)

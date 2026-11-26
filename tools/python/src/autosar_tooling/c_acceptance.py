@@ -332,10 +332,19 @@ def _retained_checker_entities(summary: dict, occurrences: list[dict], rule: str
     """Require the exact project diagnostic positions and their named source entities."""
     expected = Counter()
     programs = {row["name"]: row["translationUnits"] for row in summary["programs"]}
-    dependencies = summary["scope"].get("projectTranslationUnits", {})
+    scope = summary["scope"]
+    dependencies = scope.get("projectTranslationUnits", {})
+    target_only_r82 = (rule == "R8.2" and scope.get("profile") == "ecu"
+                       and set(programs) == {c_retention.TARGET_PROGRAM})
     for entity in entities:
         name, line = entity["file"], entity["line"]
-        for program, columns in entity["diagnostics"].items():
+        diagnostics = entity["diagnostics"]
+        if target_only_r82 and diagnostics.keys() == {"host-batch", "probe"}:
+            # Both approved programs reported the same declaration positions.
+            if diagnostics["host-batch"] != diagnostics["probe"]:
+                return False
+            diagnostics = {c_retention.TARGET_PROGRAM: diagnostics["host-batch"]}
+        for program, columns in diagnostics.items():
             if not any(unit == name or name in dependencies.get(unit, ())
                        for unit in programs.get(program, ())):
                 return False
@@ -495,6 +504,43 @@ def _det_r82_hook_type(summary: dict, project: Path, root: Path, metadata: dict,
             == "f6f0ec3467df710e95ff382bb269eecab45e2cfad47afecfeed0ee51cc086dd8")
 
 
+_ANONYMOUS_ENUM_REPORTS = {
+    "runtime/bsw/include/LSduR.h": (
+        14, "LSduR_StateType", "b2c75141cdd86173b27e18d5ef16dd3988b6411bdde15121b5332bd874b2961f",
+    ),
+    "runtime/bsw/include/PduR.h": (
+        30, "PduR_StateType", "e82cb7e0ac64c8ef2d0fc63cb40efe8c95f31a4acced6c60a0563e9b56e48712",
+    ),
+}
+_R24_RECORD = {
+    "file": "docs/standards/types/language-constructs/lexical.md",
+    "text": "## R2.4 枚举误报与 tag 引用",
+}
+
+
+def _anonymous_enum_report(summary: dict, diagnostic: dict, location: dict, root: Path,
+                           original: str, source: str) -> dict | None:
+    reviewed = _ANONYMOUS_ENUM_REPORTS.get(original)
+    if reviewed is None:
+        return None
+    line, entity, source_digest = reviewed
+    if (int(location["line"]) != line or int(location.get("column") or 0) != 14
+            or diagnostic["locations"] != [location] or diagnostic.get("severity") != "style"
+            or diagnostic.get("message") != "misra violation (use --rule-texts=<file> to get proper output)"
+            or hashlib.sha256(source.encode("utf-8")).hexdigest() != source_digest):
+        return None
+    record_lines = (root / _R24_RECORD["file"]).read_text(encoding="utf-8").splitlines()
+    if _R24_RECORD["text"] not in record_lines:
+        return None
+    name = location["file"]
+    dependencies = summary["scope"].get("projectTranslationUnits", {})
+    consumers = {program["name"] for program in summary["programs"]
+                 if any(name in dependencies.get(unit, ()) for unit in program["translationUnits"])}
+    if not diagnostic["programs"] or not set(diagnostic["programs"]) <= consumers:
+        return None
+    return {"entity": entity, "reason": None, "falsePositive": True, "record": _R24_RECORD}
+
+
 def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
                      headers: set[str] | None = None) -> dict:
     """Join current source positions to the existing bidirectional MR12 records.
@@ -548,7 +594,7 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
         candidate = next(classified)
         name = location["file"]
         if (name.startswith("kernel/")
-                or not set(diagnostic["programs"]) <= {"host-batch", "probe"}):
+                or not set(diagnostic["programs"]) <= c_retention.ANALYSIS_PROGRAMS):
             continue
         if name not in sources:
             original = origins.get(name, name if name in generated_sources else "")
@@ -599,6 +645,10 @@ def _owned_positions(summary: dict, project: Path, metadata: dict, root: Path,
                                        else "mandatory_deviation_forbidden"
                                        if category == "Mandatory"
                                        else "formal_deviation_pending"}
+        elif diagnostic["id"] == "misra-c2012-2.4":
+            ruling = _anonymous_enum_report(summary, diagnostic, location, root, original, source)
+            if ruling is not None:
+                result[index, position] = ruling
         elif (diagnostic["id"] == "misra-c2012-8.2"
               and original == "runtime/bsw/src/Det.c" and (line, column) == (16, 39)
               and diagnostic["locations"] == [location]
@@ -907,7 +957,7 @@ def _sdk_positions(summary: dict, project: Path, metadata: dict, root: Path,
                     raise ValueError(f"SDK integration unrecorded use: {location}:{symbol}")
     result = {}
     for index, position, diagnostic, location in _positions(summary["diagnostics"]):
-        if location is None or not set(diagnostic["programs"]) <= {"host-batch", "probe"}:
+        if location is None or not set(diagnostic["programs"]) <= c_retention.ANALYSIS_PROGRAMS:
             continue
         if not diagnostic["id"].startswith("misra-c2012-"):
             continue
@@ -1048,7 +1098,7 @@ def _freertos_positions(
         line, column = int(location["line"]), int(location.get("column", 0))
         if (not 1 <= line <= len(lines) or column < 0
                 or column > len(lines[line - 1].rstrip("\r\n"))
-                or not set(diagnostic["programs"]) <= {"host-batch", "probe"}):
+                or not set(diagnostic["programs"]) <= c_retention.ANALYSIS_PROGRAMS):
             continue
         candidate = {**diagnostic, "locations": [location],
                      "patched": line in patched.get(name, ()), "adopted": False}
@@ -1099,7 +1149,8 @@ def _freertos_positions(
 
 def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
              matrix_scope: dict | None = None, sdk_revision: str | None = None,
-             fingerprints: list[dict] | None = None, sample: str | None = None) -> dict:
+             fingerprints: list[dict] | None = None, sample: str | None = None,
+             report_disposition_errors: bool = False) -> dict:
     """Assess independent frozen record groups, preserving raw analysis."""
     result = {"format": FORMAT, "status": "blocked", "target": summary.get("scope", {}).get("target"),
               "caseId": None, "inputIdentity": None, "contexts": [], "assessmentInputs": None,
@@ -1148,8 +1199,18 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
         selected = {group: rows[label] if label is not None else next(iter(rows.values()))
                     for group, rows in candidates.items()}
         frozen_checker = selected.get("checker-obligations")
+        disposition_error = None
         if fingerprints is not None:
-            bindings = c_disposition.load(root, result["target"], sample, summary["tool"]["binarySha256"])
+            binary = summary["tool"]["binarySha256"]
+            try:
+                bindings = c_disposition.load(root, result["target"], sample, binary)
+            except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+                if not report_disposition_errors:
+                    raise
+                bindings = {}
+                disposition_error = str(error)
+                add("context", "diagnostic-fingerprints", "disposition_registry_unavailable",
+                    error=disposition_error)
             for context in registered:
                 group = context["records"]["kind"]
                 if group not in DIAGNOSTIC_GROUPS:
@@ -1370,6 +1431,8 @@ def evaluate(summary: dict, project: Path, *, root: Path = ROOT,
             result["analysisSample"] = sample
             c_disposition.apply(summary, result, fingerprints, bindings,
                                 {context["id"]: context for context in registered})
+            if disposition_error is not None:
+                result["fingerprintDispositions"].update(bindingsSha256=None, error=disposition_error)
         result["status"] = "blocked" if result["objects"] else "accepted"
     except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError) as error:
         result["status"] = "error"

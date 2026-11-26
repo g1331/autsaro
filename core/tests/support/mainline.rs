@@ -211,20 +211,20 @@ pub(crate) fn live_pipeline_workspace(
     for source in sources {
         std::fs::write(root.join(source.logical_path()), source.bytes()).unwrap();
     }
-    let manifest = autosar_config_core::arxml::ProjectManifest {
-        format_version: 1,
-        declared_release: "R24-11".into(),
-        profile_hint: "singlecore-ecu-v1".into(),
-        inputs: sources
+    // The analysis baseline runs these current inputs with the first-parent
+    // generator. Use that producer's own manifest version and membership.
+    let direct = autosar_config_core::Workspace::open(
+        sources
             .iter()
-            .map(|source| autosar_config_core::arxml::ProjectInput {
-                path: source.logical_path().into(),
-                role_hint: "standard".into(),
-            })
+            .map(|source| root.join(source.logical_path()))
             .collect(),
-        application_inputs: Vec::new(),
-        accepted_extension_definitions: Vec::new(),
-    };
+    )
+    .unwrap();
+    let mut manifest = direct.generation_snapshot().unwrap().manifest;
+    manifest.profile_hint = "singlecore-ecu-v1".into();
+    for source in &mut manifest.inputs {
+        source.role_hint = "standard".into();
+    }
     let path = root.join("workbench-project.json");
     std::fs::write(&path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
     autosar_config_core::Workspace::open_project_manifest(&path, &root.join("cache")).unwrap()
@@ -726,6 +726,133 @@ pub(crate) fn single_component_sources() -> Vec<InputSource> {
     sources
 }
 
+/// A shared HRH receives standard and extended frames with the same numeric ID,
+/// and the diagnostic response uses the largest extended ID on the same HTH.
+pub(crate) fn mixed_can_sources() -> Vec<InputSource> {
+    let mut sources = single_component_sources();
+    for owner in ["Receive", "Transmit"] {
+        parameter(&mut sources, owner, "CanIdType", "MIXED");
+    }
+    for (owner, prefix, old_id, id, mode, policy) in [
+        (
+            "RxValue",
+            "CanIfRxPdu",
+            "800",
+            "2047",
+            "STANDARD",
+            "STANDARD_CAN",
+        ),
+        (
+            "DiagRequest",
+            "CanIfRxPdu",
+            "1792",
+            "2047",
+            "EXTENDED",
+            "EXTENDED_NO_FD_CAN",
+        ),
+        (
+            "DiagResponse",
+            "CanIfTxPdu",
+            "1800",
+            "536870911",
+            "EXTENDED",
+            "EXTENDED_CAN",
+        ),
+    ] {
+        parameter(&mut sources, owner, &format!("{prefix}CanId"), id);
+        parameter(&mut sources, owner, &format!("{prefix}CanIdType"), policy);
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| named(node, "CAN-FRAME-TRIGGERING", &format!("{owner}Trigger")),
+            |xml| {
+                xml.replace(
+                    &format!("<IDENTIFIER>{old_id}</IDENTIFIER>"),
+                    &format!("<IDENTIFIER>{id}</IDENTIFIER>"),
+                )
+                .replace(
+                    "<CAN-ADDRESSING-MODE>STANDARD</CAN-ADDRESSING-MODE>",
+                    &format!("<CAN-ADDRESSING-MODE>{mode}</CAN-ADDRESSING-MODE>"),
+                )
+            },
+        );
+    }
+    sources
+}
+
+/// A single FD controller with a standard FD receive route and an extended FD
+/// transmit route. The diagnostic transport still uses Classical CAN.
+pub(crate) fn fd_can_sources() -> Vec<InputSource> {
+    let mut sources = single_component_sources();
+    let definition = "/AUTOSAR/EcucDefs/Can/CanConfigSet/CanController/CanControllerBaudrateConfig/CanControllerFdBaudrateConfig";
+    let parameters = [
+        ("FLOAT", "CanControllerFdBaudRate", "2000.5"),
+        ("BOOLEAN", "CanControllerTxBitRateSwitch", "true"),
+        ("INTEGER", "CanControllerPropSeg", "1"),
+        ("INTEGER", "CanControllerSeg1", "5"),
+        ("INTEGER", "CanControllerSeg2", "2"),
+        ("INTEGER", "CanControllerSyncJumpWidth", "1"),
+    ].map(|(kind, name, value)| format!(
+        r#"<ECUC-NUMERICAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-{kind}-PARAM-DEF">{definition}/{name}</DEFINITION-REF><VALUE>{value}</VALUE></ECUC-NUMERICAL-PARAM-VALUE>"#
+    )).join("");
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| named(node, "ECUC-CONTAINER-VALUE", "Baudrate"),
+        |xml| {
+            xml.replace("</PARAMETER-VALUES>", &format!(
+            r#"</PARAMETER-VALUES><SUB-CONTAINERS><ECUC-CONTAINER-VALUE><SHORT-NAME>Fd</SHORT-NAME><DEFINITION-REF DEST="ECUC-PARAM-CONF-CONTAINER-DEF">{definition}</DEFINITION-REF><PARAMETER-VALUES>{parameters}</PARAMETER-VALUES></ECUC-CONTAINER-VALUE></SUB-CONTAINERS>"#
+        ))
+        },
+    );
+    xml_edit(
+        &mut sources,
+        "ecuc.arxml",
+        |node| {
+            named(node, "ECUC-CONTAINER-VALUE", "Transmit")
+                && node.children().any(|child| {
+                    child.text() == Some("/AUTOSAR/EcucDefs/Can/CanConfigSet/CanHardwareObject")
+                })
+        },
+        |xml| {
+            xml.replace("<PARAMETER-VALUES>", r#"<PARAMETER-VALUES><ECUC-NUMERICAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-INTEGER-PARAM-DEF">/AUTOSAR/EcucDefs/Can/CanConfigSet/CanHardwareObject/CanFdPaddingValue</DEFINITION-REF><VALUE>165</VALUE></ECUC-NUMERICAL-PARAM-VALUE>"#)
+        },
+    );
+    parameter(&mut sources, "Transmit", "CanIdType", "MIXED");
+    parameter(
+        &mut sources,
+        "RxValue",
+        "CanIfRxPduCanIdType",
+        "STANDARD_FD_CAN",
+    );
+    parameter(
+        &mut sources,
+        "TxValue",
+        "CanIfTxPduCanIdType",
+        "EXTENDED_FD_CAN",
+    );
+    for owner in ["RxValueTrigger", "TxValueTrigger"] {
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| named(node, "CAN-FRAME-TRIGGERING", owner),
+            |xml| {
+                let updated =
+                    xml.replace("<CAN-FD-FRAME-SUPPORT>false", "<CAN-FD-FRAME-SUPPORT>true");
+                if owner == "TxValueTrigger" {
+                    updated.replace(
+                        "<CAN-ADDRESSING-MODE>STANDARD",
+                        "<CAN-ADDRESSING-MODE>EXTENDED",
+                    )
+                } else {
+                    updated
+                }
+            },
+        );
+    }
+    sources
+}
+
 /// Seals the single-component project with the reference echo application:
 /// the composition fixture's `Ingress` without its removed local `Value` port.
 /// Returns the project directory and its sealed closure.
@@ -952,10 +1079,10 @@ pub(crate) fn verify_production_owner_binary(
     spec.stdin_stream = true;
     let owner = tooling::execution_owner();
     let mut process = owner.spawn(spec, None).unwrap();
-    process.write_stdin(b"BEGIN 0\nRX 800 4 78563412\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 1\nCOMMIT\nBEGIN 10\nRX 1792 8 0322123400000000\nCOMMIT\nBEGIN 10\nCOMMIT\nBEGIN 20\nRX 1792 8 0322123400000000\nCOMMIT\n").unwrap();
+    process.write_stdin(b"PROTOCOL HostBatchV2\nBEGIN 0\nRX 0 STANDARD 0 800 4 78563412\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\nBEGIN 1\nCOMMIT\nBEGIN 10\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\nBEGIN 10\nCOMMIT\nBEGIN 20\nRX 0 STANDARD 0 1792 8 0322123400000000\nCOMMIT\n").unwrap();
     if p2_star.is_some() {
         process
-            .write_stdin(b"BEGIN 30\nRX 1792 8 0210030000000000\nCOMMIT\n")
+            .write_stdin(b"BEGIN 30\nRX 0 STANDARD 0 1792 8 0210030000000000\nCOMMIT\n")
             .unwrap();
     }
     process.close_stdin();
@@ -973,7 +1100,7 @@ pub(crate) fn verify_production_owner_binary(
             (
                 fields["epoch"].parse::<u64>().unwrap(),
                 fields["id"].parse::<u32>().unwrap(),
-                fields["dlc"].parse::<u8>().unwrap(),
+                fields["length"].parse::<u8>().unwrap(),
                 fields["data"].to_string(),
             )
         })
@@ -1117,7 +1244,7 @@ pub(crate) fn forged_handoff(
             let path = package.join("inputs/workbench-project.json");
             let mut manifest: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-            manifest["formatVersion"] = 2.into();
+            manifest["formatVersion"] = 99.into();
             let bytes = serde_json::to_vec_pretty(&manifest).unwrap();
             std::fs::write(&path, &bytes).unwrap();
             let policy_path = package.join("meta/seal-policy.json");

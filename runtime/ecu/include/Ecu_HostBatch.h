@@ -1,5 +1,5 @@
 /** @file
- * @brief HostBatchV1 bounded native staging; no automotive state access.
+ * @brief HostBatchV2 bounded native staging; no automotive state access.
  */
 #ifndef ECU_HOST_BATCH_H
 #define ECU_HOST_BATCH_H
@@ -10,22 +10,24 @@
 #include <stdint.h>
 #include <string.h>
 
+#define ECU_BATCH_PROTOCOL      "HostBatchV2"  /**< Exact protocol handshake token. */
 #define ECU_BATCH_CAPACITY      256u           /**< Maximum staged input frames. */
 #define ECU_BATCH_MAX_SPAN      UINT64_C(1000) /**< Maximum batch time advance, ms. */
-#define ECU_BATCH_LINE_CAPACITY 128u           /**< Maximum command length in bytes. */
+#define ECU_BATCH_LINE_CAPACITY 160u           /**< Maximum command length in bytes. */
 
-/** One copied Classical CAN input staged before automotive admission. */
+/** One copied CAN input staged before automotive admission. */
 typedef struct {
-    uint32_t id;     /**< 11-bit Classical CAN identifier. */
-    uint8_t dlc;     /**< Payload length, 0..8; the ASCII codec accepts 1..8. */
-    uint8_t data[8]; /**< Copied payload; bytes beyond dlc are ignored. */
+    uint32_t id;      /**< Encoded CAN identifier on channel 0. */
+    uint8_t dlc;      /**< Payload length in bytes, 0..64. */
+    uint8_t data[64]; /**< Copied payload; bytes beyond dlc are ignored. */
 } Ecu_BatchFrame;
 
-/** HostBatchV1 command accepted by the bounded ASCII codec. */
+/** HostBatchV2 command accepted by the bounded ASCII codec. */
 typedef enum {
-    ECU_BATCH_BEGIN, /**< Open a batch at an explicit logical epoch. */
-    ECU_BATCH_RX,    /**< Append one copied input frame. */
-    ECU_BATCH_COMMIT /**< Close staging and request whole-batch execution. */
+    ECU_BATCH_NEGOTIATE, /**< Accept the exact protocol version. */
+    ECU_BATCH_BEGIN,     /**< Open a batch at an explicit logical epoch. */
+    ECU_BATCH_RX,        /**< Append one copied input frame. */
+    ECU_BATCH_COMMIT     /**< Close staging and request whole-batch execution. */
 } Ecu_BatchCommand;
 
 /** One native producer owns this staging state. Initialize before use.
@@ -39,6 +41,7 @@ typedef struct {
     uint64_t sequence;                /**< Last reserved input/output/receipt sequence. */
     uint64_t first_input_sequence;    /**< First reserved input sequence; zero for no inputs. */
     uint16_t count;                   /**< Staged frame count, 0..256. */
+    uint8_t negotiated;               /**< Nonzero after protocol negotiation. */
     uint8_t open;                     /**< Nonzero between accepted BEGIN and COMMIT. */
     uint8_t rejected;                 /**< Nonzero rejects the open batch until COMMIT. */
     uint8_t executing;                /**< Nonzero after valid COMMIT until completion/refusal. */

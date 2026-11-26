@@ -16,8 +16,8 @@ use std::time::Duration;
 pub(super) struct ReferenceShape<'a> {
     pub period_ms: u32,
     pub periodic_symbol: &'a str,
-    pub receive_can_id: u32,
-    pub transmit_can_id: u32,
+    pub rx: &'a super::SignalChannel,
+    pub tx: &'a super::SignalChannel,
     pub diagnostic: &'a super::DiagnosticContract,
     pub read: &'a super::component::DataPort,
     pub write: &'a super::component::DataPort,
@@ -65,8 +65,8 @@ pub(super) fn reference_shape(plan: &ValidatedIntegrationPlan) -> Option<Referen
     Some(ReferenceShape {
         period_ms: *period_ms,
         periodic_symbol,
-        receive_can_id: rx.can_id,
-        transmit_can_id: tx.can_id,
+        rx,
+        tx,
         diagnostic,
         read,
         write,
@@ -81,28 +81,39 @@ pub(super) fn verification_files(
     let Some(shape) = reference_shape(plan) else {
         return Ok(BTreeMap::new());
     };
-    inputs_file(
-        shape.period_ms,
-        shape.receive_can_id,
-        shape.transmit_can_id,
-        shape.diagnostic,
-        shape.read.initial_value,
-    )
-}
-
-fn inputs_file(
-    period_ms: u32,
-    receive_can_id: u32,
-    transmit_can_id: u32,
-    diagnostic: &super::DiagnosticContract,
-    initial_receive_value: u32,
-) -> Result<BTreeMap<String, Vec<u8>>, crate::message::LocalizedText> {
+    let description = plan.description();
+    let (Some(communication), Some(transport)) = (
+        &description.communication_runtime,
+        &description.diagnostic_transport,
+    ) else {
+        return Ok(BTreeMap::new());
+    };
+    let endpoint = |direction, handle, id, accepts_fd, length| {
+        json!({
+            "module": "CanIf", "direction": direction, "handle": handle, "channel": 0,
+            "format": if id & super::can_id::EXTENDED != 0 { "EXTENDED" } else { "STANDARD" },
+            "fdPolicy": if id & super::can_id::FD != 0 { "FD" }
+                else if accepts_fd { "CLASSICAL_OR_FD" } else { "CLASSICAL" },
+            "id": id & super::can_id::EXTENDED_MAX, "logicalLength": length, "wireLength": length,
+        })
+    };
     let inputs = json!({
-        "format": "autosar-ecu-test-inputs-v1", "periodMs": period_ms,
-        "receiveCanId": receive_can_id, "transmitCanId": transmit_can_id,
-        "requestCanId": diagnostic.request_can_id, "responseCanId": diagnostic.response_can_id,
-        "did": diagnostic.did, "initialReceiveValue": initial_receive_value,
-        "receiveTimeoutMs": diagnostic.n_cr_ms,
+        "format": "autosar-ecu-test-inputs-v2", "periodMs": shape.period_ms,
+        "canFd": communication.can.data_bitrate.is_some(),
+        "fdTiming": communication.can.data_bitrate.map(|data_bitrate| json!({
+            "nominalBitrate": communication.can.nominal_bitrate,
+            "dataBitrate": data_bitrate,
+            "brs": communication.can.brs,
+        })),
+        "channels": {"0": communication.can.physical_channel},
+        "endpoints": {
+            "receive": endpoint("RX", shape.rx.can_if_handle, shape.rx.encoded_id(), shape.rx.accepts_fd, 4),
+            "transmit": endpoint("TX", shape.tx.can_if_handle, shape.tx.encoded_id(), false, 4),
+            "request": endpoint("RX", transport.request_can_if_handle, transport.encoded_request_id(), false, 8),
+            "response": endpoint("TX", transport.response_can_if_handle, transport.encoded_response_id(), false, 8),
+        },
+        "did": shape.diagnostic.did, "initialReceiveValue": shape.read.initial_value,
+        "receiveTimeoutMs": shape.diagnostic.n_cr_ms,
         "scope": "Actual configured endpoints; independent fixed echo bytes and protocol assertions are in tools/ecu_tools/verify.py. This is test input, not a verification result."
     });
     Ok(BTreeMap::from([(
@@ -158,7 +169,7 @@ fn checked_project(
         .find(|(path, _)| path == super::outputs::INTEGRATION_PATH)
         .map(|(_, bytes)| integration(bytes))
         .transpose()?;
-    if data["format"] != "autosar-ecu-integration-v2"
+    if data["format"] != "autosar-ecu-integration-v3"
         || selected.is_none_or(|selected| data["plan"]["profile"] != selected["plan"]["profile"])
     {
         return Err(crate::product_message!(

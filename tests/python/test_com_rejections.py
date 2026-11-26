@@ -17,7 +17,7 @@ class ComToolTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         logs = Path(temporary.name)
         out, err = logs / "stdout", logs / "stderr"
-        out.write_text("READY HostBatchV1\n")
+        out.write_text("READY HostBatchV2\n")
         err.write_text(stderr)
         result = ProcessResult("test", 1, None, 0 if success else 5, "exited", out, err)
         owner = Mock()
@@ -28,7 +28,7 @@ class ComToolTests(unittest.TestCase):
 
     def test_normal_query_preserves_exact_records_and_stdout(self):
         text, diagnostics = self.invoke("COM_TX_REJECT pdu=19 result=7\nCOM_TX_REJECT_END count=1\n")
-        self.assertEqual(text, "READY HostBatchV1\n")
+        self.assertEqual(text, "READY HostBatchV2\n")
         self.assertEqual(diagnostics, {"records": [{"pdu": 19, "result": 7}], "complete": True})
 
     def test_incomplete_missing_end_and_abnormal_exit_refuse_complete_success(self):

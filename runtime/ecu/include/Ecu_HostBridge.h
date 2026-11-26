@@ -1,5 +1,5 @@
 /** @file
- * @brief HostBatchV1 execution and receipt on the sole native producer.
+ * @brief HostBatchV2 execution and receipt on the sole native producer.
  * The codec (Ecu_HostBatch.h) stages a batch; this bridge admits it, drives
  * the target owner tick by tick and publishes outputs and the final receipt.
  */

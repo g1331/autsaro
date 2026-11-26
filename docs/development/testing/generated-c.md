@@ -18,15 +18,15 @@ uv run --locked python -B -m unittest discover -s tests/python/native -p test_c_
 uv run --locked python -m autosar_tooling c-check --target windows-x64-controlled-v1 --project build/c-analysis-samples/standard-ecu --output-directory build/c-analysis-results/standard-ecu
 ```
 
-Linux 使用 `linux-x64-controlled-v1` 和对应主机 GCC。共享主机需要串行窗口时，任务局部设置 `CARGO_BUILD_JOBS=1`，同时限制 c-check 编译器探针与程序分析并发为 1；不改变 TU、程序、规则或期限。WSL 的结果目录应放在 Linux 文件系统中；未启用 Unix 元数据的 Windows 挂载目录无法满足受管进程日志的私有目录权限要求。生成目录必须不存在，结果目录必须新建或为空，并与封存工程分离。分析在副本上应用原有内核补丁，检查构建清单、主机入口和补充 C 文件，
+Linux 使用 `linux-x64-controlled-v1` 和对应主机 GCC。共享主机需要串行窗口时，任务局部设置 `CARGO_BUILD_JOBS=1`，将 c-check 的编译器探针限制为串行。WSL 的结果目录应放在 Linux 文件系统中；未启用 Unix 元数据的 Windows 挂载目录无法满足受管进程日志的私有目录权限要求。生成目录必须不存在，结果目录必须新建或为空，并与封存工程分离。分析在副本上应用原有内核补丁，并从封存构建清单和补充 C 文件选出扫描输入。
 
 四样本同时选择实际支持的通信类型分支：`standard-ecu`／`user-application` 使用 EcuC 的 `PduIdTypeEnum=UINT16`、`PduLengthTypeEnum=UINT16`；`component-pipeline` 使用 `UINT8`／`UINT32`，保留移动交付包后的导入往返；`no-diagnostic` 使用 `UINT8`／`UINT8`，保留无应用 DID 和诊断路由的配置。`it` 的 `c_analysis::` 固定每个样本的配置预期，`native` 的同名模块用交付 include 路径编译并运行 `ComStack_Types.h` 消费者，按独立数值核对宽度、无符号值域和 `PduInfoType.SduLength`；设置 `AUTOSAR_C_ANALYSIS_SAMPLES` 时复用已生成样本，未设置时在临时目录重新生成。正常 `c-check` 继续扫描这些头经 CanIf／CanTp／PduR／Com／Dcm 等 TU 进入的真实程序；不向交付程序加入测试定义或模板骨架。这覆盖可构建配置的 ID 8／16 位与长度 8／16／32 位分支，不代表所有合法配置组合均已分析。Dcm 配置容量独立于通信长度类型，初始化检查可表示性；CanTp 先解码完整首帧长度再转换。无诊断样本仍编译交付中的 Dcm TU。样本参数改变会改变 plan／分析身份，旧配置的 CI 工件不能作为严格可比较基线。
 
 Cppcheck 使用目标平台模型及项目头文件。按[官方建议](https://cppcheck.sourceforge.io/manual.html)，不直接解析编译器的标准库头文件；GCC 按可用 CPU 数以最多四个并发任务逐个验证真实头文件与 C99 语法，并提取代码引用的系统宏和标准整数常量宏的实际后缀。Windows 的 `setvbuf` 参数模型使用该编译器头文件中的三个实际模式值，非法模式仍会报告。Linux 的 glibc 动态实时信号值由有限分析模型补齐；GCC 在同一 C99 参数下校验函数原型，动态值保留实际函数调用，模型不匹配即失败。其他 Windows／POSIX 接口仍取决于分析器的库模型，未知符号或解析失败保持失败。
 
-ECU 的 HostBatch 与 probe 是两个独立可执行程序，跨翻译单元检查分别运行，两个程序的 Cppcheck 并发执行、互不共享构建目录；共同源码在两个链接范围中均检查。`summary.json` 按程序声明顺序保留各程序清单、命令、退出码和诊断所属程序，原始工件分别位于 `host-batch/` 与 `probe/`。
+每个样本对 HostBatch 与 probe 共用的目标 TU 运行一次 Cppcheck exhaustive CTU 检查，命令、退出码与 TU 清单记为 `target`，工件位于结果根目录。R8.7 等 CTU 规则按该集合的可见引用判断。基准树按同一范围重扫，新增目标诊断照常阻断。
 
-结果含 `summary.json`、每个程序的原始 `diagnostics.xml`、进程日志、`compile_commands.json`、工具身份、逐项 checker 可用性和扫描范围。固定内核的诊断标记为 `adopted`，保留原始诊断；落在生产补丁新增或改动行上的诊断标记为 `patched`，属于本项目代码，不计为采用代码。准备阶段核对每个补丁实际改变了它选中的内核文件。项目规则检查直接动态内存调用，以及普通 BSW 中的直接主机线程创建；宏展开与 typedef 可以检测，间接函数指针等路径尚未覆盖。项目规则不会冒充完整 MISRA 指令。主机仿真层范围外（[ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md)）：Cppcheck 仍扫描并保留这些位置的原始诊断，不回退门对它们只报告、不阻断；`diagnostics[].complianceScope` 逐位置标注；摘要单列位置数及诊断条数。集成头取目标 TU 的 `-MD` 闭包，矩阵取并集；内核位置复用已验证的 hunk 行归属。
+结果含 `summary.json`、原始 `diagnostics.xml`、进程日志和 `compile_commands.json`。固定内核的诊断标记为 `adopted`，保留原始诊断；落在生产补丁新增或改动行上的诊断标记为 `patched`，属于本项目代码，不计为采用代码。准备阶段核对每个补丁实际改变了它选中的内核文件。项目规则检查直接动态内存调用，以及普通 BSW 中的直接主机线程创建；宏展开与 typedef 可以检测，间接函数指针等路径尚未覆盖。项目规则不会冒充完整 MISRA 指令。按 [ADR 0030](../../adr/0030-host-simulation-layer-outside-misra-scope.md)，`integration/`、`os/src/host/` 和 `kernel/portable/` 下的仿真 `.c` 不进入 MISRA 编译数据库。目标 TU 仍解析实际包含的头文件，集成接缝头取目标 TU 的 `-MD` 闭包和矩阵并集。SARIF 跳过范围外的主机位置，原始诊断继续按位置标注。内核位置沿用已验证的 hunk 行归属。主机仿真代码仍运行 `-Wall -Wextra -Werror`、clang-tidy、`test_clang_build.py`、sanitizer 与原生行为测试。
 
 主机锁边界测试使用 `uv run --locked python -B -m unittest discover -s tests/python/native -p test_host_boundaries.py`，通过测试构建替换平台调用，验证锁忙／锁错误及必要终止点，不向交付源码增加故障 hook。同一入口的 `HostIoTests` 链接实际 OS 与平台输出实现，检查有界字段、部分写、零进展、断管和终止报告回退；Linux 另检查 EINTR、既有 pending SIGPIPE 的保留，以及正常／终止路径的信号调用前 `errno` 清零；替换调用在成功后留下非零值，下一调用必须自行清零。HostBatch／probe 的确认顺序、字节输入及读错误由 core 原生 `integration::protocol::` 从生成可执行入口验证。OS 资源获取和栈保证故障注入仅编译到显式测试构建（`OS_HOST_FAILURE_TESTS`）；生产 HostBatch／probe 不读取 `AUTOSAR_OS_FAIL_RESOURCE` 或 `AUTOSAR_OS_BAD_GUARANTEE`。
 
@@ -52,9 +52,11 @@ clang 作为第二编译器检查同一批样本：`uv run --locked python -B -m
 
 CI 工具 prepare 与两树生成独立并行，每侧扫描仅依赖共享工具与本侧生成，Windows 共用分析器。各入口基准均为实际 checkout 第一父提交，PR 检出测试合并提交。双方共用 PR 样本配置、依赖与驱动，源码及生成器来自各自树；生成／扫描失败或不可比均阻断。
 
-`Strict generated source gate` 复用逐程序差集及本次[精确处置](source-acceptance.md)，改写诊断行算新增，Git 改名回接路径。基准可复用同 SHA、完整身份一致的 master 原始结果；缺失／不匹配现场扫描，验收及门每轮重算。`gate.json` 记双侧身份、差集及基线运行／工件来源，八份门回执进入唯一 `CI required`。所需上游跳过／取消／失败、缺重样本均阻断；文档选择见 [CI](README.md#ci)。
+PR 和 `master` 推送的 `c-analysis-gates` 比较双树范围内的原始诊断。改写诊断行算新增，Git 改名回接路径。`gate.json.inScopeNew` 有新增即阻断。指纹及处置保留在[项目验收报告](source-acceptance.md)，手动分析和发版仍严格核对。
 
-项目验收仍报告 accepted／blocked／error；整体 blocked 留作报告，error 阻断。原始退出码、`passed=false` 和 221 项状态保留。工具与编译产物可缓存，原始基准复用另核完整身份。当前树每轮扫描，工件留存 14 天。完整验收门见 [#482](https://github.com/g1331/autsaro/issues/482)。
+基准复用同 SHA、完整身份一致的 master 原件，否则现场扫描。门和验收每轮重算。`gate.json` 记双树身份、差集和基准来源。八份门回执进入 `CI required`，上游跳过、取消、失败或样本漏重均阻断。文档选择见 [CI](README.md#ci)。
+
+验收报告 accepted／blocked／error，执行 error 阻断。原始退出码、`passed=false` 和 221 项状态保留。工具和编译产物可缓存。当前树每轮扫描，工件留存 14 天。完整验收门见 [#482](https://github.com/g1331/autsaro/issues/482)。
 
 正常摘要的`coverage.manualAssessment`仅汇总[既有66项人工记录](../../standards/os/native-facilities/storage-interrupts.md#人工评估的配置与证据范围)，按实际`automaticChecker`与155项分开；`retained`不是满足，未评估项继续计入unclassified。它不评估当前source seal，也不改写221项`assessment=not_assessed`或`completeCompliance=false`。`misra-manual-assessment-v1`绑定解析器原始字节、五篇记录全文原始字节和固定路径选集摘要；analysisCode另含解析器的规范化文本摘要。两层换行身份分别保留，coverage或任一分析身份变化仍明确拒绝旧基线。跨平台换行反例须用原始字节显式建立LF和CRLF两个输入，再断言结论相同、摘要不同；不能假定checkout为LF，或把已为CRLF的输入再写成CRLF当作变化。
 
@@ -79,8 +81,8 @@ uv run --locked python -m autosar_tooling c-check --target linux-x64-controlled-
 
 `--baseline` 指向含 `summary.json` 和 `project/` 的样本目录。完整本地扫描后，入口核对 Cppcheck 版本、源码 revision 与三个 addon 摘要、checker coverage、目标、样本的完整 `target.json` 与生成计划和全部 TU／程序范围，以及基线源清单摘要。`semanticIdentity.version=4` 另核对实际 GCC 目标与数值 release、完整预定义行、include 搜索序列及 CPATH／C_INCLUDE_PATH、有效 builtin／逐 TU 宏定义、平台模型头／库内容、实际显式加载的 Cppcheck std／POSIX 或 Windows cfg、按正常查找顺序隐式加载的 std.cfg、实际 addon runner 及其 cppcheck／cppcheckdata 辅助文件，以及项目分析驱动、addon 和直接构建／进程辅助源码（含 POSIX launch 与 Windows Job）的内容摘要。文本摘要统一换行；预定义与宏定义排序，安装路径、结果目录、并发数及编译器／Cppcheck 二进制载体摘要仅作追溯，不决定等价。相同目标、版本、有效输入和分析代码可跨主机比较；版本字符串单独相同不足以证明等价，改变这些内容需要同配置重新扫描基线。驱动源码使用保守字节身份，注释变化也可能要求新基线。
 
-缺失、旧版本或不完整语义身份明确拒绝，旧工件保持原样；SDK 来源另外按实际 TU 的带行标记预处理、活动宏定义、所选安装包版本及原头摘要保存于现有摘要；`semanticIdentity.sdk` 封存搜索空间库存与打开头的来源输入（见 [SDK 比较身份](sdk-comparison-identity.md)），`analysisCode` 包含 `c_sdk.py`。包外／未知／修改过的头及多义宏明确保留未分类或未解析状态，不能按路径前缀当作 SDK。受支持 CI 的八份结果要求来源完整，Windows 真实等待宏还须保留无 U 的 R7.2 及对应原头证据；这不改写原始分析状态。来源责任和回退见 [SDK 原头来源类别](../../standards/os/sdk.md#sdk-原头来源类别)。正常入口在扫描前捕获身份并在扫描后检查内容未变化。隐式路径按固定版本的实际规则及程序工作目录解析，不能由 CPPCHECK_ADDON_DIR 推定 runner；隐式 cppcheck.cfg 额外引入 addon、suppression 或 safety 覆盖时明确拒绝，纯展示元数据不影响等价。任何身份不同、工件缺失或分析不完整都明确拒绝：在对应基线检出，用相同配置和工具通过正常 c-check 命令本地计算基线。配置本身改变时也需重新确定可比较的同配置基线，不能强行接受不相符的 CI 样本。
+缺失、旧版本或不完整语义身份明确拒绝，旧工件保持原样；SDK 来源另外按实际 TU 的带行标记预处理、活动宏定义、所选安装包版本及原头摘要保存于现有摘要；`semanticIdentity.sdk` 封存搜索空间库存与打开头的来源输入（见 [SDK 比较身份](sdk-comparison-identity.md)），`analysisCode` 包含 `c_sdk.py`。包外／未知／修改过的头及多义宏明确保留未分类或未解析状态，不能按路径前缀当作 SDK。受支持 CI 的八份结果要求来源完整，Windows 目标 TU 中参与分析的等待宏保留 R7.2 及对应原头证据；这不改写原始分析状态。来源责任和回退见 [SDK 原头来源类别](../../standards/os/sdk.md#sdk-原头来源类别)。正常入口在扫描前捕获身份并在扫描后检查内容未变化。隐式路径按固定版本的实际规则及程序工作目录解析，不能由 CPPCHECK_ADDON_DIR 推定 runner；隐式 cppcheck.cfg 额外引入 addon、suppression 或 safety 覆盖时明确拒绝，纯展示元数据不影响等价。任何身份不同、工件缺失或分析不完整都明确拒绝：在对应基线检出，用相同配置和工具通过正常 c-check 命令本地计算基线。配置本身改变时也需重新确定可比较的同配置基线，不能强行接受不相符的 CI 样本。
 
 生成计划的 `runtimeSources` 同时保存交付源码与生成器／模板摘要。由 `originalBswSources` 定位到直接交付的 runtime C／头文件条目，分别核对实际字节、原始封存记录和元数据身份后，允许源码摘要随整改变化；原始到交付路径绑定、成员集合及其他生成计划字段仍须相等。没有直接交付来源的生成器／模板摘要不放宽。当前输入与分析副本、基线各自的 seal 必须匹配各自 summary，不能修改旧摘要或来源映射来追认比较；比较器自身代码身份的变化也照常要求匹配的实际分析。
 
-比较按每个诊断位置的“规则＋相对文件＋源码行文本＋程序名称”计数，先逐程序分别计算新增与移除，再汇总为位置计数。源码移动和程序列表顺序变化不算新增；HostBatch 的移除不能抵消 probe 的新增。完整条目保存在现有 `summary.json` 的 `comparison.new`／`removed`。本地扫描与基线比较各自保留事实：零新增不改变 `passed=false`，现存违规仍返回非零；身份拒绝也返回非零。它不是扫描通过缓存，不减少样本、规则或比较粒度。严格源码门按 [ADR 0026](../../adr/0026-project-source-acceptance-preserves-raw-analysis.md) 分离原始分析与项目验收，分阶段启用见 ADR 0027，不回退门与实际阻断证据由 [#55](https://github.com/g1331/autsaro/issues/55) 承接。
+比较按每个诊断位置的“规则＋相对文件＋源码行文本＋程序名称”计数，先逐程序分别计算新增与移除，再汇总为位置计数。源码移动和程序列表顺序变化不算新增。旧的双程序基线需要用当前驱动重扫。完整条目保存在现有 `summary.json` 的 `comparison.new`／`removed`。本地扫描与基线比较各自保留事实：零新增不改变 `passed=false`，现存违规仍返回非零；身份拒绝也返回非零。它不是扫描通过缓存，不减少样本、规则或比较粒度。严格源码门按 [ADR 0026](../../adr/0026-project-source-acceptance-preserves-raw-analysis.md) 分离原始分析与项目验收，分阶段启用见 ADR 0027，不回退门与实际阻断证据由 [#55](https://github.com/g1331/autsaro/issues/55) 承接。

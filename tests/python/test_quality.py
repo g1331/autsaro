@@ -13,8 +13,135 @@ from unittest.mock import patch
 from autosar_tooling import quality
 
 
+class ContributionTests(unittest.TestCase):
+    def test_branch_prefix_is_case_insensitive_and_checks_token_boundaries(self):
+        for branch in (
+            "t3code/naming", "T3-Code.namer", "CLAUDE-code/refs", "codex", "codex_fix",
+            "cursor-issue", "antigravity.topic", "copilot/task", "gemini-task", "windsurf/task",
+        ):
+            with self.subTest(branch=branch):
+                errors = quality.branch_name_errors(branch)
+                self.assertEqual(len(errors), 1)
+                self.assertIn(repr(branch), errors[0])
+                self.assertIn("git branch -m feat/describe-change", errors[0])
+        for branch in (
+            "feat/enforce-pr-branch-hygiene", "fix/codex-import", "cursorial-motion",
+            "t3codec", "master", "main", "release", "release/1.2",
+        ):
+            with self.subTest(branch=branch):
+                self.assertEqual(quality.branch_name_errors(branch), [])
+
+    def test_body_accepts_plain_reference_paragraphs(self):
+        for body in (
+            "Closes #1",
+            "## Change\n\nRefs #509\n\nImplemented the checks.",
+            "Refs #509\r\nCloses #504  \r\n",
+            "<!-- Explain the change here -->\n\nrEfS\t#509",
+            "```\nCloses #12\n```\n\nRefs #509",
+        ):
+            with self.subTest(body=body):
+                self.assertEqual(quality.pull_request_body_errors(body), [])
+
+    def test_body_rejects_missing_malformed_and_example_references(self):
+        for body in (
+            "", "Fixes #509", "Refs #0", "Refs #-12", "Refs #1a", "Refs #12.5", "Refs #N",
+            "Refs owner/repo#12", "Refs \\#509", "Refs &#35;509",
+            "<!--\nCloses #509\n-->", "Example <!--\nRefs #509\n-->",
+            "````markdown\n```\nCloses #509\n````", "~~~\nRefs #509",
+            "`Closes #509`", "``an example\nRefs #509\n``",
+            "    Refs #509", "> Example\nRefs #509", "- Example\n\n  Refs #509",
+            "# Refs #509", "Refs #509\n---------",
+            "| Directive |\n| --- |\n| Refs #509 |", "[Refs #509](https://example.com)",
+            "Use Refs #509 in the PR description.",
+        ):
+            with self.subTest(body=body):
+                errors = quality.pull_request_body_errors(body)
+                self.assertEqual(len(errors), 1)
+                self.assertIn("PR body is missing an issue reference", errors[0])
+                self.assertIn("Closes #123", errors[0])
+                self.assertIn("Refs #123", errors[0])
+
+    def test_local_branch_and_detached_head_use_real_git_refs(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ):
+            os.environ.pop("GITHUB_EVENT_NAME", None)
+            root = Path(temporary)
+
+            def git(*args):
+                subprocess.run(
+                    ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+                    cwd=root, check=True, capture_output=True,
+                )
+
+            git("init", "--quiet", "-b", "codex/example")
+            git("commit", "--allow-empty", "-m", "test: seed checkout")
+            # An identically named tag must not hide the branch behind Git's short-ref disambiguation.
+            git("tag", "codex/example")
+            with patch.object(quality, "ROOT", root):
+                self.assertIn("codex/example", quality.contribution_errors()[0])
+                for event in ("push", "workflow_dispatch", "release"):
+                    with patch.dict(os.environ, {"GITHUB_EVENT_NAME": event}):
+                        self.assertEqual(quality.contribution_errors(), [])
+                git("switch", "--detach", "HEAD")
+                self.assertEqual(quality.contribution_errors(), [])
+
+    def test_pr_event_uses_source_branch_and_body_instead_of_checkout(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            event = Path(temporary) / "event.json"
+            environment = {"GITHUB_EVENT_NAME": "pull_request", "GITHUB_EVENT_PATH": str(event)}
+            with patch.dict(os.environ, environment), patch.object(quality, "run") as git:
+                for branch, body, expected in (
+                    ("t3code/example", None, ("t3code/example", "PR body is missing")),
+                    ("t3code/example", "Refs #509", ("t3code/example",)),
+                    ("feat/check-pr", "<!-- Refs #509 -->", ("PR body is missing",)),
+                    ("feat/check-pr", "Refs #509", ()),
+                ):
+                    with self.subTest(branch=branch, body=body):
+                        event.write_text(json.dumps({
+                            "pull_request": {
+                                "head": {"ref": branch}, "base": {"ref": "master"}, "body": body,
+                            },
+                        }), encoding="utf-8")
+                        errors = quality.contribution_errors()
+                        self.assertEqual(len(errors), len(expected))
+                        for message, error in zip(expected, errors):
+                            self.assertIn(message, error)
+                event.write_text('{"pull_request": {}}', encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, "Invalid GitHub pull_request event"):
+                    quality.contribution_errors()
+                git.assert_not_called()
+
+    def test_pr_body_edits_trigger_the_same_required_quality_job(self):
+        import yaml
+
+        workflow = yaml.load(
+            (quality.ROOT / ".github/workflows/checks.yml").read_text(), Loader=yaml.BaseLoader,
+        )
+        self.assertIn("edited", workflow["on"]["pull_request"]["types"])
+        self.assertIn("quality", workflow["jobs"]["required"]["needs"])
+        self.assertTrue(any(
+            "autosar_tooling quality --scope all" in step.get("run", "")
+            for step in workflow["jobs"]["quality"]["steps"]
+        ))
+
+    def test_pr_body_edit_checks_current_text_instead_of_previous_reference(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            event = Path(temporary) / "event.json"
+            environment = {"GITHUB_EVENT_NAME": "pull_request", "GITHUB_EVENT_PATH": str(event)}
+            payload = {
+                "action": "edited",
+                "changes": {"body": {"from": "Closes #631"}},
+                "pull_request": {"head": {"ref": "fix/ci-cancelled-required-status"}, "body": ""},
+            }
+            with patch.dict(os.environ, environment):
+                event.write_text(json.dumps(payload), encoding="utf-8")
+                self.assertIn("PR body is missing an issue reference", quality.contribution_errors()[0])
+                payload["pull_request"]["body"] = "Refs #509"
+                event.write_text(json.dumps(payload), encoding="utf-8")
+                self.assertEqual(quality.contribution_errors(), [])
+
+
 class CommitMessageTests(unittest.TestCase):
-    def test_source_quality_propagates_commit_failures(self):
+    def test_source_quality_propagates_contribution_and_commit_failures(self):
         from contextlib import ExitStack
 
         from autosar_tooling import c_standard, documentation
@@ -29,11 +156,14 @@ class CommitMessageTests(unittest.TestCase):
             for name in ('runtime_findings', 'deviation_findings', 'baseline_errors'):
                 stack.enter_context(patch.object(c_standard, name, return_value=set()))
             stack.enter_context(patch.object(documentation, 'check', return_value=[]))
+            stack.enter_context(patch.object(
+                quality, 'contribution_errors', return_value=['PR body is missing an issue reference'],
+            ))
             commits = stack.enter_context(patch.object(
                 quality, 'commit_range_errors', return_value=['commit abc12345: invalid title'],
             ))
             self.assertEqual(quality.check('base', commit_head='topic'), [
-                'commit abc12345: invalid title',
+                'PR body is missing an issue reference', 'commit abc12345: invalid title',
             ])
             commits.assert_called_once_with('base', 'topic')
 

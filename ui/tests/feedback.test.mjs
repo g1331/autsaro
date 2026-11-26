@@ -3,14 +3,14 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { composedMessage, localize, message, previewLanguage, translate } from '../src/i18n';
-import { createBatchEditing, fieldRejection } from '../src/workbench/batchEditing';
-import { createDeliveryActions } from '../src/workbench/deliveryActions';
-import { createSettingsActions } from '../src/workbench/settingsActions';
-import { CopyText, Dialog } from '../src/workbench/Dialog';
-import { SettingsPage } from '../src/pages/SettingsPage';
-import { headline } from '../src/workbench/forms';
-import { workspaceTitle } from '../src/workbench/labels';
-import { initialState } from '../src/workbench/state';
+import { createBatchEditing, fieldRejection } from '../src/features/editing/batchEditing';
+import { createDeliveryActions } from '../src/features/delivery/deliveryActions';
+import { createSettingsActions } from '../src/features/settings/settingsActions';
+import { CopyText, Dialog } from '../src/shared/ui/Dialog';
+import { SettingsPage } from '../src/features/settings/SettingsPage';
+import { headline } from '../src/shared/ui/forms';
+import { workspaceTitle } from '../src/shared/ui/labels';
+import { initialState } from './support/workbench-state.mjs';
 import { withCommands } from './support/commands.mjs';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false, invoke: vi.fn() }));
@@ -640,7 +640,7 @@ test('a direct ARXML import is marked as not saved as a project', () => {
 
 test('the delivery page reports the latest result of generate, build and host verification', async () => {
   previewLanguage('zh-CN');
-  const { IntegrationDelivery } = await import('../src/IntegrationDelivery');
+  const { IntegrationDelivery } = await import('../src/features/delivery/IntegrationDelivery');
   const base = {
     ...initialState(),
     workspace: { name: 'Ecu', dirty: false, files: [], issues: [] },

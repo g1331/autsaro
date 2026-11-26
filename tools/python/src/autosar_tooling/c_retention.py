@@ -15,6 +15,8 @@ PROFILES = {"S": "standard-ecu", "U": "user-application",
             "C": "component-pipeline", "N": "no-diagnostic"}
 COHORT_SHA256 = "f300270c060c15fe7c9d449e1e38a6a7994c02b12280578acc8cd8956e500224"
 TARGETS = {"linux-x64-controlled-v1", "windows-x64-controlled-v1"}
+TARGET_PROGRAM = "target"
+ANALYSIS_PROGRAMS = frozenset({TARGET_PROGRAM, "host-batch", "probe"})
 RECORD_DIRECTORY = "docs/standards/rte/generated-retention"
 COHORT_FIELDS = ("rule", "name", "source", "delivered", "shape", "profiles", "producer")
 
@@ -192,7 +194,7 @@ def analyze(diagnostics: list[dict], project: Path, target: str) -> dict:
             if target not in TARGETS:
                 occurrence["reason"] = "target_outside_record"
                 continue
-            if not programs or not set(programs) <= {"host-batch", "probe"}:
+            if not programs or not set(programs) <= ANALYSIS_PROGRAMS:
                 occurrence["reason"] = "program_outside_record"
                 continue
             if location is None:

@@ -33,8 +33,8 @@ CAN_CODE void Can_InternalSetMode(CanMode mode);
 CAN_CODE CanMode Can_InternalGetMode(void);
 /** @brief Driver implementation: Send a host frame while retaining its generated CanIf PDU handle.
  * @param[in] pdu_id Generated CanIf transmit PDU identifier.
- * @param[in] id Standard CAN identifier.
- * @param[in] dlc Number of valid payload bytes, 0..8.
+ * @param[in] id Encoded CAN identifier.
+ * @param[in] dlc Number of valid payload bytes, 0..64.
  * @param[in] data Nonnull caller-owned payload; copied before return.
  * @return Host transmission status.
  * Preconditions: Initialized started driver, valid identifier/DLC and nonnull data; else refuses.
@@ -45,7 +45,7 @@ CAN_CODE CanMode Can_InternalGetMode(void);
 CAN_CODE EcuStatus Can_InternalTransmitPdu(PduIdType pdu_id,
                                            uint32 id,
                                            uint8 dlc,
-                                           const uint8 data[8]);
+                                           const uint8 *data);
 
 /** @brief Complete the pending host transmission through the configured output callback.
  * @return Host output status, or ECU_OK if no frame is pending.
@@ -98,8 +98,8 @@ CAN_CODE static inline void Can_SetMode(CanMode mode) { Can_InternalSetMode(mode
 CAN_CODE static inline CanMode Can_GetMode(void) { return Can_InternalGetMode(); }
 /** @brief Send a host frame while retaining its generated CanIf PDU handle.
  * @param[in] pdu_id Generated CanIf transmit PDU identifier.
- * @param[in] id Standard CAN identifier.
- * @param[in] dlc Number of valid payload bytes, 0..8.
+ * @param[in] id Encoded CAN identifier.
+ * @param[in] dlc Number of valid payload bytes, 0..64.
  * @param[in] data Nonnull caller-owned payload; copied before return.
  * @return Host transmission status.
  * Preconditions: Initialized started driver, valid identifier/DLC and nonnull data; else refuses.
@@ -110,24 +110,24 @@ CAN_CODE static inline CanMode Can_GetMode(void) { return Can_InternalGetMode();
 CAN_CODE static inline EcuStatus Can_TransmitPdu(PduIdType pdu_id,
                                                  uint32_t id,
                                                  uint8_t dlc,
-                                                 const uint8_t data[8])
+                                                 const uint8_t *data)
 {
     return Can_InternalTransmitPdu(pdu_id, id, dlc, data);
 }
 /** @brief Inject one received frame into the host CAN stack.
- * @param[in] id Standard CAN identifier.
- * @param[in] dlc Number of valid payload bytes, 0..8.
+ * @param[in] id Encoded CAN identifier.
+ * @param[in] dlc Number of valid payload bytes, 0..64.
  * @param[in] data Nonnull caller-owned payload; copied before return.
  * @param[in] now_ms Unused timestamp; does not advance logical time or
  * enter the CanIf receive indication.
  * @return Driver admission status; CanIf filtering and length checks are
  * observed through Det and the upper-layer indication, not this result.
- * Preconditions: Initialized started driver, id 0..0x7ff, DLC 0..8 and nonnull data.
- * Context: Host input control, outside exclusive areas.
- * Reentrancy: Driver serializes admission; a pending/in-flight receive returns ECU_ERR_CAN_BUSY.
- * Ownership: Copies payload before acceptance; upper indication borrows snapshot during callback.
+ * Preconditions: Initialized started driver, encoded CAN ID, legal wire payload length and nonnull
+ * data. Context: Host input control, outside exclusive areas. Reentrancy: Driver serializes
+ * admission; a pending/in-flight receive returns ECU_ERR_CAN_BUSY. Ownership: Copies payload before
+ * acceptance; upper indication borrows snapshot during callback.
  */
-CAN_CODE EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t data[8], uint64_t now_ms);
+CAN_CODE EcuStatus Can_Inject(uint32_t id, uint8_t dlc, const uint8_t *data, uint64_t now_ms);
 
 #define CAN_STOP_SEC_CODE
 #include "Can_MemMap.h"

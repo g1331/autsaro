@@ -1,0 +1,155 @@
+.object-table {
+  table-layout: fixed;
+}
+.object-table .col-select {
+  width: 72px;
+}
+.object-table .col-name {
+  width: 26%;
+}
+.object-table .col-type {
+  width: 24%;
+}
+.object-table .col-access {
+  width: 120px;
+}
+.object-table th,
+.object-table td {
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.object-table .table-link {
+  display: block;
+  max-width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.object-table input[type='checkbox'] {
+  vertical-align: middle;
+}
+.batch-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  margin-top: 14px;
+}
+.batch-bar > span {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+/* The buttons wrap as one group, aligned right. */
+.batch-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.inspector-pane {
+  position: relative;
+  flex: none;
+  width: var(--panel-inspector-width, var(--inspector-width));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+}
+.inspector-scroll {
+  overflow: auto;
+  min-height: 0;
+  padding: 16px;
+}
+.inspector-pane h2 {
+  font-size: 15px;
+}
+.field-help {
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.descriptor-field {
+  margin: 16px 0 20px;
+}
+.descriptor-field > label {
+  overflow-wrap: anywhere;
+}
+.descriptor-field small {
+  display: block;
+}
+.descriptor-field .field-help span {
+  display: block;
+}
+.field-actions {
+  gap: 5px;
+}
+.field-actions button {
+  font-size: 11px;
+  padding: 3px 5px;
+  min-height: 24px;
+}
+.readonly-value {
+  user-select: text;
+  border-bottom: 1px solid var(--line);
+  padding: 8px 0;
+}
+.role-tag,
+.stage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--shell);
+  border-radius: 3px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 20px;
+}
+.object-inspector > .role-tag {
+  margin-bottom: 8px;
+}
+.reference-list > section,
+.catalog-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.property-list {
+  margin: 12px 0;
+}
+.property-list > div {
+  margin: 10px 0;
+}
+.property-list dt {
+  color: var(--secondary);
+  font-size: 12px;
+}
+.property-list dd {
+  margin: 4px 0 0;
+}
+.copy-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.copy-value > span {
+  min-width: 0;
+}
+.form-fields {
+  display: grid;
+  gap: 16px;
+}
+.form-fields label small {
+  color: var(--secondary);
+  font-size: 11px;
+}
+.integration-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}

@@ -98,7 +98,7 @@ static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_PDUR, 41u, 51u, PduR_CanIfTxConfirmation, PduR_CanIfTriggerTransmit}};
 static const LSduR_PBConfigType ls = {29u, ls_rx, 1u, ls_tx, 1u};
-static const CanIf_RxPduConfigType canif_rx[] = {{0x123u, 21u, 4u}};
+static const CanIf_RxPduConfigType canif_rx[] = {{0x123u, 21u, 4u, FALSE}};
 static const CanIf_TxPduConfigType canif_tx[] = {{0x456u, 51u, 4u}};
 static const CanIf_ConfigType canif = {canif_rx,
                                        1u,
@@ -110,7 +110,7 @@ static const CanIf_ConfigType canif = {canif_rx,
                                        7u,
                                        11u,
                                        17u};
-static const Can_ConfigType can = {sink};
+static const Can_ConfigType can = {.sink = sink};
 static const ComM_UserHandleType users[] = {17u, 43u};
 static const ComM_ConfigType comm = {7u,
                                      users,
@@ -124,11 +124,11 @@ static const ComM_ConfigType comm = {7u,
                                      NULL_PTR,
                                      0u};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 9u};
-static const BswM_ConfigType bswm = {7u, action};
+static const BswM_ConfigType bswm = {7u, action, NULL_PTR};
 
 static void reject_bswm_configurations(void)
 {
-    const BswM_ConfigType missing_action = {7u, NULL_PTR};
+    const BswM_ConfigType missing_action = {7u, NULL_PTR, NULL_PTR};
     BswM_Init(NULL_PTR);
     BswM_ComM_CurrentMode(7u, COMM_FULL_COMMUNICATION);
     assert(actions == 0u);

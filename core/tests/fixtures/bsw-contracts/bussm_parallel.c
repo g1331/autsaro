@@ -78,7 +78,7 @@ static void entered_full(uint8 NetworkId)
     assert(NetworkId == 0u);
     note(COMM_FULL_COMMUNICATION);
 }
-static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u}};
+static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u, FALSE}};
 static const CanIf_TxPduConfigType transmits[] = {{0x321u, 51u, 1u}};
 static const CanIf_ConfigType canif = {receives,
                                        1u,
@@ -90,7 +90,7 @@ static const CanIf_ConfigType canif = {receives,
                                        0u,
                                        0u,
                                        0u};
-static const Can_ConfigType can = {sink};
+static const Can_ConfigType can = {.sink = sink};
 static const Ecu_HostBusSM_ConfigType bussm = {0u, 0u};
 static const ComM_UserHandleType users[] = {1u};
 /* The Dcm notifications observe what ComM receives from the provider. */

@@ -149,11 +149,14 @@ class BaselineReuseTests(unittest.TestCase):
             os.environ["GITHUB_RUN_ID"] = "9"
             os.environ["GITHUB_RUN_ATTEMPT"] = "3"
             scan = stack.enter_context(patch.object(c_baseline.c_check, "check"))
-            output = root / "result"
+            output = root / "analysis" / "result"
             self.assertEqual(c_baseline.analyze(
                 "baseline", "linux", "standard-ecu", project, output, fingerprints=True), 1)
             scan.assert_not_called()
             semantic.assert_called_once()
+            probe_project = semantic.call_args.args[1]
+            self.assertEqual(probe_project.parents[2], output.parent)
+            self.assertFalse(probe_project.parent.exists())
             acceptance.assert_called_once()
             result = json.loads((output / "summary.json").read_text())
             self.assertEqual(result["projectAcceptance"]["inputIdentity"], "fresh-current-inputs")

@@ -543,8 +543,28 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
         1,
         Some(1),
     )?;
+    let fd =
+        "Can/CanConfigSet/CanController/CanControllerBaudrateConfig/CanControllerFdBaudrateConfig";
+    a.container(fd, 0, Some(1))?;
+    a.floats(fd, "CanControllerFdBaudRate", Some("16000"), 1)?;
+    a.0.entries_mut()
+        .get_mut(&format!("{ROOT}{fd}/CanControllerFdBaudRate"))
+        .unwrap()
+        .unit = Some("kbit/s".into());
+    a.integers(fd, "CanControllerPropSeg", "0", U8, 1)?;
+    a.integers(
+        fd,
+        "CanControllerSeg1 CanControllerSeg2 CanControllerSyncJumpWidth",
+        "0",
+        U8,
+        1,
+    )?;
+    a.integers(fd, "CanControllerSspOffset", "0", U8, 0)?;
+    a.booleans(fd, "CanControllerTxBitRateSwitch", 1)?;
     let hardware = "Can/CanConfigSet/CanHardwareObject";
     a.container(hardware, 0, None)?;
+    a.integers(hardware, "CanFdPaddingValue", "0", U8, 0)?;
+    a.default(hardware, "CanFdPaddingValue", "0");
     a.integers(hardware, "CanObjectId", "0", U16, 1)?;
     a.integers(hardware, "CanHwObjectCount", "1", U16, 1)?;
     a.enumeration(hardware, "CanHandleType", "BASIC FULL", 1)?;
@@ -1374,6 +1394,10 @@ fn persistence(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText> 
         U8,
         1,
     )?;
+    // CP R24-11 ECUC_Mcu_00186 fixes this value as Published Information.
+    a.0.published_information.insert(format!(
+        "{ROOT}Mcu/McuPublishedInformation/McuResetReasonConf/McuResetReason"
+    ));
 
     let general = "Dem/DemGeneral";
     a.container(general, 1, Some(1))?;

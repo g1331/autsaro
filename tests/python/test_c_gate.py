@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 import test_c_comparison as comparison_tests
 from autosar_tooling import c_gate, c_rename
+from test_ci_selection import expression_value
 
 
 class SourceGateTests(unittest.TestCase):
@@ -421,15 +422,34 @@ class SourceGateTests(unittest.TestCase):
         from autosar_tooling.config import ROOT
 
         workflow = yaml.safe_load((ROOT / ".github/workflows/checks.yml").read_text())
-        steps = workflow["jobs"]["c-analysis-gates"]["steps"]
-        step = next(row for row in steps if row.get("name") == "Strict generated source gate")
+        jobs = workflow["jobs"]
+        steps = jobs["c-analysis-gates"]["steps"]
+        step = next(row for row in steps if "autosar_tooling.c_gate', 'scan'" in row.get("run", ""))
+        aggregate = next(row for row in jobs["c-analysis"]["steps"]
+                         if "autosar_tooling.c_gate aggregate" in row.get("run", ""))
+        self.assertEqual(jobs["c-analysis-gates-windows"]["steps"], steps)
+        for owner in (jobs["c-analysis-gates"], jobs["c-analysis-gates-windows"],
+                      jobs["c-analysis"], step, aggregate):
+            self.assertNotIn("GATE_MODE", owner.get("env", {}))
+        self.assertEqual(shlex.split(aggregate["run"])[-2:], ["--mode", "$GATE_MODE"])
         self.assertNotIn("if", step)
+        cases = (
+            ("pull_request", "refs/pull/662/merge", "", "pr"),
+            ("push", "refs/heads/master", "", "pr"),
+            ("push", "refs/heads/main", "", "strict"),
+            ("workflow_dispatch", "refs/heads/master", "", "strict"),
+            ("push", "refs/heads/master", "release-commit", "strict"),
+        )
         with tempfile.TemporaryDirectory() as temporary:
             script = Path(temporary) / "gate.py"
             script.write_text(step["run"], encoding="utf-8")
-            for mode in ("pr", "strict"):
+            for event, ref, release, expected_mode in cases:
+                mode = expression_value(workflow["env"]["GATE_MODE"], {
+                    "github.event_name": event, "github.ref": ref, "inputs.release-revision": release,
+                })
+                self.assertEqual(mode, expected_mode)
                 for code in (0, 1, 2):
-                    with self.subTest(mode=mode, code=code), patch.dict(os.environ, {
+                    with self.subTest(event=event, ref=ref, release=release, code=code), patch.dict(os.environ, {
                         "ANALYSIS_TARGET": "linux-x64-controlled-v1",
                         "ANALYSIS_SAMPLE": "standard-ecu", "GATE_MODE": mode,
                     }), patch.object(subprocess, "run", return_value=
@@ -470,6 +490,10 @@ class SourceGateTests(unittest.TestCase):
             self.assertNotIn("Generate complete analysis samples",
                              [step.get("name") for step in jobs[prepare]["steps"]])
             self.assertEqual(current["steps"], baseline["steps"])
+            step_ids = [step.get("id") for step in current["steps"]]
+            headers = step_ids.index("linux-uapi-headers")
+            self.assertEqual(current["steps"][headers]["if"], "runner.os == 'Linux'")
+            self.assertLess(headers, step_ids.index("analyze"))
             for job in (current, baseline):
                 groups = job["strategy"]["matrix"]["include"]
                 self.assertCountEqual([row[key] for row in groups for key in ("first", "second")],
@@ -646,6 +670,32 @@ class SourceGateTests(unittest.TestCase):
                     self.assertEqual(environment["CARGO_TARGET_DIR"], str(baseline / "target"))
                     self.assertEqual(environment["AUTOSAR_C_ANALYSIS_SAMPLES"], str(output))
 
+    def test_baseline_staging_keeps_only_the_exact_legacy_bswm_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            current, baseline = root / "current", root / "baseline"
+            names = ("core/resources/templates/standard-ecu/ecuc.arxml",
+                     "core/tests/fixtures/component-pipeline/arxml/ecuc.arxml")
+            old = "".join(f"<VALUE>Ecu_HostBusSM_ApplyMode(0u, {mode})</VALUE>\n"
+                          for mode in ("COMM_NO_COMMUNICATION", "COMM_SILENT_COMMUNICATION",
+                                       "COMM_FULL_COMMUNICATION"))
+            new = old.replace("ApplyMode", "ConfirmMode")
+            for name in names:
+                for side, source in ((current, new), (baseline, old.replace("\n", "\r\n"))):
+                    path = side / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(source.encode())
+            with patch.object(c_gate, "ROOT", current), patch.object(c_gate, "git", return_value="parent"), \
+                    patch.object(c_gate.subprocess, "check_output", return_value="parent"):
+                c_gate.stage(baseline)
+                for name in names:
+                    self.assertEqual((baseline / name).read_bytes(), old.replace("\n", "\r\n").encode())
+                # A configuration change beyond these exact values is not projected onto the parent.
+                (current / names[0]).write_bytes((new + "<EXTRA/>\n").encode())
+                c_gate.stage(baseline)
+                for name in names:
+                    self.assertEqual((baseline / name).read_bytes(), (current / name).read_bytes())
+
     def test_aggregate_refuses_missing_duplicate_changed_or_wrong_run_receipts(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -682,8 +732,10 @@ class SourceGateTests(unittest.TestCase):
             for path in paths:
                 current = c_gate.read(path.with_name("summary.json"))
                 c_gate.c_comparison.annotate_scope(current, set(scope["targetHeaders"]))
+                stale = "a" * 64
                 current["projectAcceptance"].update(
                     scopeMatrix=scope, complianceScope=current["complianceScope"],
+                    fingerprintDispositions={"accepted": [], "stale": [stale]},
                     occurrences=[{"diagnostic": index, "locationIndex": position,
                                   "assessment": "blocked"}
                                  for index, position, _row, _location
@@ -691,13 +743,24 @@ class SourceGateTests(unittest.TestCase):
                 path.with_name("summary.json").write_text(json.dumps(current))
                 data = c_gate.read(path)
                 data["baselineScopeMatrix"] = scope
+                data["inScopeNew"] = []
+                inventories = {
+                    side: [{"diagnostic": index, "locationIndex": 0, "program": "target",
+                            "fingerprint": hashlib.sha256(f"{side}/{index}".encode()).hexdigest()}
+                           for index in range(len(current["diagnostics"]))]
+                    for side in ("current", "baseline")
+                }
+                data["diagnosticFingerprints"] = c_gate.fingerprint_comparison(
+                    {"current": current, "baseline": c_gate.read(path.with_name("baseline-summary.json"))},
+                    inventories, {"current": scope, "baseline": scope}, mode="pr")
+                self.assertEqual(data["diagnosticFingerprints"]["status"], "blocked")
                 data["summarySha256"]["current"] = c_gate.sha(path.with_name("summary.json"))
                 path.write_text(json.dumps(data))
             shutil.rmtree(root / "fixture")
             def revision(*args):
                 return "head" if args[-1] == "HEAD" else "parent"
             with patch.object(c_gate, "git", side_effect=revision):
-                c_gate.aggregate(root)
+                c_gate.aggregate(root, mode="pr")
                 path = next(root.glob("*/*/gate.json"))
                 original = path.read_bytes()
                 summary_bytes = path.with_name("summary.json").read_bytes()
@@ -728,7 +791,7 @@ class SourceGateTests(unittest.TestCase):
                             data[key] = "wrong" if change != "identity" else {"current": "missing"}
                             path.write_text(json.dumps(data))
                         with self.assertRaises((ValueError, KeyError)):
-                            c_gate.aggregate(root)
+                            c_gate.aggregate(root, mode="pr")
                         path.write_bytes(original)
                         if change == "duplicate":
                             shutil.rmtree(root / "extra")

@@ -27,6 +27,22 @@ def _read(path: Path) -> dict:
 MATRIX_TARGETS = ("linux-x64-controlled-v1", "windows-x64-controlled-v1")
 MATRIX_SAMPLES = ("standard-ecu", "user-application", "component-pipeline", "no-diagnostic")
 SEMANTIC_VERSION = 4
+BSWM_MODES = ("COMM_NO_COMMUNICATION", "COMM_SILENT_COMMUNICATION", "COMM_FULL_COMMUNICATION")
+BSWM_CALLOUT_PARAMETER = (
+    "/AUTOSAR/EcucDefs/BswM/BswMConfig/BswMModeControl/BswMAction/"
+    "BswMAvailableActions/BswMUserCallout/BswMUserCalloutFunction"
+)
+
+
+def upgraded_bswm_callouts(source: bytes, handle: int) -> bytes | None:
+    """Recognize only one complete set of the three legacy callout values."""
+    for mode in BSWM_MODES:
+        old = f"<VALUE>Ecu_HostBusSM_ApplyMode({handle}u, {mode})</VALUE>".encode()
+        new = f"<VALUE>Ecu_HostBusSM_ConfirmMode({handle}u, {mode})</VALUE>".encode()
+        if source.count(old) != 1 or new in source:
+            return None
+        source = source.replace(old, new)
+    return source
 
 
 def raw_identity(summary: dict) -> str:
@@ -92,8 +108,11 @@ def annotate_scope(summary: dict, headers: set[str] | None = None) -> None:
 
 def platform_location(name: str) -> bool:
     """ADR 0030 rule 1: platform selection owns the complete directory."""
-    return name.startswith(("os/src/host/", "kernel/portable/MSVC-MingW/",
-                            "kernel/portable/ThirdParty/GCC/Posix/"))
+    return name.startswith(("os/src/host/", "kernel/portable/"))
+
+
+def target_unit(name: str) -> bool:
+    return not platform_location(name) and not name.startswith("integration/")
 
 
 def target_headers(scopes: list[dict]) -> set[str]:
@@ -102,7 +121,7 @@ def target_headers(scopes: list[dict]) -> set[str]:
     for scope in scopes:
         dependencies = scope.get("projectTranslationUnits", {})
         for unit in scope["translationUnits"]:
-            if platform_location(unit) or unit.startswith("integration/"):
+            if not target_unit(unit):
                 continue
             headers.update(dependencies.get(unit, []))
     return headers
@@ -117,8 +136,7 @@ def location_scope(scope: dict, location: dict, *, headers: set[str] | None = No
         if name.endswith(".c"):
             return "host-integration"
         dependencies = scope.get("projectTranslationUnits")
-        units = [unit for unit in scope["translationUnits"]
-                 if not platform_location(unit) and not unit.startswith("integration/")]
+        units = [unit for unit in scope["translationUnits"] if target_unit(unit)]
         if not isinstance(dependencies, dict) or any(unit not in dependencies for unit in units):
             raise ValueError("MISRA scope requires complete GCC project dependency receipts")
         if name not in (target_headers([scope]) if headers is None else headers):
@@ -292,7 +310,7 @@ def _configuration(root: Path, *, source_tree: bool = False) -> dict:
     metadata = _read(root / "meta/integration.json")
     plan = dict(metadata["plan"])
     if "runtimeSources" not in plan:
-        if metadata.get("format") == "autosar-ecu-integration-v2":
+        if metadata.get("format") in {"autosar-ecu-integration-v2", "autosar-ecu-integration-v3"}:
             raise ValueError("Runtime source provenance missing")
         return plan
     sources, origins = plan["runtimeSources"], metadata.get("originalBswSources")
@@ -334,6 +352,121 @@ def _configuration(root: Path, *, source_tree: bool = False) -> dict:
                                               if key not in {"rules.sha256", "definitions.sha256"}}
     plan["runtimeSources"] = selected
     return plan
+
+
+def _r11_baseline_plan(plan: dict) -> dict:
+    """Project V2's single-channel standard Classical selection into V3."""
+    if plan["formatVersion"] != 2:
+        raise ValueError("R11 baseline plan version differs")
+    signals = plan["signals"]
+    channels = {signal["trigger"].rsplit("/", 1)[0] for signal in signals}
+    if len(channels) != 1:
+        raise ValueError("R11 baseline physical channel is ambiguous")
+    runtime = plan["communicationRuntime"]
+    can = {**runtime["can"], "physicalChannel": channels.pop(),
+           "receiveIdType": "STANDARD", "transmitIdType": "STANDARD"}
+    result = {**plan, "formatVersion": 3, "communicationRuntime": {**runtime, "can": can},
+              "signals": [{**signal, "extended": False, "acceptsFd": False} for signal in signals]}
+    composition = plan["composition"]
+    result["composition"] = {**composition, "networkEndpoints": [
+        {**endpoint, "transport": {**endpoint["transport"], "extended": False, "acceptsFd": False}}
+        for endpoint in composition["networkEndpoints"]
+    ]}
+    for name in ("diagnostic", "diagnosticTransport"):
+        if plan.get(name) is not None:
+            result[name] = {**plan[name], "requestExtended": False,
+                            "responseExtended": False, "requestAcceptsFd": False}
+    return result
+
+
+def _bswm_baseline_plan(previous: dict, current: dict) -> dict:
+    """Compare only the exact three-callout transition in the source gate."""
+    old = previous.get("modeRuntime")
+    new = current.get("modeRuntime")
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return previous
+    handle = old.get("channelHandle")
+    rules = old.get("rules")
+    if (type(handle) is not int or not 0 <= handle <= 255 or not isinstance(rules, list)
+            or len(rules) != len(BSWM_MODES)):
+        return previous
+    updated = []
+    replacements = {}
+    for index, (rule, mode) in enumerate(zip(rules, BSWM_MODES, strict=True)):
+        args = f"({handle}u, {mode})"
+        if (not isinstance(rule, dict) or type(rule.get("mode")) is not int
+                or rule["mode"] != index or rule.get("callout") != "Ecu_HostBusSM_ApplyMode" + args):
+            return previous
+        replacement = "Ecu_HostBusSM_ConfirmMode" + args
+        replacements[rule["callout"]] = replacement
+        updated.append({**rule, "callout": replacement})
+    upgraded = {**old, "rules": updated}
+    if upgraded != new:
+        return previous
+    configuration = []
+    for entry in previous["configuration"]:
+        parameters = entry.get("parameters", {})
+        values = parameters.get(BSWM_CALLOUT_PARAMETER)
+        if values is not None:
+            if len(values) != 1 or values[0] not in replacements:
+                return previous
+            parameters = {**parameters, BSWM_CALLOUT_PARAMETER: [replacements.pop(values[0])]}
+            entry = {**entry, "parameters": parameters}
+        configuration.append(entry)
+    if replacements or configuration != current["configuration"]:
+        return previous
+    return {**previous, "modeRuntime": upgraded, "configuration": configuration}
+
+
+def _bswm_input_digests(old_root: Path, project: Path, handle: int) -> tuple[str, str]:
+    relative = "inputs/ecuc.arxml"
+    contents = []
+    hashes = []
+    for root in (old_root, project):
+        path = root / relative
+        refuse_links(path, root)
+        source = path.read_bytes()
+        fingerprint = hashlib.sha256(source).hexdigest()
+        records = (root / FILE_HASHES).read_text(encoding="utf-8").splitlines()
+        if records.count(f"{fingerprint}  {relative}") != 1:
+            raise ValueError("BswM callout transition input is not sealed")
+        contents.append(source)
+        hashes.append(fingerprint)
+    if upgraded_bswm_callouts(contents[0], handle) != contents[1]:
+        raise ValueError("Sample generation configuration differs outside the BswM callouts")
+    return hashes[0], hashes[1]
+
+
+def _translated_ecuc_digest(rows: list[dict], name: str, digests: tuple[str, str]) -> list[dict]:
+    matches = [row for row in rows if row.get("logicalPath") == "ecuc.arxml"]
+    if (len(matches) != 1 or matches[0].get(name) != digests[0]
+            or (name == "sha256" and matches[0].get("packagePath") != "inputs/ecuc.arxml")):
+        raise ValueError("BswM callout transition input identity differs")
+    return [{**row, name: digests[1]} if row is matches[0] else row for row in rows]
+
+
+def _can_fd_baseline_plan(plan: dict) -> dict:
+    """Project the previous Classical-only configuration into the FD-capable plan."""
+    runtime = plan["communicationRuntime"]
+    can = runtime["can"]
+    records = {record["path"]: record for record in plan["configuration"]}
+    controller = records[can["controller"]]
+    default_rate, = controller["references"][controller["definition"] + "/CanControllerDefaultBaudrate"]
+    baud = records[default_rate]
+    nominal, = baud["parameters"][baud["definition"] + "/CanControllerBaudRate"]
+    bitrate = int(float(nominal)) * 1000
+    composition = plan["composition"]
+    return {
+        **plan,
+        "communicationRuntime": {**runtime, "can": {
+            **can, "nominalBitrate": bitrate, "dataBitrate": None, "brs": False, "fdPadding": 0,
+        }},
+        "signals": [{**signal, "fd": False} for signal in plan["signals"]],
+        "composition": {**composition, "networkEndpoints": [
+            {**endpoint, "transport": {**endpoint["transport"], "fd": False}}
+            for endpoint in composition["networkEndpoints"]
+        ]},
+    }
 
 
 def compare(
@@ -401,8 +534,39 @@ def compare(
                     require_kernel_identity(path / "kernel", value["kernelSha256"])
                     value["kernelSha256"] = sorted(value["kernelSha256"])
             return value
-        if normalized(target_configuration(project, current["scope"])) != normalized(
-                mapped(target_configuration(old_root, previous["scope"]))):
+        current_target = target_configuration(project, current["scope"])
+        previous_target = mapped(target_configuration(old_root, previous["scope"]))
+        plan = _configuration(project, source_tree=source_tree)
+        previous_plan = mapped(_configuration(old_root, source_tree=source_tree))
+        if source_tree and plan.get("modeRuntime") != previous_plan.get("modeRuntime"):
+            upgraded = _bswm_baseline_plan(previous_plan, plan)
+            if upgraded is not previous_plan:
+                digests = _bswm_input_digests(old_root, project, upgraded["modeRuntime"]["channelHandle"])
+                previous_plan = {**upgraded, "sources":
+                                 _translated_ecuc_digest(upgraded["sources"], "rawSha256", digests)}
+                delivery = previous_target.get("nativeDelivery")
+                if delivery is not None:
+                    previous_target["nativeDelivery"] = {**delivery, "inputSnapshots":
+                        _translated_ecuc_digest(delivery["inputSnapshots"], "sha256", digests)}
+        r11_transition = source_tree and (previous_target.get("format"), current_target.get("format")) == (
+            "autosar-build-target-v3", "autosar-build-target-v4",
+        )
+        if r11_transition:
+            # Match the target across the protocol migration after checking each source seal.
+            previous_target.update(format="autosar-build-target-v4", hostBatchProtocol="HostBatchV2")
+        can_fd_transition = (source_tree and current_target.get("canFrameProfile") == "classical-and-fd"
+                             and "canFrameProfile" not in previous_target)
+        if can_fd_transition:
+            previous_target["canFrameProfile"] = "classical-and-fd"
+        if source_tree:
+            match current_target.get("nativeDelivery"), previous_target.get("nativeDelivery"):
+                case {"format": "autosar-workbench-handoff-v5" as version}, (
+                    {"format": "autosar-workbench-handoff-v4"} as previous_delivery
+                ):
+                    # v5 can carry inactive applications. The rest of the handoff
+                    # still has to match, including its input snapshots and slots.
+                    previous_delivery["format"] = version
+        if normalized(current_target) != normalized(previous_target):
             raise ValueError("Target/sample configuration differs")
         scope_fields = ("target", "profile", "entries", "compilerFlags", "includePaths",
                         "translationUnits", "supplemental")
@@ -415,8 +579,10 @@ def compare(
         for root in (project, old_root):
             if not (root / "meta/integration.json").is_file():
                 raise ValueError("Sample generation identity unavailable")
-        plan = _configuration(project, source_tree=source_tree)
-        previous_plan = mapped(_configuration(old_root, source_tree=source_tree))
+        if r11_transition:
+            previous_plan = _r11_baseline_plan(previous_plan)
+        if can_fd_transition:
+            previous_plan = _can_fd_baseline_plan(previous_plan)
         output_plan = _configuration(output / "project", source_tree=source_tree)
         if (normalized(plan) != normalized(previous_plan)
                 or normalized(plan) != normalized(output_plan)):

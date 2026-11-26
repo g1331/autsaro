@@ -80,6 +80,33 @@ class CComparisonTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "configuration differs"):
                 compare(summary, project, output, baseline, source_tree=True)
 
+    def test_source_tree_compares_v4_and_v5_handoffs_with_the_same_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.fixture(Path(temporary))
+
+            def write_target(root, version, snapshots):
+                path = root / "target.json"
+                target = json.loads(path.read_bytes())
+                target["nativeDelivery"] = {
+                    "format": f"autosar-workbench-handoff-v{version}",
+                    "inputSnapshots": snapshots,
+                }
+                path.write_text(json.dumps(target))
+
+            inputs = [{"kind": "arxml", "logicalPath": "config.arxml"}]
+            write_target(baseline / "project", 4, inputs)
+            write_target(project, 5, inputs)
+            self.assertFalse(compare(current, project, output, baseline, source_tree=True)["new"])
+            with self.assertRaisesRegex(ValueError, "Target/sample configuration differs"):
+                compare(current, project, output, baseline)
+
+            changed_inputs = [*inputs, {"kind": "inactive-application", "logicalPath": "user.c"}]
+            for version, snapshots in ((5, changed_inputs), (6, inputs)):
+                with self.subTest(version=version, snapshots=snapshots):
+                    write_target(project, version, snapshots)
+                    with self.assertRaisesRegex(ValueError, "Target/sample configuration differs"):
+                        compare(current, project, output, baseline, source_tree=True)
+
     def test_source_tree_checks_each_patched_kernel_before_comparing_its_file_set(self):
         with tempfile.TemporaryDirectory() as temporary:
             current, project, output, baseline = self.fixture(Path(temporary))
@@ -213,7 +240,7 @@ class CComparisonTests(unittest.TestCase):
         current, project, output, baseline = self.fixture(root)
         for path in (project, output / "project", baseline / "project"):
             self.seal(path, {
-                "format": "autosar-ecu-integration-v2",
+                "format": "autosar-ecu-integration-v3",
                 "originalBswSources": {"runtime/bsw/src/Example.c": "main.c"},
                 "plan": {"configuration": "same", "runtimeSources": {
                     "runtime/bsw/src/Example.c": digest(path / "main.c"),
@@ -223,6 +250,163 @@ class CComparisonTests(unittest.TestCase):
         current["sourceSealSha256"] = digest(project / "meta/files.sha256")
         self.write(baseline, current)
         return current, project, output, baseline
+
+    def test_r11_analysis_projects_compare_only_the_same_can_selection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.runtime_fixture(Path(temporary))
+            old_root = baseline / "project"
+            old_path = old_root / "meta/integration.json"
+            metadata = json.loads(old_path.read_text())
+            metadata["format"] = "autosar-ecu-integration-v2"
+            metadata["plan"].update(
+                formatVersion=2, communicationRuntime={"can": {}},
+                signals=[{"trigger": "/Network/Channel/Signal", "canId": 801}],
+            )
+            metadata["plan"]["composition"] = {"networkEndpoints": [
+                {"transport": metadata["plan"]["signals"][0].copy()},
+            ]}
+            old_target = json.loads((old_root / "target.json").read_text())
+            old_target.update(format="autosar-build-target-v3",
+                              nativeDelivery={"format": "autosar-workbench-handoff-v4"})
+            (old_root / "target.json").write_text(json.dumps(old_target))
+            self.seal(old_root, metadata)
+            previous = deepcopy(current)
+            previous["sourceSealSha256"] = digest(old_root / "meta/files.sha256")
+            self.write(baseline, previous)
+
+            metadata["format"] = "autosar-ecu-integration-v3"
+            metadata["plan"].update(
+                formatVersion=3, communicationRuntime={"can": {
+                    "physicalChannel": "/Network/Channel",
+                    "receiveIdType": "STANDARD", "transmitIdType": "STANDARD",
+                }},
+                signals=[{"trigger": "/Network/Channel/Signal", "canId": 801,
+                          "extended": False, "acceptsFd": False}],
+            )
+            transport = metadata["plan"]["composition"]["networkEndpoints"][0]["transport"]
+            transport.update(extended=False, acceptsFd=False)
+            for root in (project, output / "project"):
+                target = {**old_target, "format": "autosar-build-target-v4",
+                          "nativeDelivery": {"format": "autosar-workbench-handoff-v5"},
+                          "hostBatchProtocol": "HostBatchV2"}
+                (root / "target.json").write_text(json.dumps(target))
+                self.seal(root, metadata)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            self.assertFalse(compare(current, project, output, baseline, source_tree=True)["new"])
+
+            # The layered-workspace baseline already uses handoff v5 before HostBatchV2.
+            old_target["nativeDelivery"]["format"] = "autosar-workbench-handoff-v5"
+            (old_root / "target.json").write_text(json.dumps(old_target))
+            self.seal(old_root, json.loads(old_path.read_text()))
+            previous["sourceSealSha256"] = digest(old_root / "meta/files.sha256")
+            self.write(baseline, previous)
+            self.assertFalse(compare(current, project, output, baseline, source_tree=True)["new"])
+
+            for record in (metadata["plan"]["signals"][0], transport):
+                with self.subTest(record=record):
+                    record["extended"] = True
+                    for root in (project, output / "project"):
+                        self.seal(root, metadata)
+                    current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+                    with self.assertRaisesRegex(ValueError, "Sample generation configuration differs"):
+                        compare(current, project, output, baseline, source_tree=True)
+                    record["extended"] = False
+
+    def test_source_gate_compares_only_the_exact_bswm_callout_transition(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.runtime_fixture(Path(temporary))
+            before = baseline / "project"
+            metadata = json.loads((before / "meta/integration.json").read_text())
+            mode_runtime = {
+                "channelHandle": 7,
+                "rules": [{"mode": index, "callout": f"Ecu_HostBusSM_ApplyMode(7u, {mode})"}
+                          for index, mode in enumerate(
+                              ("COMM_NO_COMMUNICATION", "COMM_SILENT_COMMUNICATION",
+                               "COMM_FULL_COMMUNICATION"))],
+            }
+            metadata["plan"]["modeRuntime"] = mode_runtime
+            old_source = "".join(f"<VALUE>{rule['callout']}</VALUE>\n"
+                                 for rule in mode_runtime["rules"])
+            def configure(root, source):
+                path = root / "inputs/ecuc.arxml"
+                path.parent.mkdir(exist_ok=True)
+                path.write_bytes(source.encode())
+                metadata["plan"]["sources"] = [{"logicalPath": "ecuc.arxml", "rawSha256": digest(path)}]
+                metadata["plan"]["configuration"] = [
+                    {"parameters": {c_comparison.BSWM_CALLOUT_PARAMETER: [rule["callout"]]}}
+                    for rule in mode_runtime["rules"]
+                ]
+                target_path = root / "target.json"
+                target = json.loads(target_path.read_text())
+                target["nativeDelivery"] = {"inputSnapshots": [
+                    {"logicalPath": "ecuc.arxml", "packagePath": "inputs/ecuc.arxml", "sha256": digest(path)},
+                ]}
+                target_path.write_text(json.dumps(target))
+                self.seal(root, metadata)
+            configure(before, old_source)
+            previous = deepcopy(current)
+            previous["sourceSealSha256"] = digest(before / "meta/files.sha256")
+            self.write(baseline, previous)
+            for rule in mode_runtime["rules"]:
+                rule["callout"] = rule["callout"].replace("ApplyMode", "ConfirmMode")
+            new_source = old_source.replace("ApplyMode", "ConfirmMode")
+            for root in (project, output / "project"):
+                configure(root, new_source)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            self.assertFalse(compare(current, project, output, baseline, source_tree=True)["new"])
+            with self.assertRaisesRegex(ValueError, "Target/sample configuration differs"):
+                compare(current, project, output, baseline)
+            for root in (project, output / "project"):
+                configure(root, new_source + "<EXTRA/>\n")
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            with self.assertRaisesRegex(ValueError, "differs outside the BswM callouts"):
+                compare(current, project, output, baseline, source_tree=True)
+            mode_runtime["rules"][1]["callout"] = "Ecu_HostBusSM_ConfirmMode(7u, COMM_FULL_COMMUNICATION)"
+            for root in (project, output / "project"):
+                configure(root, new_source)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            with self.assertRaisesRegex(ValueError, "configuration differs"):
+                compare(current, project, output, baseline, source_tree=True)
+
+    def test_classical_baseline_compares_with_fd_capable_tools(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            current, project, output, baseline = self.runtime_fixture(Path(temporary))
+            old_root = baseline / "project"
+            metadata = json.loads((old_root / "meta/integration.json").read_text())
+            metadata["plan"].update(
+                communicationRuntime={"can": {"controller": "/Can/Controller"}},
+                signals=[{"canId": 801, "acceptsFd": True}],
+                composition={"networkEndpoints": [{"transport": {"canId": 801, "acceptsFd": True}}]},
+                configuration=[
+                    {"path": "/Can/Controller", "definition": "/Defs/Controller",
+                     "references": {"/Defs/Controller/CanControllerDefaultBaudrate": ["/Can/Controller/Rate"]}},
+                    {"path": "/Can/Controller/Rate", "definition": "/Defs/Rate",
+                     "parameters": {"/Defs/Rate/CanControllerBaudRate": ["500"]}},
+                ],
+            )
+            self.seal(old_root, metadata)
+            previous = deepcopy(current)
+            previous["sourceSealSha256"] = digest(old_root / "meta/files.sha256")
+            self.write(baseline, previous)
+            metadata["plan"]["communicationRuntime"]["can"].update(
+                nominalBitrate=500_000, dataBitrate=None, brs=False, fdPadding=0,
+            )
+            metadata["plan"]["signals"][0]["fd"] = False
+            metadata["plan"]["composition"]["networkEndpoints"][0]["transport"]["fd"] = False
+            for root in (project, output / "project"):
+                target = root / "target.json"
+                target.write_text(json.dumps({**json.loads(target.read_text()),
+                                              "canFrameProfile": "classical-and-fd"}))
+                self.seal(root, metadata)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            self.assertFalse(compare(current, project, output, baseline, source_tree=True)["new"])
+
+            metadata["plan"]["communicationRuntime"]["can"]["dataBitrate"] = 2_000_000
+            for root in (project, output / "project"):
+                self.seal(root, metadata)
+            current["sourceSealSha256"] = digest(project / "meta/files.sha256")
+            with self.assertRaisesRegex(ValueError, "Sample generation configuration differs"):
+                compare(current, project, output, baseline, source_tree=True)
 
     def test_sealed_runtime_source_changes_reach_diagnostic_comparison(self):
         with tempfile.TemporaryDirectory() as temporary:

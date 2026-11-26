@@ -1,0 +1,48 @@
+.inspector-block {
+  margin: 16px 0;
+}
+.reference-list,
+.pending-change {
+  font-size: 12px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  button {
+    transition:
+      color 140ms ease-out,
+      background-color 140ms ease-out;
+  }
+}
+@keyframes busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-reduced-motion='true']) .busy-indicator,
+  :root:not([data-reduced-motion='true']) .stage.running .stage-pill svg {
+    animation: busy-spin 0.9s linear infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+}
+:root[data-reduced-motion='true'] button {
+  transition: none;
+}
+@media (max-width: 1250px) {
+  :root {
+    --tree-width: 220px;
+    --inspector-width: 260px;
+  }
+  .document-page,
+  .source-document,
+  .workflow-page {
+    padding: 16px;
+  }
+  th,
+  td {
+    padding: 9px 8px;
+  }
+}

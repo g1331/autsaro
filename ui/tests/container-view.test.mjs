@@ -3,17 +3,17 @@ import { createElement } from 'react';
 import { cleanup, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { localize, message, previewLanguage, translate } from '../src/i18n';
-import { createBatchEditing } from '../src/workbench/batchEditing';
+import { createBatchEditing } from '../src/features/editing/batchEditing';
 import {
   ConfigurationDocument,
   ContainerView,
   alternateBase,
   outsideRange,
-} from '../src/workbench/ContainerView';
-import { ObjectInspector } from '../src/workbench/ObjectEditor';
-import { ProjectTree } from '../src/workbench/ProjectTree';
-import { fieldState } from '../src/workbench/projectGroups';
-import { initialState } from '../src/workbench/state';
+} from '../src/features/editing/ContainerView';
+import { ObjectInspector } from '../src/features/editing/ObjectEditor';
+import { ProjectTree } from '../src/features/project/ProjectTree';
+import { fieldState } from '../src/features/project/projectGroups';
+import { initialState } from './support/workbench-state.mjs';
 import { withCommands } from './support/commands.mjs';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false, invoke: vi.fn() }));

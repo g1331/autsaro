@@ -238,7 +238,7 @@ export async function createPipelineInputs(scratch) {
     manifest,
     JSON.stringify(
       {
-        formatVersion: 1,
+        formatVersion: 2,
         declaredRelease: 'R24-11',
         profileHint: 'singlecore-ecu-v1',
         inputs: names.map((name) => ({ path: name, roleHint: 'standard' })),

@@ -1,5 +1,6 @@
-/** @file Host batch ECU executable speaking HostBatchV1 over standard streams. */
+/** @file Host batch ECU executable speaking HostBatchV2 over standard streams. */
 #include "Ecu_HostBridge.h"
+#include "Can_GeneralTypes.h"
 #include "Ecu_ComRejection.h"
 #include "Os_Host.h"
 #include "Os_HostIo.h"
@@ -58,7 +59,8 @@ static int write_output(const Ecu_OutputRecord *output,
     (void)context;
     if (output == NULL) {
         receipt(&text, state, status);
-    } else if ((output->dlc > sizeof(output->data)) || (output->can_id > 0x7ffu)) {
+    } else if ((!Can_IsWireLength(output->can_id, output->dlc)) ||
+               (!Can_IsValidId(output->can_id))) {
         text.failed = 1;
     } else {
         size_t index;
@@ -66,9 +68,17 @@ static int write_output(const Ecu_OutputRecord *output,
         Os_HostTextField(&text, " sequence=", state->sequence);
         Os_HostTextField(&text, " ticket=", output->ticket);
         Os_HostTextField(&text, " pdu=", output->pdu);
-        Os_HostTextField(&text, " id=", output->can_id);
-        Os_HostTextField(&text, " dlc=", output->dlc);
+        Os_HostTextAppend(&text,
+                          ((output->can_id & CAN_ID_EXTENDED_FLAG) != 0u)
+                              ? " channel=0 format=EXTENDED"
+                              : " channel=0 format=STANDARD");
+        Os_HostTextField(&text, " fd=", ((output->can_id & CAN_ID_FD_FLAG) != 0u) ? 1u : 0u);
+        Os_HostTextField(&text, " id=", output->can_id & CAN_ID_EXTENDED_MAX);
+        Os_HostTextField(&text, " length=", output->dlc);
         Os_HostTextAppend(&text, " data=");
+        if (output->dlc == 0u) {
+            Os_HostTextByte(&text, '-');
+        }
         for (index = 0u; index < output->dlc; ++index) {
             Os_HostTextHex(&text, output->data[index], 2u, 0);
         }
@@ -135,15 +145,24 @@ static Os_HostThreadResultType host_batch_control(void *argument)
         Os_HostSleepMs(1u);
     }
     Ecu_HostBatchInitialize(&batch);
-    if (Os_HostWriteBytes(0, "READY HostBatchV1\n", sizeof("READY HostBatchV1\n") - 1u) == 0) {
+    if (Os_HostWriteBytes(0,
+                          "READY " ECU_BATCH_PROTOCOL "\n",
+                          sizeof("READY " ECU_BATCH_PROTOCOL "\n") - 1u) == 0) {
         Ecu_TargetAbortNative(E_OS_STATE);
     }
     while (read_line(line, &length) != 0) {
         Ecu_BatchCommand command;
         StatusType status = Ecu_HostBatchParse(&batch, line, length, &command);
-        if ((status == E_OK) && (command == ECU_BATCH_COMMIT)) {
+        if ((status == E_OK) && (command == ECU_BATCH_NEGOTIATE)) {
+            const char confirmation[] = "PROTOCOL_OK " ECU_BATCH_PROTOCOL "\n";
+            if (Os_HostWriteBytes(0, confirmation, sizeof(confirmation) - 1u) == 0) {
+                Ecu_TargetAbortNative(E_OS_STATE);
+            }
+        } else if ((status == E_OK) && (command == ECU_BATCH_COMMIT)) {
             /* E_OK: the receipt is written. Otherwise nothing ran. */
             status = Ecu_HostBatchExecute(&batch, &write_output, NULL);
+        } else {
+            /* BEGIN and RX only stage data. Errors are reported below. */
         }
         if (status != E_OK) {
             if (write_rejection(&batch, status) == 0) {

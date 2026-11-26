@@ -6,7 +6,15 @@
 
 | 条款 | 义务要点 |
 | --- | --- |
-| `SWS_CANDriver` 全部 368 条（含 CONSTR、NA 与 `ECUC_Can`）逐条处置：适用条目由测试以 `Verifies:` 标注，其余条目的已核对、不适用与差距见下表 | 主机虚拟控制器只有一个，所有事件都轮询；`Can.h` 只声明标准服务，使用 AUTOSAR 类型；驱动 controller ID 与 CanIf controller ID 是两个命名空间，回调只携带后者；Init 后为 STOPPED，STARTED 只能从 STOPPED 进入，STOPPED 可从任何已初始化状态进入（含 STOPPED 自环），SLEEP 是逻辑睡眠，只能从 STOPPED 或 SLEEP 进入、只能经 STOPPED 退出；模式变化由 `Can_MainFunction_Mode`（及 `Can_MainFunction_Wakeup`）通知；STOPPED 与 bus-off 取消待发报文，bus-off 后不自动恢复；`Can_Write` 拷贝 0–8 字节、不阻塞，发送槽占用时返回 `CAN_BUSY`，不解析 CAN FD 标志位；接收与确认分别由 `Can_MainFunction_Read`／`Write` 轮询，已接收帧被覆盖时报告运行时错误 `CAN_E_DATALOST` |
+| `SWS_CANDriver` 全部 368 条（含 CONSTR、NA 与 `ECUC_Can`）逐条处置：适用条目由测试以 `Verifies:` 标注，其余条目的已核对、不适用与差距见下表 | 主机虚拟控制器只有一个，所有事件都轮询；`Can.h` 只声明标准服务，使用 AUTOSAR 类型；驱动 controller ID 与 CanIf controller ID 是两个命名空间，回调只携带后者；Init 后为 STOPPED，STARTED 只能从 STOPPED 进入，STOPPED 可从任何已初始化状态进入（含 STOPPED 自环），SLEEP 是逻辑睡眠，只能从 STOPPED 或 SLEEP 进入、只能经 STOPPED 退出；模式变化由 `Can_MainFunction_Mode`（及 `Can_MainFunction_Wakeup`）通知；STOPPED 与 bus-off 取消待发报文，bus-off 后不自动恢复；`Can_Write` 拷贝 0–8 字节 Classical 或 0–64 字节 FD 负载、不阻塞，发送槽占用时返回 `CAN_BUSY`。FD controller 保存格式位并按 DLC 向上补齐，Classical controller 忽略 ≤8 字节请求的 FD 位；接收与确认分别由 `Can_MainFunction_Read`／`Write` 轮询，已接收帧被覆盖时报告运行时错误 `CAN_E_DATALOST` |
+
+## 主机 CAN FD 交付
+
+`Can_PduType`、`Can_IdType`、`Can_HwType` 与标准 API 签名沿用 R24-11。
+`Can_ConfigType` 的末尾新增波特率、BRS 和发送 HOH 填充值，随 ECU 配置一起生成。
+驱动收发快照容纳 64 字节，HostBatchV2 的 `length` 表示线帧字节数，`fd` 取自编码标识符。
+主机输出记录附带 BRS 和 bit/s 速率供 probe 观察。目标元数据的 `canFrameProfile` 标记这一交付能力。旧包需从原 ARXML 重新生成，
+包内工具及验证输入由生成包的封存清单绑定。
 
 ## 未由测试覆盖的条目
 
@@ -21,11 +29,10 @@
 | 改变波特率 | 不适用（配置：ECUC_Can_00482=true）：SWS_Can_00062、00255、00256、00260、00422、00500、SWS_CAN_00491、SWS_Can_00492、00493、00494 |
 | Partial Networking | 不适用（配置：ECUC_Can_00529=true、ECUC_Can_00530）：SWS_Can_00601、00602、00603、ECUC_Can_00531、00532、00533、00534、00535、00536、00537 |
 | 多路发送与硬件 FIFO | 不适用（配置：ECUC_Can_00095=true、ECUC_Can_00467>1）：SWS_Can_00277、00401、00402、00403、00489、00490 |
-| CAN FD | 不适用（配置：ECUC_Can_00473）：SWS_Can_00502、ECUC_Can_00475、00476、00477、00478、00479、00481、00494 |
+| CAN FD 位时序 | 差距 #170：ECUC_Can_00476、00477、00478、00479、00494 的硬件位时序及 SSP 待真实目标验收。驱动将 BRS 与实际选用的数据阶段速率传到主机输出队列，由包内 probe 观察。硬件采样由目标验证。 |
 | TriggerTransmit | 不适用（配置：ECUC_Can_00486=true）：SWS_Can_00503、00504、00506 |
 | 分区映射 | 不适用（配置：ECUC_Can_00491、ECUC_Can_00492）：SWS_Can_CONSTR_00509、SWS_Can_CONSTR_00510、SWS_Can_CONSTR_00511 |
 | 硬件对象负载长度 | 不适用（配置：ECUC_Can_00495）：SWS_Can_CONSTR_00512 |
-| 扩展 ID | 不适用（配置：ECUC_Can_00065=EXTENDED／MIXED）：SWS_Can_00423 |
 | 多个读写周期 | 不适用（配置：ECUC_Can_00437 多于一个）：SWS_Can_00441、00442 |
 | L-PDU callout | 不适用（配置：ECUC_Can_00434）：SWS_Can_00443、00444 |
 | 安全事件 | 不适用（配置：ECUC_Can_00496=true）：SWS_Can_91021、91022、91023、91024 |
@@ -42,7 +49,7 @@
 | 模块结构与依赖 | 已核对（源码：驱动只与 CanIf、Det 和 SchM 交互，不使用其他驱动的服务；只有一种控制器类型，沿用不带厂商扩展的标准命名）：SWS_Can_00058、00077、00238、00242、00244、00284、00385、00386 |
 | 配置生成 | 已核对（配置模型：工作台按所选控制器生成配置并在生成前校验；硬件相关取值由目标控制器决定）：SWS_Can_00022、00024 |
 | 错误检测范围 | 已核对（源码：开发错误随 `CanDevErrorDetect` 关闭，运行时错误 `CAN_E_DATALOST` 由测试验证）：SWS_Can_00104 |
-| 类型与可选接口 | 已核对（源码：`Can_GeneralTypes.h` 包含 `ComStack_Types.h` 并承载 Can、CanIf 共用的类型；`Can_ConfigType` 只含主机发送回调；可选接口所需的配置都被拒绝，驱动不调用它们）：SWS_Can_00222、00235、00413、00436 |
+| 类型与可选接口 | 已核对（源码：`Can_GeneralTypes.h` 包含 `ComStack_Types.h` 并承载 Can、CanIf 共用的类型；`Can_ConfigType` 含主机发送回调、nominal/data bitrate、BRS 与发送 HOH 的填充值；可选接口所需的配置都被拒绝，驱动不调用它们）：SWS_Can_00222、00235、00413、00436 |
 | 已接受的引用与枚举 | 已核对（配置模型：硬件对象引用唯一控制器且方向分别为 RECEIVE／TRANSMIT，默认波特率引用该控制器的 CanControllerBaudrateConfig，CanSupportTTCANRef 指向必须为 false 的 CanIfSupportTTCAN）：ECUC_Can_00322、00327、00435、00430 |
 | 规范附录 | 已核对（条目只声明所列上游需求不适用于 Can，没有实现义务）：SWS_Can_NA |
 | 控制器硬件 | 差距 #170：SWS_Can_00053、00079、00236、00239、00257、00262、00264、00265、00266、00268、00281、00372、00398、00407、00419、00515、00520、ECUC_Can_00005、00073、00074、00075、00113、00313、00382、00383、00471 |

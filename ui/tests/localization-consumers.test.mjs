@@ -3,10 +3,10 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { localize, message, previewLanguage, translate } from '../src/i18n';
-import { useWorkbench } from '../src/workbench/useWorkbench';
-import { IntegrationPanel } from '../src/IntegrationPanel';
-import { OwnedLog } from '../src/workbench/Dialog';
-import { ToolWindows } from '../src/workbench/ToolWindows';
+import { useWorkbench } from '../src/app/useWorkbench';
+import { IntegrationPanel } from '../src/features/editing/IntegrationPanel';
+import { OwnedLog } from '../src/shared/ui/Dialog';
+import { ToolWindows } from '../src/app/ToolWindows';
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(),

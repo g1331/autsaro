@@ -28,12 +28,15 @@ impl CommunicationIntegerType {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct CanRuntimeContract {
+    pub physical_channel: String,
     pub controller: String,
     pub controller_id: u8,
     pub can_if_controller_id: u8,
     pub receive_hardware: String,
+    pub receive_id_type: String,
     pub receive_handle: u16,
     pub transmit_hardware: String,
+    pub transmit_id_type: String,
     pub transmit_handle: u16,
     pub read_write_period: String,
     pub read_write_period_ms: u32,
@@ -43,6 +46,10 @@ pub struct CanRuntimeContract {
     pub transmit_polling: bool,
     pub busoff_polling: bool,
     pub wakeup_polling: bool,
+    pub nominal_bitrate: u32,
+    pub data_bitrate: Option<u32>,
+    pub brs: bool,
+    pub fd_padding: u8,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -205,6 +212,52 @@ fn partition(
     })
 }
 
+fn bitrates(
+    graph: &Graph,
+    controller: usize,
+) -> Result<(u32, Option<u32>, bool), Vec<PlanDiagnostic>> {
+    let baud = value(graph, controller, "CanControllerDefaultBaudrate", true)
+        .and_then(|path| graph.objects.get(path).copied())
+        .filter(|index| {
+            definition_is(graph, *index, "CanControllerBaudrateConfig")
+                && graph.within(*index, controller)
+        })
+        .ok_or_else(|| fail(graph, controller, "CONTROLLER_MAPPING"))?;
+    let nominal = value(graph, baud, "CanControllerBaudRate", false)
+        .and_then(super::native_configuration::baudrate_kbit)
+        .and_then(|value| value.checked_mul(1000))
+        .ok_or_else(|| fail(graph, baud, "BAUDRATE_CONFLICT"))?;
+    let fd: Vec<_> = graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, "CanControllerFdBaudrateConfig"))
+        .collect();
+    let [config] = fd.as_slice() else {
+        return if fd.is_empty() {
+            Ok((nominal, None, false))
+        } else {
+            Err(fail(graph, fd[1], "CAN_FD_CONFIGURATION"))
+        };
+    };
+    if graph.elements[*config]
+        .parent
+        .and_then(|parent| graph.elements[parent].parent)
+        != Some(baud)
+    {
+        return Err(fail(graph, *config, "CAN_FD_CONFIGURATION"));
+    }
+    let data = value(graph, *config, "CanControllerFdBaudRate", false)
+        .and_then(super::component::decimal_thousandths)
+        .filter(|rate| (1..=16_000_000).contains(rate))
+        .ok_or_else(|| fail(graph, *config, "CAN_FD_CONFIGURATION"))?;
+    let brs = match value(graph, *config, "CanControllerTxBitRateSwitch", false) {
+        Some("true" | "1") => true,
+        Some("false" | "0") => false,
+        _ => return Err(fail(graph, *config, "CAN_FD_CONFIGURATION")),
+    };
+    Ok((nominal, Some(data), brs))
+}
+
 pub(super) fn inspect(
     graph: &Graph,
     schedule: &ScheduleContract,
@@ -254,6 +307,8 @@ pub(super) fn inspect(
         }
     }
     let controller = one(graph, "CanController")?;
+    let (nominal_bitrate, data_bitrate, brs) = bitrates(graph, controller)?;
+    let mut fd_padding = 0;
     for name in [
         "CanRxProcessing",
         "CanTxProcessing",
@@ -304,16 +359,32 @@ pub(super) fn inspect(
             Some("TRANSMIT") => &mut transmit,
             _ => return Err(fail(graph, index, "CAN_HARDWARE_HANDLES")),
         };
+        if let Some(padding) = value(graph, index, "CanFdPaddingValue", false) {
+            if value(graph, index, "CanObjectType", false) != Some("TRANSMIT") {
+                return Err(fail(graph, index, "CAN_FD_PADDING"));
+            }
+            fd_padding = crate::definitions::unsigned_integer(padding)
+                .and_then(|padding| u8::try_from(padding).ok())
+                .ok_or_else(|| fail(graph, index, "CAN_FD_PADDING"))?;
+        }
+        let id_type = match value(graph, index, "CanIdType", false) {
+            Some(format @ ("STANDARD" | "EXTENDED" | "MIXED")) => format,
+            _ => return Err(fail(graph, index, "CAN_ID_CONFLICT")),
+        };
         if selected
-            .replace((graph.elements[index].object.clone(), handle))
+            .replace((
+                graph.elements[index].object.clone(),
+                handle,
+                id_type.to_owned(),
+            ))
             .is_some()
         {
             return Err(fail(graph, index, "CAN_HARDWARE_HANDLES"));
         }
     }
-    let (receive_hardware, receive_handle) =
+    let (receive_hardware, receive_handle, receive_id_type) =
         receive.ok_or_else(|| fail(graph, controller, "CAN_HARDWARE_HANDLES"))?;
-    let (transmit_hardware, transmit_handle) =
+    let (transmit_hardware, transmit_handle, transmit_id_type) =
         transmit.ok_or_else(|| fail(graph, controller, "CAN_HARDWARE_HANDLES"))?;
     // The selected two-object common HRH/HTH range is contiguous from zero
     // (ECUC_Can_00326, SWS_CANIF_00115).
@@ -355,18 +426,26 @@ pub(super) fn inspect(
             return Err(fail(graph, general, "CAN_POLLING_TIMEBASE"));
         }
     }
+    let ecu = graph.of_kind("ECU-INSTANCE");
+    let [ecu] = ecu.as_slice() else {
+        return Err(fail(graph, controller, "CONTROLLER_MAPPING"));
+    };
+    let channel = super::component::selected_channel(graph, *ecu)?;
     Ok(CommunicationRuntimeContract {
         partition,
         pdu_collection: graph.elements[collection].object.clone(),
         pdu_id_type,
         pdu_length_type,
         can: CanRuntimeContract {
+            physical_channel: graph.elements[channel].object.clone(),
             controller: graph.elements[controller].object.clone(),
             controller_id,
             can_if_controller_id,
             receive_hardware,
+            receive_id_type,
             receive_handle,
             transmit_hardware,
+            transmit_id_type,
             transmit_handle,
             read_write_period: rw_path.into(),
             read_write_period_ms: period(graph, rw, "CanMainFunctionPeriod", schedule)?,
@@ -376,6 +455,10 @@ pub(super) fn inspect(
             transmit_polling: true,
             busoff_polling: true,
             wakeup_polling: true,
+            nominal_bitrate,
+            data_bitrate,
+            brs,
+            fd_padding,
         },
     })
 }
@@ -397,6 +480,14 @@ pub(super) fn profile_header(
                 super::symbolic_names::name("Can", "CanController", &can.controller),
             ),
             ("CAN_CANIF_CONTROLLER_ID", can_if_controller.to_owned()),
+            (
+                "CAN_RX_ID_TYPE",
+                format!("CAN_HOH_ID_{}", can.receive_id_type),
+            ),
+            (
+                "CAN_TX_ID_TYPE",
+                format!("CAN_HOH_ID_{}", can.transmit_id_type),
+            ),
             (
                 "CAN_TX_HOH",
                 super::symbolic_names::name("Can", "CanHardwareObject", &can.transmit_hardware),

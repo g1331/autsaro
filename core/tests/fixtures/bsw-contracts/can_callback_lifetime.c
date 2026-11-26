@@ -165,7 +165,7 @@ static EcuStatus sink(uint32 id, uint8 length, const uint8 data[8]) {
     assert(id == 0x321u && length == 1u && data[0] == 42u);
     return ECU_OK;
 }
-static const Can_ConfigType can = {sink};
+static const Can_ConfigType can = {.sink = sink};
 static void observed(void) {
     if (reenter) {
         reenter = 0u;
@@ -199,7 +199,7 @@ static void tx(PduIdType id, Std_ReturnType status) {
         observed();
     }
 }
-static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u}};
+static const CanIf_RxPduConfigType receives[] = {{0x320u, 21u, 1u, FALSE}};
 static const CanIf_TxPduConfigType transmits[] = {{0x321u, 51u, 1u}};
 static const CanIf_ConfigType canif = {receives, 1u, transmits, 1u, mode, busoff, 0u, 0u, 0u, 0u};
 static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};

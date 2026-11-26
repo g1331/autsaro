@@ -1,0 +1,239 @@
+.app-shell {
+  height: 100dvh;
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.menubar {
+  height: 34px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 0 7px;
+  user-select: none;
+  background: var(--shell);
+  border-bottom: 1px solid var(--line);
+}
+.menubar-menus {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.menubar-menus > button {
+  height: 30px;
+  padding: 4px 9px;
+}
+.menubar-menus > button[data-state='open'],
+.menubar-menus > button[data-highlighted] {
+  background: var(--hover);
+}
+.titlebar-drag-region {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  overflow: hidden;
+}
+.app-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  font-size: 12px;
+  color: var(--secondary);
+}
+.window-controls {
+  display: flex;
+  align-self: stretch;
+  flex: none;
+}
+.window-control {
+  width: 46px;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  color: var(--text);
+}
+.window-control:focus-visible {
+  outline-offset: -3px;
+}
+.window-close:not(:disabled):not([aria-disabled='true']):hover,
+.window-close:not(:disabled):not([aria-disabled='true']):active {
+  color: #ffffff;
+  background: #c42b1c;
+}
+.menu-popup {
+  width: 286px;
+  max-height: var(--radix-menubar-content-available-height, 75vh);
+  overflow: auto;
+  z-index: 20;
+  background: var(--overlay);
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: default;
+  outline: none;
+}
+.menu-item[data-highlighted] {
+  background: var(--hover);
+}
+.menu-item:focus-visible {
+  outline: 2px solid var(--blue);
+}
+.menu-item[aria-disabled='true'] {
+  color: var(--muted);
+}
+.menu-item[aria-disabled='true'] > * {
+  opacity: 0.65;
+}
+.menu-popup small {
+  display: block;
+  padding: 0 10px 6px;
+  color: var(--muted);
+  white-space: normal;
+}
+.menu-popup [role='separator'] {
+  margin: 4px 6px;
+  border-top: 1px solid var(--line);
+}
+.tooltip {
+  z-index: 40;
+  max-width: 320px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--overlay);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+}
+/* A reason beside its action group, with the command that resolves it. */
+.command-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -4px 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--secondary);
+}
+.command-reasons li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+.command-reasons svg {
+  flex: none;
+}
+.command-reasons button {
+  min-height: 24px;
+  padding: 2px 6px;
+  color: var(--blue);
+}
+.toolbar-reasons,
+.batch-bar .command-reasons {
+  margin: 0;
+}
+.toolbar-reasons {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.toolbar-reasons li {
+  flex-wrap: nowrap;
+}
+.toolbar-reasons span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.context-toolbar {
+  min-height: 38px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.context-toolbar > strong {
+  max-width: 240px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.toolbar-separator {
+  height: 20px;
+  width: 1px;
+  background: var(--line);
+}
+.toolbar-spacer {
+  flex: 1;
+}
+.toolbar-search {
+  min-width: 150px;
+  justify-content: flex-start;
+  color: var(--muted);
+}
+.toolbar-search > kbd {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+.workspace-frame {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  position: relative;
+}
+.tool-rail {
+  width: 42px;
+  flex: none;
+  background: var(--shell);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 3px;
+}
+.tool-rail button {
+  position: relative;
+  width: 35px;
+  height: 35px;
+  padding: 5px;
+}
+.tool-rail button[aria-pressed='true']::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--selection-text);
+}
+.tool-rail > span {
+  flex: 1;
+}

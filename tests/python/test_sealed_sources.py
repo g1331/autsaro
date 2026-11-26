@@ -44,7 +44,7 @@ class SealedSourceTests(unittest.TestCase):
         (self.project / "bsw/src").mkdir(parents=True)
         (self.project / SOURCE).write_bytes(b"/* sealed */\n")
         (self.project / "target.json").write_text(json.dumps(
-            {"format": "autosar-build-target-v3", "target": "linux-x64-controlled-v1"}), encoding="utf-8")
+            {"format": "autosar-build-target-v4", "target": "linux-x64-controlled-v1"}), encoding="utf-8")
         self.names = [SOURCE, "target.json"]
         seal(self.project, self.names)
         self.assertEqual(sealed_sources(self.project)[0], self.names)
@@ -55,10 +55,23 @@ class SealedSourceTests(unittest.TestCase):
 
     def test_retired_build_manifest_is_refused(self):
         target = self.project / "target.json"
-        target.write_text(json.dumps({"format": "autosar-build-target-v2", "target": "linux-x64-controlled-v1"}),
+        target.write_text(json.dumps({"format": "autosar-build-target-v3", "target": "linux-x64-controlled-v1"}),
                           encoding="utf-8")
         seal(self.project, self.names)
-        self.refused("Unsupported build target format or identity")
+        self.refused("Unsupported build target format or identity. Regenerate from the original ARXML.")
+        self.assertEqual(sealed_sources(self.project, analysis_baseline=True)[0], self.names)
+
+    def test_sealed_classical_only_hostbatch_v2_package_requires_regeneration(self):
+        target = self.project / "target.json"
+        target.write_text(json.dumps({
+            "format": "autosar-build-target-v4", "target": "linux-x64-controlled-v1",
+            "profile": "ecu", "hostBatchProtocol": "HostBatchV2",
+        }), encoding="utf-8")
+        seal(self.project, self.names)
+        before = {path: path.read_bytes() for path in self.project.rglob("*") if path.is_file()}
+        self.refused("Unsupported CAN frame profile in this ECU package. Regenerate from the original ARXML.")
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+        self.assertEqual(sealed_sources(self.project, analysis_baseline=True)[0], self.names)
 
     def test_tampered_bytes_name_the_file(self):
         with (self.project / SOURCE).open("ab") as output:

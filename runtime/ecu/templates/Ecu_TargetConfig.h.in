@@ -52,8 +52,8 @@ RTE_Ecu_CODE Std_ReturnType Ecu_StackRunCycle(EventMaskType events);
  */
 RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached);
 /** Validate a host frame against the generated CAN routes.
- * @param[in] id 11-bit CAN identifier, 0..0x7ff.
- * @param[in] dlc Classical CAN payload length, 0..8 bytes.
+ * @param[in] id Encoded CAN identifier.
+ * @param[in] dlc Wire payload length, 0..64 bytes.
  * @return Nonzero for allowed Rx shapes or unknown IDs; zero for invalid ranges, Tx IDs or wrong
  * known Rx lengths.
  *

@@ -4,6 +4,11 @@
 
 ### Breaking
 
+- Host CAN supports standard and extended FD frames, explicit receive policies and driver padding through 64 wire bytes. Regenerate ECU packages from ARXML for the FD-capable HostBatchV2 tools. Rebuild native consumers and update private `Can_ConfigType` initializers for bitrates, BRS and HTH padding. Rebuild host output consumers for the probe’s FD timing fields. CanTp continues to use Classical CAN (#485)
+
+- CanIf now accepts standard and extended Classical CAN on one controller and filters by frame format and numeric ID. Regenerate ECU packages from ARXML for the HostBatchV2 handshake, typed CAN records, and updated delivery metadata. Update private CanIf Rx route initializers to supply the FD acceptance policy (#117)
+- Workbench project manifests now use format 2 and native delivery uses `autosar-workbench-handoff-v5`. Recreate older projects from their original ARXML and regenerate packages. Layered projects retain base, project and variant source members alongside active and inactive application snapshots (#490)
+
 - Single-instance RTE handles now expand to pointers to shared const CDS objects. Regenerate all component headers, sources and BSW memory descriptions and rebuild consumers; the independent Rte_Inst_* pointer symbols are removed, and Rte_Instance_* CDS objects have external linkage (#195)
 
 - ComM service inputs now require per-user UR_/UM_ ports, the standard user-request interface and alphabetic ComMMode declarations. ComM_ConfigType appends immutable user/channel notification mappings; regenerate plans and contracts, update positional initializers and rebuild consumers (#195)
@@ -80,6 +85,10 @@
 ### Fixed
 
 - The Linux x64 controlled ECU delivery can now compile `Arti.h`, `Os.h`, `Os_Arti.h`, and `Os_Host.h` as the first or a repeated include in a C++17 translation unit (#434)
+
+- Generated BswM actions confirm the actual mode and reject stale indications without overwriting CAN directions. Update the three legacy `BswMUserCalloutFunction` values from `Ecu_HostBusSM_ApplyMode` to `Ecu_HostBusSM_ConfirmMode` as directed by validation, then regenerate and rebuild the ECU project (#660)
+
+- C analysis rejects unexpected include search changes from project flags and evaluated resource existence probes, and reports SDK link permission and I/O failures (#620)
 
 - `fetch-official` retries transient download failures up to twice, reports connection diagnostics, and rejects redirects before requesting a different URL (#614)
 

@@ -6,11 +6,15 @@
 
 | 条款 | 义务要点 |
 | --- | --- |
-| `SWS_CANInterface` 全部 493 条（374 条 `SWS_CANIF`，含 CONSTR 与 NA；119 条 `ECUC_CanIf`）逐条处置：适用条目由测试以 `Verifies:` 标注，其余条目的已核对、不适用与差距见下表；`SWS_Comtype_00007`（句柄连续） | Init 取 `CanIf_ConfigType*`，无效配置保持未初始化，未初始化时服务返回 `E_NOT_OK`、回调不处理；`CanIf.h` 只含标准声明；Transmit 服务 ID 0x49（RxIndication 0x14），不同 PduId 可重入、同 PduId 不可重入；Init 后 PDU mode 为 OFFLINE，STOPPED／BusOff→TX_OFFLINE，SLEEP→OFFLINE，SetPduMode 须在 STARTED；只有 OFFLINE 的 Tx 报告 `CANIF_E_STOPPED`，长度拒绝报告 62／90，短 DLC 报告 61；Rx 按 controller、HRH 与 CAN ID（`STANDARD_NO_FD_CAN`）路由；每个被接受的发送至多一次上层确认，PDU 模式抑制的确认结束请求；Rx／Tx 句柄按方向从 0 连续；controller ID 从 0 起；BusOff／模式通知按 dispatch 送往 host CDD |
+| `SWS_CANInterface` 全部 493 条（374 条 `SWS_CANIF`，含 CONSTR 与 NA；119 条 `ECUC_CanIf`）逐条处置：适用条目由测试以 `Verifies:` 标注，其余条目的已核对、不适用与差距见下表；`SWS_Comtype_00007`（句柄连续） | Init 取 `CanIf_ConfigType*`，无效配置保持未初始化，未初始化时服务返回 `E_NOT_OK`、回调不处理；`CanIf.h` 只含标准声明；Transmit 服务 ID 0x49（RxIndication 0x14），不同 PduId 可重入、同 PduId 不可重入；Init 后 PDU mode 为 OFFLINE，STOPPED／BusOff→TX_OFFLINE，SLEEP→OFFLINE，SetPduMode 须在 STARTED；只有 OFFLINE 的 Tx 报告 `CANIF_E_STOPPED`，长度拒绝报告 62／90，短 DLC 报告 61；Rx 按 controller、HRH、ID 宽度、数值及 Classical／FD 策略路由。同一 ID 的互斥策略可各有一条 Rx 路由；每个被接受的发送至多一次上层确认，PDU 模式抑制的确认结束请求；Rx／Tx 句柄按方向从 0 连续；controller ID 从 0 起；BusOff／模式通知按 dispatch 送往 host CDD |
+
+## 主机帧格式
+
+CanIf Rx 在匹配后检查配置的最小字节数，并向 LSduR 传递收到的线帧长度。Tx 从配置的标识符取格式，驱动负责将 FD 请求补到可编码的线帧长度。FD controller 上连接 CanTp 的 Rx 配置须选择 Classical-only，生成路由继续使用 Classical N-PDU。
 
 ## 未由测试覆盖的条目
 
-下表处置 `SWS_CANInterface` 中没有测试 `Verifies:` 的条目。“配置”类写明控制该义务的 ECUC 参数及主线不提供的取值（未写取值的参数整项不提供），这些配置在生成前被拒绝，每个参数都有带 `Rejects:` 标记的测试。同一通道混用标准与扩展 ID 是差距，由 #117 承接。
+下表处置 `SWS_CANInterface` 中没有测试 `Verifies:` 的条目。“配置”类写明控制该义务的 ECUC 参数及主线不提供的取值（未写取值的参数整项不提供），这些配置在生成前被拒绝，每个参数都有带 `Rejects:` 标记的测试。同通道混合 ID 及精确过滤由 [生成 ECU 的 HostBatch 混合收发测试](../../core/tests/native/integration/protocol.rs) 验证（`SWS_CANIF_00281`）。
 
 | 分组 | 处置与条目 |
 | --- | --- |
@@ -40,7 +44,6 @@
 | 可选下层接口表 | 不适用（配置：ECUC_CanIf_00843=true、ECUC_CanIf_00838、ECUC_CanIf_00772=true、ECUC_CanIf_00273、ECUC_CanIf_00855、ECUC_CanIf_00614=true、ECUC_CanIf_00844=true、ECUC_CanIf_00847=true、ECUC_CanIf_00848=true、ECUC_CanIf_00547=CAN_SM）：SWS_CANIF_00294 |
 | 配置集名 | 已核对（主线只生成一个配置集：`CanIf_PBcfg.c` 中的 `CanIf_Config` 传给 `CanIf_Init`，集名只作标识）：ECUC_CanIf_00623 |
 | 规范附录 | 已核对（条目只声明所列上游需求不适用于 CanIf，没有实现义务）：SWS_CANIF_NA_00999 |
-| 同一通道混用标准与扩展 ID | 差距 #117：SWS_CANIF_00281 |
 
 ## MemMap 的具体责任
 

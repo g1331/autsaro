@@ -564,7 +564,7 @@ pub(super) fn files(
                     description
                         .diagnostic_transport
                         .as_ref()
-                        .map_or(u32::MAX, |transport| transport.request_can_id)
+                        .map_or(u32::MAX, |transport| transport.encoded_request_id())
                 ),
             ),
             (
@@ -726,7 +726,13 @@ pub(super) fn files(
         &mut config,
         "Can",
         "static const Can_ConfigType ecu_can_driver",
-        &values("NULL_PTR"),
+        &values(&format!(
+            "NULL_PTR, {}u, {}u, {}, {}u",
+            can.nominal_bitrate,
+            can.data_bitrate.unwrap_or(0),
+            if can.brs { "TRUE" } else { "FALSE" },
+            can.fd_padding,
+        )),
     );
     let routing_headers = r#"#include "Com_Cfg.h"
 #include "CanIf_Cfg.h"
@@ -836,13 +842,17 @@ pub(super) fn files(
             reception_timeout
         )));
         if signal.receive {
-            receive.push(row(&format!("{}u, {can_if}, 4u", signal.can_id)));
+            receive.push(row(&format!(
+                "{}u, {can_if}, 4u, {}",
+                signal.encoded_id(),
+                if signal.accepts_fd { "TRUE" } else { "FALSE" }
+            )));
             ls_rx.push(row(&format!(
                 "{ls_source}, {source}, &PduR_CanIfRxIndication"
             )));
             pd_rx.push(row(&format!("{source}, {pdu}, &Com_RxIndication")));
         } else {
-            transmit.push(row(&format!("{}u, {can_if}, 4u", signal.can_id)));
+            transmit.push(row(&format!("{}u, {can_if}, 4u", signal.encoded_id())));
             ls_tx.push(row(&format!(
                 "LSDUR_UP_PDUR, {ls_source}, {can_if}, &PduR_CanIfTxConfirmation, &PduR_CanIfTriggerTransmit"
             )));
@@ -889,8 +899,11 @@ pub(super) fn files(
         let pd_tx_destination = name("PduR", "PduRDestPdu", &tx_route.destination);
         let ls_rx_source = name("LSduR", "LSduRPathSourcePdu", &rx_route.source);
         let ls_tx_source = name("LSduR", "LSduRPathSourcePdu", &tx_route.source);
-        receive.push(row(&format!("{}u, {can_rx}, 8u", tp.request_can_id)));
-        transmit.push(row(&format!("{}u, {can_tx}, 8u", tp.response_can_id)));
+        receive.push(row(&format!(
+            "{}u, {can_rx}, 8u, FALSE",
+            tp.encoded_request_id(),
+        )));
+        transmit.push(row(&format!("{}u, {can_tx}, 8u", tp.encoded_response_id())));
         ls_rx.push(row(&format!(
             "{ls_rx_source}, {tp_rx}, &CanTp_RxIndication"
         )));
@@ -1185,7 +1198,7 @@ pub(super) fn files(
         "BswM",
         "static const BswM_ConfigType bswm_config",
         &values(&format!(
-            "{}, &Ecu_BswMAction",
+            "{}, &Ecu_BswMAction, &Ecu_HostBusSM_QueueModePublication",
             name("ComM", "ComMChannel", &mode.channel)
         )),
     );
@@ -1218,16 +1231,13 @@ pub(super) fn files(
         &values("NULL_PTR, 0u, det_runtime_callouts, 1u"),
     );
     config.push_str(&c_layout::section("RTE_Ecu", "Rte", "CODE", true));
-    // ECUC_BswM_00843: parameters are fixed by the configured complete call.
-    config.push_str(
+    // The validated callout text contains the complete preconfigured arguments.
+    config.push_str(&format!(
         r#"static RTE_Ecu_CODE Std_ReturnType Ecu_BswMAction(NetworkHandleType channel,
                                                   ComM_ModeType requested)
-{
-    Std_ReturnType result = E_OK;
-"#,
-    );
-    config.push_str(&format!(
-        r#"    if (channel != {}) {{
+{{
+    Std_ReturnType result;
+    if (channel != {}) {{
         return E_NOT_OK;
     }}
     switch (requested) {{
@@ -1235,18 +1245,9 @@ pub(super) fn files(
         name("ComM", "ComMChannel", &mode.channel)
     ));
     for rule in &mode.rules {
-        let requested = [
-            "COMM_NO_COMMUNICATION",
-            "COMM_SILENT_COMMUNICATION",
-            "COMM_FULL_COMMUNICATION",
-        ][usize::from(rule.mode)];
-        let channel = name("ComM", "ComMChannel", &mode.channel);
         config.push_str(&format!(
-            r#"        case {}u:
-            (void)Ecu_HostBusSM_ApplyMode({channel}, {requested});
-            break;
-"#,
-            rule.mode
+            "        case {}u:\n            result = {};\n            break;\n",
+            rule.mode, rule.callout
         ));
     }
     config.push_str(
@@ -1367,6 +1368,7 @@ pub(super) fn files(
     if ((Ecu_TargetIsOwner() == 0) || (Ecu_SchMTimingActive() == FALSE)) {
         return E_NOT_OK;
     }
+    Ecu_HostBusSM_PublishPendingMode();
 "#,
         );
         let mut active_mask = None;
@@ -1458,19 +1460,35 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
     config.push_str(
         r#"RTE_Ecu_CODE int Ecu_StackFrameShape(uint32 id, uint8 dlc)
 {
-    if ((id > 0x7ffu) || (dlc > 8u)) {
+    if ((!Can_IsValidId(id)) || (!Can_IsWireLength(id, dlc)) ||
+        (((id & CAN_ID_FD_FLAG) != 0u) && (ecu_can_driver.data_bitrate == 0u))) {
         return 0;
     }
 "#,
     );
     for signal in &description.signals {
+        let id = signal.encoded_id();
+        let condition = if signal.receive && signal.accepts_fd {
+            format!("(id & ~CAN_ID_FD_FLAG) == {id}u")
+        } else {
+            format!("id == {id}u")
+        };
         config.push_str(&format!(
-            r#"    if (id == {}u) {{
+            r#"    if ({condition}) {{
         return {};
     }}
 "#,
-            signal.can_id,
-            if signal.receive { "dlc == 4u" } else { "0" }
+            if signal.receive {
+                if signal.accepts_fd {
+                    "((id & CAN_ID_FD_FLAG) != 0u) ? (dlc >= 4u) : (dlc == 4u)"
+                } else if signal.fd {
+                    "dlc >= 4u"
+                } else {
+                    "dlc == 4u"
+                }
+            } else {
+                "0"
+            }
         ));
     }
     if let Some(tp) = transport {
@@ -1482,7 +1500,8 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
         return 0;
     }}
 "#,
-            tp.request_can_id, tp.response_can_id
+            tp.encoded_request_id(),
+            tp.encoded_response_id()
         ));
     }
     config.push_str(
@@ -1553,7 +1572,7 @@ RTE_Ecu_CODE void Ecu_StackRetire(uint8 reached)
     // emitter extended are generated outputs. The packaging tool is wrapped at delivery.
     let mut original_sources = outputs.original_assets();
     original_sources.remove("runtime/ecu-tool.py");
-    outputs.emit(ECU, super::outputs::INTEGRATION_PATH, format!("{:#}\n", serde_json::json!({"format": "autosar-ecu-integration-v2", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })))?;
+    outputs.emit(ECU, super::outputs::INTEGRATION_PATH, format!("{:#}\n", serde_json::json!({"format": "autosar-ecu-integration-v3", "plan": description, "target": target.spec().id, "owner": "single source-derived AUTOSTART extended task", "originalBswSources": original_sources })))?;
     let verification = super::handoff::verification_files(plan).map_err(|_| failure())?;
     let readme = format!(
         r#"# ECU integration source project

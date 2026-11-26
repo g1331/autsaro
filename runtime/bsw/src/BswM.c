@@ -64,12 +64,14 @@ static BSWM_CODE void BswM_Process(void)
     boolean owner = TRUE;
     while (owner) {
         BswM_ModeActionType action = NULL_PTR;
+        void (*action_failed)(void) = NULL_PTR;
         NetworkHandleType network = 0u;
         ComM_ModeType mode = COMM_NO_COMMUNICATION;
         SchM_Enter_BswM_BSWM_STATE();
         if (postponed > 0u) {
             --postponed;
             action = bswm_configuration->action;
+            action_failed = bswm_configuration->action_failed;
             network = bswm_configuration->channel;
             mode = port_mode;
         } else {
@@ -78,9 +80,10 @@ static BSWM_CODE void BswM_Process(void)
         }
         SchM_Exit_BswM_BSWM_STATE();
         if (owner) {
-            /* The single-item action list ends either way; runtime failure
-             * reporting (BswMReportFailRuntimeErrorId) is not selected. */
-            (void)action(network, mode);
+            const Std_ReturnType result = action(network, mode);
+            if ((result != E_OK) && (action_failed != NULL_PTR)) {
+                action_failed();
+            }
         }
     }
 }

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::sync::Arc;
 
+pub(crate) const PROJECT_FORMAT: u32 = 2;
 const MANIFEST: &str = "workbench-project.json";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,6 +27,8 @@ pub struct ProjectManifest {
     pub format_version: u32,
     pub declared_release: String,
     pub profile_hint: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layers: Option<super::ProjectLayers>,
     pub inputs: Vec<ProjectInput>,
     pub application_inputs: Vec<ApplicationInput>,
     pub accepted_extension_definitions: Vec<ExtensionDefinitionIdentity>,
@@ -235,7 +238,7 @@ pub(super) fn validate_manifest(
             "profile" => profile
         ));
     }
-    if manifest.format_version != 1 {
+    if manifest.format_version != PROJECT_FORMAT {
         return Err(crate::product_message!(
             "backend.arxml.project.format_version_unsupported",
             "version" => manifest.format_version
@@ -258,6 +261,9 @@ pub(super) fn validate_manifest(
                 "backend.arxml.project.arxml_paths_must_be_unique"
             ));
         }
+    }
+    if let Some(layers) = &manifest.layers {
+        layers.validate_members(manifest)?;
     }
     let mut slots = BTreeSet::new();
     for input in &manifest.application_inputs {
@@ -477,6 +483,7 @@ fn from_preview(
             extension_diagnostics: Vec::new(),
         }),
     };
+    workspace.verify_project_base()?;
     workspace.refresh()?;
     for scope in &workspace.snapshot.validation {
         if (scope.scope == ValidationScope::Schema
@@ -606,7 +613,8 @@ impl Workspace {
                 });
             }
             let manifest = ProjectManifest {
-                format_version: 1,
+                format_version: PROJECT_FORMAT,
+                layers: None,
                 declared_release: "R24-11".into(),
                 profile_hint: self.snapshot.profile.clone(),
                 inputs,
@@ -698,7 +706,8 @@ impl Workspace {
         let directory = destination(directory)?;
         let (profile, mut files, inputs) = template_files(name, template_id)?;
         let manifest = ProjectManifest {
-            format_version: 1,
+            format_version: PROJECT_FORMAT,
+            layers: None,
             declared_release: "R24-11".into(),
             profile_hint: profile,
             inputs,
@@ -809,14 +818,19 @@ impl Workspace {
             }
         }
         let accepted = self.catalog.accepted_extensions();
-        let manifest = ProjectManifest {
-            format_version: 1,
-            declared_release: "R24-11".into(),
-            profile_hint: self.snapshot.profile.clone(),
-            inputs,
-            application_inputs,
-            accepted_extension_definitions: accepted.clone(),
-        };
+        let manifest = self
+            .project_manifest()
+            .filter(|manifest| manifest.layers.is_some())
+            .cloned()
+            .unwrap_or_else(|| ProjectManifest {
+                format_version: PROJECT_FORMAT,
+                layers: None,
+                declared_release: "R24-11".into(),
+                profile_hint: self.snapshot.profile.clone(),
+                inputs,
+                application_inputs,
+                accepted_extension_definitions: accepted.clone(),
+            });
         validate_manifest(&manifest)?;
         files.push(ProjectFilePreview {
             path: MANIFEST.into(),
@@ -951,6 +965,7 @@ impl Workspace {
             workspace.integration_input_root = Some(input_root);
             workspace.project = Some(membership);
         })?;
+        workspace.verify_project_base()?;
         // The hint never authorizes application slots: actual source semantics determine the profile.
         if !workspace
             .project
@@ -959,6 +974,9 @@ impl Workspace {
             .manifest
             .application_inputs
             .is_empty()
+            && workspace
+                .project_manifest()
+                .is_some_and(|manifest| manifest.layers.is_none())
         {
             let sources = workspace
                 .integration_sources()

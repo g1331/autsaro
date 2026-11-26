@@ -94,7 +94,7 @@ static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, CanTp_RxIndication}};
 static const LSduR_TxRouteType ls_tx[] = {
     {LSDUR_UP_CANTP, 41u, 51u, CanTp_TxConfirmation, NULL_PTR}};
 static const LSduR_PBConfigType ls = {29u, ls_rx, 1u, ls_tx, 1u};
-static const CanIf_RxPduConfigType canif_rx[] = {{0x700u, 21u, 8u}};
+static const CanIf_RxPduConfigType canif_rx[] = {{0x700u, 21u, 8u, FALSE}};
 static const CanIf_TxPduConfigType canif_tx[] = {{0x708u, 51u, 8u}};
 static const CanIf_ConfigType canif = {canif_rx,
                                        1u,
@@ -106,7 +106,7 @@ static const CanIf_ConfigType canif = {canif_rx,
                                        0u,
                                        0u,
                                        0u};
-static const Can_ConfigType can = {sink};
+static const Can_ConfigType can = {.sink = sink};
 static const ComM_UserHandleType users[] = {43u};
 static const ComM_ConfigType comm = {7u,
                                      users,
@@ -120,7 +120,7 @@ static const ComM_ConfigType comm = {7u,
                                      NULL_PTR,
                                      0u};
 static const Ecu_HostBusSM_ConfigType cdd = {7u, 0u};
-static const BswM_ConfigType bswm = {7u, Ecu_HostBusSM_ApplyMode};
+static const BswM_ConfigType bswm = {7u, &Ecu_HostBusSM_ApplyMode, NULL_PTR};
 static uint8 authentication_mode = 255u;
 static void publish_authentication(uint8 state) { authentication_mode = state; }
 static const Dcm_ConfigType dcm = {

@@ -43,7 +43,7 @@ AMD2.47–49 和 TC2.7–8 的可变实参例外。其余修订未改变本表�
 | R2.1 | Required | 各程序的可达路径 | not_assessed | 主文39–41 排除预处理删除的代码。当前四 profile 两程序的 TU、定义和配置入口已定位，Dcm 收发、Bootstrap／SchM、OS 回调及 defensive 分支的完整可达证明未齐。#443 的 #547 逐入口结算活动代码的可达性，或整改／处置具体不可达语句。 |
 | R2.2 | Required | 可观察输出和持久状态的生产路径 | not_assessed | 主文41–42、TC1 初始化说明、TC2.3–4 的已用转换／void 例外及 AMD4.37。ARTI 发布、持久写入、空调用及表达式仍缺逐操作的输出／时序影响证明。#443 的 #547 连接实际读方和可观察效果，删除真实死操作或完成必要处置；不按 token 出现次数判定行为影响。 |
 | R2.3 | Advisory | 全程序 typedef 定义与使用 | not_assessed | 主文43；实际范围内原报告有28个物理位置，含标准公共类型、生成模式及 BswM 声明。既有公共类型15项与 generated-retention 只处理各自实体；#443 的 #547 接续完整 typedef 定义／使用／固定发布合同结算，标准保留仍保留真实 unused 及正式义务。 |
-| R2.4 | Advisory | 全程序 tag 定义与实际引用 | not_assessed | 主文43 的 tag 与 typedef 分开；LSduR／PduR 两处报告落在匿名 enum，为有界误报。0015 项目 patch 引入的 QueuePointers／SemaphoreData tag 未见独立引用，保留真实 Advisory 违反；CDS、Os_NativeStackType、QueueDefinition／tskTaskControlBlock 的实际 tag 引用另核。#503 保留 0015 的静态对象布局，两个 tag 仍在项目范围，#443 的 #547 继续补齐全体 tag。 |
+| R2.4 | Advisory | 双目标四 profile 的两个程序 | not_assessed | LSduR／PduR 匿名枚举误报按指纹处置。QueuePointers／SemaphoreData 是 0015 项目补丁中的真实未用 tag，尚待 #443 的 #547 完成安全清理。 |
 | R2.5 | Advisory | define／undef 历史与实际宏使用 | not_assessed | 主文44；TC1 将 undef 计为使用，TC2.5–6 更正为 macro definitions。当前跨组件同名宏有独立 owner，固定 addon 的同名合并及覆盖会遗漏定义实例。#443 的 #547 按每个程序复放 define／undef／实际展开，逐定义连接生成来源、消费者和原保留表；替换表含名字本身未当作实际使用。 |
 | R2.6 | Advisory | 函数内 label 与实际跳转 | satisfied | 主文 44 的对象是函数内标签。固定核心 CheckOtherImpl::checkUnusedLabel 跳过 expanded macro，故另检查全部当前原 token 和项目使用点实际展开：没有函数 label／goto；Dcm.c、Os_Backend.c、Os_Arti.c 等的 default 属 switch。项目补丁也无标签；当前双程序不存在需补跳转消费者的标签实体。 |
 | R2.7 | Advisory | 函数定义的形参与调用契约 | satisfied | 主文44–45，AMD4.38 更正标题；逐个检查878种去重的范围内函数定义展开、975个具名形参，函数体普通 identifier 均有真实引用，无未引用形参；成员名字单列。Ecu_OsHooks／Det_Callouts 的固定 callback 用显式 void 转换消费值，其他形参连接实际计算、输出或下层调用；编译器 -Wextra/-Werror 和实际调用验证保留，函数指针类型的形参不冒充函数定义。 |
@@ -53,7 +53,7 @@ AMD2.47–49 和 TC2.7–8 的可变实参例外。其余修订未改变本表�
 | R5.2 | Required | 当前同 scope／namespace 的有效名称 | satisfied | 主文 49–50、AMD2.35 的 C99 最低区分长度为 63。对全部物理标识符及实际展开的项目使用点做跨 scope 保守前缀比较，无不同拼写共用 63 字符前缀；同名声明约束由两目标实际 C99 编译检查。包含 ComM 头、所有生成 RTE 头与项目 patch；两者均外部链接及宏的例外仍分别沿 R5.1／R5.4／R5.5。 |
 | R5.3 | Required | 双目标四 profile 的 C99 HostBatch／probe 中同 namespace 的嵌套 scope | satisfied | 主文50–51／PDF58–59、AMD2.36；从 452 份 GCC 展开按声明点顺序还原普通标识符与 tag 的嵌套 scope，成员各归所属聚合类型。覆盖 typedef、枚举常量、函数原型／定义形参、局部对象和宏展开声明。范围内无同 namespace 遮蔽；Linux 的 access 和 Windows 的 byte 三个物理位置均落在 ADR 0030 主机专用实现。按下节所列实际输入与归属评估。 |
 | R5.4 | Required | 活动宏名及各自参数名 | satisfied | 主文 51–52、AMD2.37–38 按定义时的活动集合和 C99 63 字符判断。原文件所有宏／参数的保守前缀比较无冲突；实际 -dD 顺序重放 define／undef，逐次核对项目宏与已定义宏／参数及本宏参数，亦无冲突。包含反复撤销的 Os_MemMap、RTE_CORE 下的应用宏及 port 宏；同号入口未清 undef 的限制由该独立核查补齐。 |
-| R5.6 | Required | 双目标四 profile 的 C99 HostBatch／probe，跨名称空间及 TU | not_assessed | 主文54／PDF62。Rte_Instance 的精确源码记录已补。Windows 实际展开另见 CounterType、ResourceType、boolean 及 Com 的 byte 与 SDK 实体同名。#443 的 #547 待完成 [Windows 交叉实体处置](../../rte/generated-diagnostics.md#r56-跨名称空间候选)，含未报告的实际声明。 |
+| R5.6 | Required | 双目标四 profile 的 C99 HostBatch／probe，跨名称空间及 TU | not_assessed | 主文54／PDF62。#443 的 #547 已核对 Rte_Instance 和 Windows 的 CounterType、ResourceType、boolean、byte。待处理漏报的 SDK 集成重名，再完成 Rte_Instance 正式偏离。[声明证据](typedef-uniqueness.md) |
 | R5.8 | Required | 外部链接名称与全部其他实体 | satisfied | 主文56／PDF64；按四 profile 的 HostBatch／probe 分别比较 external-linkage 定义名与全部函数、对象、typedef、tag、enum 及成员／形参声明，完整 GCC 行标记区分物理 owner；当前外部名无其他实体重用。Os_ArtiTasks、Ecu_OsConfig、Rte_Instance_<组件> 和回调绑定均连接唯一定义与实际消费者；普通重复声明归同一实体，SDK 原头和采用原行沿 ADR 0025。 |
 | R5.9 | Advisory | 双目标四 profile 的 HostBatch／probe 内部链接名称与全部其他实体 | not_assessed | 主文57／PDF65、TC1 修正主体、AMD2.27 追加 C11。沿用第八批的完整实体清单、36 个已修重用名及 53 个头内 static inline 的同一头例外核对。#443 的 #547 本轮消除 7 个 BSW 重用名。Os_Backend.c:53 的 activations 与 Os_ArtiTaskType.activations 重名，仍是实际 Advisory 违反。 |
 | R6.1 | Required | 项目位域及实际声明类型／消费者 | satisfied | 主文 58–59、AMD2.41–43 允许 C99 实现支持的显式有符号／无符号类型及 bool，可经 typedef。当前物理与实际展开的项目位域仅 Dcm_MsgAddInfoType 的 reqType／suppressPosResponse；两目标 uint8→uint8_t→unsigned char，实际 GCC C99 编译接受。Dcm 接收初始化／子功能提取写入，响应抑制读取后者；无项目 union 位域或其他 typedef 位域候选。 |
@@ -126,6 +126,16 @@ Clang 18.1.3 对这 16 份 GCC 展开逐 TU 以 C99 成功检查语法，保留 
 Os_Backend.c:956 的 `Os_TargetTestPending` 只在 `OS_ACTIVATION_TESTS` 开启时编译。
 当前两目标的 HostBatch 和 probe 都未开启该开关，改名证明缺少此处的 GCC 展开与
 Cppcheck 绑定。保留 `activations`，待两侧证据覆盖该测试分支并通过现有证明后继续改名。
+
+## R2.4 枚举误报与 tag 引用
+
+主文印刷 43／PDF 51 将 tag 与 typedef 名分开。AMD2 增列 C11，当前按 C99 判定。
+固定 addon 的 `MisraTagName` 用 Cppcheck scope 的 `className` 和左花括号位置建表。
+在 `LSduR.h:14:14`（`LSduR_StateType`）和 `PduR.h:30:14`（`PduR_StateType`），
+实际声明均以 `typedef enum {` 开始，因此没有 tag 声明。该误报与类型别名的 R2.3
+记录分别裁决。验收按封存原件、诊断位置、程序实际头文件依赖和逐程序指纹归档，保留原报告。
+双目标四 profile 的 RTE CDS tag 均由独立 typedef 引用。`Os_NativeStackType` 由
+`Os_ArtiTaskStacks` 的声明和定义直接引用。队列及内核原件见[采用篇](../../os/adoption.md#r24-内核-tag)。
 
 ## R7.1 当前条件控制证据
 

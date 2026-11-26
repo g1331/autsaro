@@ -20,6 +20,9 @@ pub struct SignalChannel {
     pub trigger: String,
     pub can_if_pdu: String,
     pub can_id: u32,
+    pub extended: bool,
+    pub accepts_fd: bool,
+    pub fd: bool,
     pub can_if_handle: u16,
     pub receive: bool,
     pub dlc: u8,
@@ -27,6 +30,17 @@ pub struct SignalChannel {
     pub bit_length: u16,
     pub deadline_ms: Option<u32>,
     pub transmit_period_ms: Option<u32>,
+}
+
+impl SignalChannel {
+    pub(super) fn encoded_id(&self) -> u32 {
+        super::can_id::encoded(self.can_id, self.extended)
+            | if self.fd && !self.accepts_fd {
+                super::can_id::FD
+            } else {
+                0
+            }
+    }
 }
 
 fn reject(
@@ -389,28 +403,16 @@ pub(super) fn inspect_ports(
             "SIGNAL_MAPPING",
         )?;
         check_trigger(graph, trigger, pdu, Some(signal), port.read)?;
-        let can_id = graph
-            .text(trigger, "IDENTIFIER")
-            .and_then(crate::definitions::unsigned_integer)
-            .filter(|id| *id <= 0x7ff)
-            .ok_or_else(|| {
-                reject(
-                    graph,
-                    trigger,
-                    "CAN_ID_CONFLICT",
-                    crate::product_message!("backend.integration.communication.classical_can_standard_identifier_invalid"),
-                )
-            })?;
-        if graph.text(trigger, "CAN-ADDRESSING-MODE") != Some("STANDARD") {
-            return Err(reject(
+        let can_id = super::can_id::trigger_id(graph, trigger).ok_or_else(|| {
+            reject(
                 graph,
                 trigger,
                 "CAN_ID_CONFLICT",
                 crate::product_message!(
-                    "backend.integration.communication.classical_can_addressing_unsupported"
+                    "backend.integration.communication.classical_can_identifier_or_format_invalid"
                 ),
-            ));
-        }
+            )
+        })?;
         let frame_port_ref = one(
             graph,
             trigger,
@@ -522,16 +524,9 @@ pub(super) fn inspect_ports(
                 .collect(),
             "SIGNAL_MAPPING",
         )?;
-        if value(graph, can_if, &format!("{can_prefix}CanId"), false)
-            .and_then(crate::definitions::unsigned_integer)
-            != Some(can_id)
-            || value(graph, can_if, &format!("{can_prefix}CanIdType"), false)
-                != Some(if port.read {
-                    "STANDARD_NO_FD_CAN"
-                } else {
-                    "STANDARD_CAN"
-                })
-        {
+        let Some((_, accepts_fd)) = super::can_id::pdu_id(graph, can_if, port.read)
+            .filter(|(id, dual)| super::can_id::accepts(*id, *dual, can_id))
+        else {
             return Err(reject(
                 graph,
                 can_if,
@@ -540,7 +535,7 @@ pub(super) fn inspect_ports(
                     "backend.integration.communication.canif_identifier_or_addressing_type_mismatch"
                 ),
             ));
-        }
+        };
         let can_handle = value(graph, can_if, &format!("{can_prefix}Id"), false)
             .and_then(|value| value.parse::<u16>().ok())
             .ok_or_else(|| {
@@ -647,7 +642,10 @@ pub(super) fn inspect_ports(
             frame: graph.elements[frame].object.clone(),
             trigger: graph.elements[trigger].object.clone(),
             can_if_pdu: graph.elements[can_if].object.clone(),
-            can_id,
+            can_id: can_id & super::can_id::EXTENDED_MAX,
+            extended: can_id & super::can_id::EXTENDED != 0,
+            accepts_fd,
+            fd: can_id & super::can_id::FD != 0,
             can_if_handle: can_handle,
             receive: port.read,
             dlc: 4,
@@ -659,7 +657,7 @@ pub(super) fn inspect_ports(
     }
     if channels
         .iter()
-        .map(|channel| channel.can_id)
+        .map(SignalChannel::encoded_id)
         .collect::<std::collections::BTreeSet<_>>()
         .len()
         != channels.len()

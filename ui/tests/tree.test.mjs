@@ -2,10 +2,10 @@
 import { createElement } from 'react';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { ProjectTree } from '../src/workbench/ProjectTree';
-import { ToolWindows, toolLabels } from '../src/workbench/ToolWindows';
+import { ProjectTree } from '../src/features/project/ProjectTree';
+import { ToolWindows, toolLabels } from '../src/app/ToolWindows';
 import { localize, previewLanguage, translate } from '../src/i18n';
-import { initialState } from '../src/workbench/state';
+import { initialState } from './support/workbench-state.mjs';
 import { withCommands } from './support/commands.mjs';
 
 afterEach(() => {

@@ -22,6 +22,7 @@ import threading
 import time
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
 from typing import Any, Self
 
@@ -55,6 +56,60 @@ def _reap_group(pgid: int) -> None:
             return
         if pid == 0:
             return
+
+
+def _shutdown_snapshot(pid: int) -> dict[str, Any]:
+    """Sample Linux task state before killing a supervisor that failed to exit."""
+    limit = 8
+    proc = Path(f"/proc/{pid}")
+    evidence: dict[str, Any] = {"pid": pid, "observed_ns": time.monotonic_ns()}
+
+    def read(path: Path) -> bytes:
+        try:
+            return path.read_bytes()
+        except OSError as error:
+            return f"errno={error.errno}".encode("ascii")
+
+    def state(task: Path) -> str:
+        # Skip comm, which can contain spaces and right parentheses.
+        field = read(task / "stat").rsplit(b") ", 1)[-1].partition(b" ")[0]
+        return field.decode("ascii", errors="replace") or "unavailable"
+
+    try:
+        tasks = list(islice((proc / "task").iterdir(), limit + 1))
+    except OSError as error:
+        evidence["tasks_errno"] = error.errno
+        return evidence
+    children: dict[str, str] = {}
+    threads = []
+    children_truncated = False
+    for task in tasks[:limit]:
+        thread = {
+            "tid": task.name,
+            "state": state(task),
+            "wchan": read(task / "wchan")[:80].strip().decode("ascii", errors="replace"),
+        }
+        child_ids = read(task / "children").split()
+        if child_ids and child_ids[0].startswith(b"errno="):
+            thread["children_error"] = child_ids[0].decode("ascii")
+        threads.append(thread)
+        for child in child_ids[:limit + 1]:
+            if not child.isdigit():
+                continue
+            child_pid = child.decode("ascii")
+            if child_pid in children:
+                continue
+            if len(children) == limit:
+                children_truncated = True
+                break
+            children[child_pid] = state(Path(f"/proc/{child_pid}"))
+    return {
+        **evidence,
+        "threads": threads,
+        "children": children,
+        "threads_truncated": len(tasks) > limit,
+        "children_truncated": children_truncated,
+    }
 
 
 def _escaped_child(
@@ -688,23 +743,34 @@ class Owner:
     def close(self) -> None:
         if self.process is None:
             return
-        succeeded = False
+        shutdown = "request_failed"
         try:
             response = self.request("shutdown")
-            if response["status"] != "closed":
-                raise OwnershipError(response["status"])
-            succeeded = True
+            status = response["status"]
+            shutdown = status if status in ("closed", "cleanup_unconfirmed") else "unexpected_status"
+            if status != "closed":
+                raise OwnershipError(status)
         finally:
             try:
                 try:
                     exit_code = self.process.wait(timeout=3)
                 except subprocess.TimeoutExpired as error:
-                    self.process.kill()
-                    self.process.wait()
-                    raise OwnershipError(
-                        f"supervisor_failed: shutdown timed out; {self.directory}"
-                    ) from error
-                if succeeded and exit_code == 0 and self.directory is not None:
+                    evidence = None
+                    try:
+                        if sys.platform == "linux":
+                            with suppress(Exception):
+                                evidence = _shutdown_snapshot(self.process.pid)
+                    finally:
+                        self.process.kill()
+                        exit_code = self.process.wait()
+                    message = f"supervisor_failed: shutdown timed out; {self.directory}"
+                    if evidence is not None:
+                        # Diagnostics must not replace the shutdown timeout.
+                        with suppress(Exception):
+                            evidence.update(shutdown=shutdown, exit_code=exit_code)
+                            message += "\nshutdown evidence: " + json.dumps(evidence)
+                    raise OwnershipError(message) from error
+                if shutdown == "closed" and exit_code == 0 and self.directory is not None:
                     self.socket_path.unlink(missing_ok=True)
                     (self.directory / "supervisor.log").unlink(missing_ok=True)
                     self.directory.rmdir()

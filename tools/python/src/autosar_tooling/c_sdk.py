@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import gzip
 import hashlib
 import json
@@ -732,7 +733,8 @@ def validate_sources(data: dict) -> None:
                 and re.search(r"\bWaitForSingleObject\s*\([^;]*\bINFINITE\b", use)
             ):
                 port_wait = True
-    if not port_wait:
+    # Require the port witness when that translation unit belongs to the scan.
+    if port in units and not port_wait:
         raise ValueError("SDK wait " + port + ": missing active wait call source")
 
 
@@ -852,10 +854,11 @@ def entry_kind(entry: os.DirEntry, link: bool) -> str | None:
     """
     try:
         return "dir" if entry.is_dir() else "file" if entry.is_file() else None
-    except OSError:
-        if not link:
-            raise
-        return None
+    except OSError as error:
+        # ERROR_INVALID_NAME and ERROR_CANT_RESOLVE_FILENAME (Windows ELOOP).
+        if link and (error.errno == errno.ELOOP or getattr(error, "winerror", None) in (123, 1921)):
+            return None
+        raise
 
 
 def walk_search_directory(directory: Path, visited: set):

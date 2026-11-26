@@ -49,16 +49,25 @@ def run_script(script):
 
 def expression_value(expression, event):
     expression = expression.removeprefix("${{").removesuffix("}}").strip()
-    event = {"inputs.release-revision": "", **event}
+    event = {
+        "always()": True,
+        "cancelled()": False,
+        "github.event.changes.base": None,
+        "github.event.changes.body": None,
+        "github.event.changes.title": None,
+        "inputs.release-revision": "",
+        **event,
+    }
     for name in sorted(event, key=len, reverse=True):
         expression = expression.replace(name, repr(event[name]))
     expression = expression.replace("||", " or ").replace("&&", " and ")
-    return eval(expression, {"__builtins__": {}})
+    expression = re.sub(r"!(?!=)", " not ", expression)
+    return eval("(" + expression + "\n)", {"__builtins__": {}})
 
 
 def concurrency_group(expression, event):
     return re.sub(r"\$\{\{(.*?)\}\}",
-                  lambda match: str(expression_value(match[1], event)), expression)
+                  lambda match: str(expression_value(match[1].strip(), event)), expression, flags=re.DOTALL)
 
 
 class CiSelectionTests(unittest.TestCase):
@@ -162,11 +171,10 @@ class CiSelectionTests(unittest.TestCase):
                 run.return_value = subprocess.CompletedProcess([], 0)
                 run_script(preflight["run"])
                 self.assertEqual(output.read_text(), "sha=" + release_sha + "\n")
-        for job in ("c-analysis-gates", "c-analysis-gates-windows", "c-analysis"):
-            step = next(row for row in workflow["jobs"][job]["steps"] if "GATE_MODE" in row.get("env", {}))
-            self.assertEqual(expression_value(step["env"]["GATE_MODE"], {
-                "github.event_name": "workflow_dispatch",
-            }), "strict")
+        self.assertEqual(expression_value(workflow["env"]["GATE_MODE"], {
+            "github.event_name": "workflow_dispatch", "github.ref": "refs/heads/master",
+            "inputs.release-revision": release_sha,
+        }), "strict")
         detect = workflow["jobs"]["changes"]["steps"][1]
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "output"
@@ -212,8 +220,7 @@ class CiSelectionTests(unittest.TestCase):
                 for key in ("code", "native", "desktop", "analysis", "application"):
                     self.assertEqual(values[key], str(not draft).lower())
                 for name in ("changes", "quality", "required"):
-                    condition = workflow["jobs"][name]["if"].replace("always()", "True")
-                    self.assertTrue(expression_value(condition, event))
+                    self.assertTrue(expression_value(workflow["jobs"][name]["if"], event))
                 needs = {name: {"result": "success" if name in {"changes", "quality"}
                                or not draft else "skipped"}
                          for name in workflow["jobs"]["required"]["needs"]}
@@ -497,20 +504,46 @@ class CiSelectionTests(unittest.TestCase):
         ):
             run_script(gate["steps"][0]["run"])
 
-    def test_label_events_do_not_cancel_or_replace_required_for_unrelated_labels(self):
+    def test_pr_events_select_the_required_run_and_its_concurrency_group(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())
-        for action, label in (("synchronize", ""), ("labeled", "full-ci"), ("labeled", "area:ci")):
-            event = {"github.workflow": "Development checks", "github.event.action": action,
+        jobs = workflow["jobs"]
+        edits = {"title": {"from": ""}, "body": {"from": None}, "base": {"ref": {"from": "main"}}}
+        for action, label, changes, selected in (
+            ("synchronize", "", (), True),
+            ("labeled", "full-ci", (), True),
+            ("labeled", "area:ci", (), False),
+            ("edited", "", ("title",), False),
+            ("edited", "", ("body",), True),
+            ("edited", "", ("title", "body"), True),
+            ("edited", "", ("base",), True),
+            ("edited", "", ("title", "base"), True),
+            ("edited", "", (), True),
+        ):
+            event = {"github.workflow": workflow["name"], "github.event.action": action,
                      "github.event.label.name": label, "github.event_name": "pull_request",
                      "github.run_id": 123, "github.event.pull_request.number": 99,
-                     "github.ref": "refs/pull/99/merge", "github.sha": "a" * 40}
-            selected = action != "labeled" or label == "full-ci"
-            cancelled = expression_value(workflow["concurrency"]["cancel-in-progress"], event)
-            self.assertEqual(bool(cancelled), selected)
-            name = expression_value(workflow["jobs"]["required"]["name"], event)
-            self.assertEqual(name == "CI required", selected)
-            for job in ("changes", "quality"):
-                self.assertEqual(bool(expression_value(workflow["jobs"][job]["if"], event)), selected)
+                     "github.ref": "refs/pull/99/merge", "github.sha": "a" * 40,
+                     **{f"github.event.changes.{key}": edits[key] for key in changes}}
+            with self.subTest(action=action, label=label, changes=changes):
+                self.assertEqual(expression_value(workflow["concurrency"]["cancel-in-progress"], event), selected)
+                group = concurrency_group(workflow["concurrency"]["group"], event)
+                self.assertEqual(group, workflow["name"] + ("-99" if selected else "-123"))
+                self.assertEqual(expression_value(jobs["required"]["name"], event) == "CI required", selected)
+                for job in ("changes", "quality", "required"):
+                    self.assertEqual(expression_value(jobs[job]["if"], event), selected)
+
+    def test_only_pr_required_stops_on_workflow_cancellation(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+        for event_name, ref in (("pull_request", "refs/pull/99/merge"), ("push", "refs/heads/master")):
+            for cancelled in (False, True):
+                event = {"github.event_name": event_name, "github.ref": ref, "cancelled()": cancelled,
+                         "github.event.action": "synchronize" if event_name == "pull_request" else "",
+                         "github.event.label.name": ""}
+                master = event_name == "push"
+                with self.subTest(event=event_name, cancelled=cancelled):
+                    self.assertEqual(expression_value(jobs["required"]["if"], event), master or not cancelled)
+                    self.assertEqual(expression_value(jobs["master-result"]["if"], event), master)
+                    self.assertEqual(expression_value(jobs["extended"]["if"], event), master and not cancelled)
 
     def test_combined_application_job_keeps_every_check_inside_twenty_minutes(self):
         workflow = yaml.safe_load(WORKFLOW.read_text())["jobs"]
@@ -1327,7 +1360,7 @@ class CiSelectionTests(unittest.TestCase):
                 selection = ("application" if name == "desktop" else
                              "analysis" if name == "c-analysis" else
                              "native" if name in native_jobs else "code")
-                for status in ("success", "failure", "cancelled", "skipped"):
+                for status in ("success", "failure", "cancelled", "skipped", "timed_out"):
                     outputs = {key: str(value).lower() for key, value in selected.items()}
                     needs = {job: {"result": "success"} for job in workflow["required"]["needs"]}
                     needs["changes"]["outputs"] = outputs

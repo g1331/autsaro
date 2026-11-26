@@ -57,8 +57,8 @@ static void busoff(uint8 controller) {
     assert(Can_GetControllerMode(0u, &actual) == E_OK && actual == CAN_CS_STOPPED);
     ++busoffs;
 }
-static const Can_ConfigType can = {sink};
-static const CanIf_RxPduConfigType rx[] = {{0x320u, 21u, 0u}};
+static const Can_ConfigType can = {.sink = sink};
+static const CanIf_RxPduConfigType rx[] = {{0x320u, 21u, 0u, FALSE}};
 static const CanIf_TxPduConfigType tx[] = {{0x321u, 51u, 4u}};
 static const CanIf_ConfigType canif = {rx, 1u, tx, 1u, mode, busoff, 0u, 0u, 0u, 1u};
 static const LSduR_RxRouteType ls_rx[] = {{21u, 31u, PduR_CanIfRxIndication}};

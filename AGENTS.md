@@ -1,83 +1,44 @@
 # Agent 开发指南
 
-本文件是所有代理与贡献者共用的入口，规则不依赖特定代理工具或会话记忆。先读本文件、[CONTRIBUTING.md](CONTRIBUTING.md)、README 和相关模块说明，再核对目标版本、分支及工作区。保留用户修改，使用项目正常开发入口。本文件写跨任务规则；专题规则见“按任务先读”，开工前阅读并遵守。
+本文件是所有代理与贡献者共用的入口目录，规则不依赖特定代理工具或会话记忆。开工前先读本文件、[贡献指南](CONTRIBUTING.zh-CN.md)（[English](CONTRIBUTING.md)）、[README](README.zh-CN.md) 与相关模块说明，并核对目标版本、分支及工作区，保留用户修改。
 
-## 结构与开发
+## 仓库结构
 
 - `core/`：Rust 配置、解析、生成及验证；`src-tauri/`：桌面后端；`ui/`：React 界面。
 - `runtime/`：交付的 C99 运行时；`tools/python/src/`：开发工具与离线 ECU 工具；`tests/`：Python 与桌面测试。
-- `scripts/`：官方资料收集；`docs/development/` 与 `docs/maintainers/`：开发与发行说明。
+- `scripts/`：官方资料收集；`docs/development/` 与 `docs/maintainers/`：开发与发行说明；`docs/standards/`：标准基线与模块义务。
 
-采用 npm、Cargo、uv 和正常测试运行器，不新增代理专用编排、报告或状态系统。格式检查不全仓重排：推送前运行 `quality --scope all --merge-base origin/<目标分支>`，按配置工具检查全部改动行（含夹具与 Rust 测试）。它读取工作区，包含未暂存和未跟踪文件；基准只选改动行，卫生检查先于行过滤。pre-push 包装与干净检出做法见 CONTRIBUTING。自动 GUI 验收用隔离入口，不占用户桌面。
+## 常用入口命令
+
+```sh
+uv run --locked python -m autosar_tooling verify --scope changed --base origin/master --list
+uv run --locked python -m autosar_tooling quality --scope all --merge-base origin/master
+uv run --locked python -m autosar_tooling requirements
+uv run --locked python -m autosar_tooling assets check
+```
+
+常规前后端与 Rust 检查命令见 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md#检查改动)，环境诊断见 `uv run --locked python -m autosar_tooling doctor --component <ui|desktop|resources>`。
 
 ## 按任务先读
 
 | 开始这类工作前 | 先读 |
 | --- | --- |
-| 修改 C、头文件、生成 C 的模板或 emitter | [C 编码规范](docs/development/c-coding-standard.md)、[misra-c2012](.agents/skills/misra-c2012/SKILL.md)、[生成 C 的静态检查](docs/development/testing/generated-c.md)（含样本比较）、[Emitter 规则](docs/architecture/mainline.md#emitter-规则) |
+| 修改 C、头文件、生成 C 的模板或 emitter | [C 编码规范](docs/development/c-coding-standard.md)、[misra-c2012](.agents/skills/misra-c2012/SKILL.md)、[生成 C 的静态检查](docs/development/testing/generated-c.md)、[Emitter 规则](docs/architecture/mainline.md#emitter-规则) |
 | 实现或核对 BSW／RTE／OS 规范，写条款处置 | [标准基线](docs/standards/README.md)（§5 处置标记与核算）及对应模块篇 |
 | 修改独占区、跨模块回调或并发 | [运行时架构 · 独占区协议](docs/architecture/runtime.md#独占区协议) |
 | 原生、OS、进程测试；迁移 runtime 文件或改运行时配置结构；排查时序与间歇失败 | [进程与原生行为](docs/development/testing/native.md)、[Windows 进程](docs/development/testing/windows-processes.md) |
-| CI／workflow、独立审查、变异、Clippy、源码验收 | [测试说明](docs/development/testing/README.md)、[源码验收](docs/development/testing/source-acceptance.md) |
+| CI／workflow、日常反馈、模糊测试、源码验收 | [测试说明](docs/development/testing/README.md)、[最小有效反馈](docs/development/testing/feedback.md)、[源码验收](docs/development/testing/source-acceptance.md) |
+| 进入调查、行为证伪、变异确认与独立审查 | [工程验证、调查与独立审查](docs/development/testing/verification-and-review.md) |
 | 桌面场景与界面交互验收 | [桌面场景](docs/development/testing/desktop.md) |
 | 官方档案、官方对照或登记了字节摘要的夹具 | [官方对照](docs/development/testing/official.md) |
 | 交付资产与资产摘要 | [资产清单维护](docs/maintainers/assets.md) |
 | 工作台界面与软件帮助 | [DESIGN.md](DESIGN.md) 及其[交互规格](docs/design/ux-baseline/EXPERIENCE/README.md) |
-| 版本发布 | [发行说明](docs/maintainers/releasing.md) |
+| Issue、分支、提交、PR、文档规范与版本发布 | [贡献指南](CONTRIBUTING.zh-CN.md)、[发行说明](docs/maintainers/releasing.md)、[规划与协作](docs/project/OWNER_GUIDE.md) |
 
-## Issue、分支与 PR
+## 核心原则
 
-任务与状态用 GitHub Issues 和 Milestones 跟踪；方向与长期候选见 [docs/roadmap/](docs/roadmap/README.md)，架构约束见 [docs/architecture/](docs/architecture/README.md)，重要决定写成 [ADR](docs/adr/)。实现结果和验证证据完整写在 PR（正文与最终评论），Issue 与相关跨模块 Issue 只写结论、链接及与其相关的部分，同一份证据不在多处复述；不额外生成报告、矩阵或台账。状态查询只读。2026-10 之前的规划归档只作追溯（见路线图），不作当前依据。
-
-- **开工**：读该 Issue 的范围、依赖、进入条件、验收标准、评论与关联 PR，核对所属 Milestone 总览（`tracking` 标签）的共同规则，并对照当前代码，已由其他工作完成的部分不重做。新建 Issue、开始实现或补充规则前，先搜索已有 Issue（含已关闭）与进行中的 PR／分支：已有覆盖的在原 Issue 补充或接续，相关但不同的互相引用并保持单一信息来源。关键模块 Issue 等依赖全部合并后开工，不与前置工作并行开预调查。
-- **进入调查**：进入条件未满足时先调查，把结论和确定的方案写回 Issue 评论再实现。调查评论写证据，不写执行计划：所选配置；按原文编号说明现有实现哪里成立、哪里有缺口；状态归属与真实调用闭包；方案理由及被否决的方案；ABI／交付契约影响；用哪些反例与变异证伪（范例：[#45 的进入调查](https://github.com/g1331/autsaro/issues/45#issuecomment-6192582796)）。新增校验、状态、标志或并发机制前，先追清已有校验链与实际调用闭包并写进调查；变异只做事后确认，不用来发现本应先查清的重复。
-- **分支**：一个 Issue 在独立分支中一次完整推进，开工时用 `gh issue develop <N> --base master --name <分支>` 创建远端分支并关联到 Issue 的 Development；本地已建好同名分支（如工作树）时同样执行，推送即快进。分支按实际功能或修复命名，如 `feat/component-scheduling`，不使用 `t3code` 等代理工具名称作为前缀；命名在关联前定好，改名或拆分时为新分支重新关联并删除旧远端分支；并行的 Issue 各用独立工作树隔离。
-- **决定与授权**：普通方案、重构及有界风险按当前明确委托决定，不因历史待决重复索批。Issue 内 ABI／交付／第三方身份按规范决定，记入 PR／CHANGELOG。重大产品／公开合同、路线、发布、法律承诺、保护绕过及范围外操作仍按保留权限授权。提交至合并仅沿用当前授权，缺授权须说明。
-- **提交**：按可审查、可独立验证的阶段及时提交，不把多个阶段积成一个大提交：模块整改通常分为定义与配置校验、运行时与生成器、规范处置与清单；仓库规则与流程文档（AGENTS、CONTRIBUTING、编码规范）的修改单独提交，并在 PR 正文列出。提交信息采用 Conventional Commits（type、scope 与破坏性变更写法见 CONTRIBUTING），scope 写受影响模块或区域（如 `dcm`）；描述用英文写实际能力或修复，不用内部任务编号代替改动含义。
-- **PR 与审查**：最终 PR 用 `Closes #N`，中间 PR 用 `Refs #N`；合并前核对 `closingIssuesReferences` 并解除中间交付的整项关闭关联，仅有 `Refs` 不足。审查不设人工批准或等待门槛。自审完整 diff：PR 正文逐项关联验收、Issue 备注／移交事项及测试、样本或文档证据；未完成项注明原因和承接 Issue。按原文复核改动的规范结论：编号、签名、返回／错误语义、状态转换与处置标记。模块整改、交付布局／ABI、并发或独占区等高风险改动须做一轮独立审查，与 CI 并行；发现须注明位置与规范原文，实现者修复或说明不采纳理由。GitHub 记审查 head、发现与处置，不写代理身份、配置或会话信息。
-- **CI 与合并**：完整工程推进覆盖分支、实现、验证、提交、PR、审查、必需 CI、合并及目标分支核对。必需检查失败立即查日志。自审后用 `gh pr merge --auto --merge`，由 `CI required` 放行。master 每次 push 跑完整 Development 矩阵与按路径选择的 Extended；`Post-merge checks result` 汇总失败并开 Issue。开 PR 或合并前查最近完成的 master 汇总：无关失败确认已有 Issue 跟踪后照常推进，相关或归属未明先查清。引入回归的 PR 作者修复，影响交付或关键主线用例时维护者及时回滚。仅在合并后套件是 Issue 出口证据时等待它，并回写结果。分支与 master 冲突时先同步。确认 PR 已合并再删除工作树、勾选总览。未获合并授权时交付止于 PR 最终评论，由合并者勾选总览。
-- **顺带完成与遗留**：一项工作顺带完成了另一个 Issue 的内容时，在那个 Issue 留言写明完成了什么及所在 PR，并勾选其清单；全部完成的在 PR 中写 `Closes #N`，或核实后附理由关闭。超出本次范围的差距（包括只因当前配置收窄才成立的实现捷径，如静态交付文件写死生成器决定的名字）按依据、影响与退出条件新建 Issue（`known-gap`／`tech-debt`／`question`），归入承接阶段的 Milestone 或留在未排期（Milestone 只为已承诺的阶段建立，见路线图）。改变路线顺序、产品契约或支持边界时先写 ADR 并更新路线图与架构文档，被取代的 ADR 只改状态。
-- **托管 runner**：由并行 Issue 共享，推送前确认会触发哪些运行，中间提交和探测推送的检查及时取消，临时探测分支和一次性 workflow 用完即删（细则见[测试说明](docs/development/testing/README.md#ci)）。文档中描述的自动入口须有实际运行记录，不能只凭 workflow 文件存在。
-
-## AUTOSAR 契约与渐进完善
-
-- 修改或扩展 BSW、RTE、OS、配置模型及 C 生成逻辑时，先按项目固定版次核对相关官方 SWS、ECUC 和通用 BSW 要求，再设计实现与测试。规范结论一律对照原文：每个编号的实现、测试预期与处置标记都依据 SpecificationsARXML 中该条目的正文或 PDF 原页（含图），不凭记忆、现有代码、开源实现或条目标题判断；未对照原文的不能写成已核对；“已核对”只表示所选配置下的义务已满足，括号写出具体证据（函数、类型、测试或生成样本对象），不让多行共用泛泛说明。核对所涉模块的全部接口义务与上下层接缝，不只检查新增函数；文本提取只保留图题，所依据页面上的框图、状态机和时序图须渲染页面查看；现有代码、ABI 清单和绿色测试不能替代官方契约；ECUC metadata 数值范围通过不等于配置语义合法（细则见[标准基线 §3](docs/standards/README.md#3-预期从标准独立定义)）。
-- 条款处置按 [ADR 0017](docs/adr/0017-requirement-disposition-in-tests-and-standards.md) 用显式标记记录（测试注释 `Verifies:`、模块篇的“已核对／不适用／差距”标记，语法见[标准基线 §5](docs/standards/README.md#5-条款处置与核算)），未加标记的编号不计入处置；`SWS_BSWGeneral` 按模块限定标记并用 `requirements SWS_BSWGeneral --module <Mip>` 核算，其他模块的证据不替本模块处置；核算结果现算，不提交。
-- 对外使用 AUTOSAR 标准名称的接口须满足标准签名和语义，仅改名、加 typedef 或空壳接口不算对齐；主机注入与测试控制走明确的适配接口（见[标准基线 §3](docs/standards/README.md#3-预期从标准独立定义)）。
-- 每次相关开发主动检查并修复当前模块及直接依赖链上的既有标准差距，纳入本次 Issue 的范围、实现与验收。模块整改以 SpecificationsARXML 中该模块文档的全部条目为清单（不从 PDF 抓编号）；完成时 `requirements <文档>` 的未处置条目与失效引用均为零，用 `--update` 提交该文档清单并从 `acceptance.yml` 的 `STALE_ONLY` 移除。以模块在所选配置下的适用义务为边界，不能因示例未使用就省略必需能力，也不无条件扩展到所有可选变体。超出当前授权或受目标条件阻塞的差距，写明规范依据、影响、承接阶段与退出条件到对应 Issue（跨阶段差距同时更新 roadmap 或 standards 文档）；仅写“主机专属”或“尚未符合”不算解决，不让已知差距随功能扩展反复延期。
-- 稳定版本发布前只维护一条生成主线：旧工程和旧交付包按真实结构身份识别后明确拒绝，不静默误解析、不改写（见[主线收敛](docs/architecture/mainline.md#稳定版本前不保留兼容)）；契约变化仍须审阅 ABI／第三方身份并写入 CHANGELOG。
-- 验证预期从官方契约独立定义，用正常测试框架检查公开接口的编译／链接兼容性及成功、拒绝和关键状态变化，保留已有行为回归；不从现有源码或 ABI 清单自动生成唯一预期，对规范的核对与实现内部一致性检查分开，不以主机行为、XSD 校验或 MISRA 检查代替模块符合性。
-- 主机功能以已定义的调查范围为最低基线，不按上板日期缩减。配置、生成、驱动软件、模型与恢复在前序闭合；R10 只做具体目标适配与硬件取证，可后移。主机／仿真证据不外推实机、完整符合或认证。
-
-## C、MISRA 与交付资产
-
-- clang-tidy 按 C 编码规范从 `quality --c-samples` 运行，新结果不能靠加基线条目通过，修好的条目从基线删除。相关改动对实际生成的受影响 profile 运行 `c-check`；本机缺少固定版本 Cppcheck 时按测试说明从官方标签构建后在本地运行，不把 `c-check` 留给 CI。区分分析完整性、源码诊断与人工规范评估，不能用 CI 链路通过替代源码合规结论。现存诊断清零前，按“规则＋文件＋源码行”与基线的同一检查对比受影响样本，新代码不增加诊断。申请偏离前核对适用的 amendment／TC 与实际调用路径（见[标准基线 §3](docs/standards/README.md#3-预期从标准独立定义)）。
-- MISRA 范围按 [ADR 0030](docs/adr/0030-host-simulation-layer-outside-misra-scope.md)：主机仿真层在范围外，也编译进目标的文件仍在范围内。范围内按 [ADR 0025](docs/adr/0025-misra-layered-scope.md)分自有代码与 SDK／FreeRTOS 采用代码，应用 R15.5 GRP；AUTOSAR 必需冲突按 [ADR 0023](docs/adr/0023-autosar-required-conflict-disposition.md)。类别外核对原文、闭包、风险并独立复核；Mandatory 不偏离，缺依据保持未核查。新例外按当前授权决定，风险接受不替代正式偏离或符合性义务。原始诊断保留，PR 留证据，#58 留结论链接。
-- 运行时资产摘要由构建计算；使用 `python -m autosar_tooling assets check` 核对清单与文件，`assets update` 只更新独立 seal guard 身份。ABI 与第三方身份单独审阅；交付字节须符合 `.gitattributes` 固定换行，由资产测试核查，见[资产清单维护](docs/maintainers/assets.md)。
-
-## 工程推进与判断
-
-- 以高质量完成项目为目标，按实际风险选择必要流程，不机械模仿用户举例的组织方式。每次交付以既有同类交付的工程习惯与质量为最低基线：开工时（写调查评论前）对照近期同类 Issue／PR 及实际代码，维度包括调查深度、代码习惯（命名、职责划分、复用已有入口、测试组织）、边界处理、测试和交接证据，交付前复核；精简只减少重复与无效工作，不削减必要调查、实现或验证，不等用户提醒后补齐。
-- 给出有证据的专业判断，声称“已对照／已核对”时写明对象与维度，未覆盖的直接说明；受到质疑时核查依据并解释结论变化，不迎合反问，也不把日常技术选择交回用户。提请用户决定或确认前，先从 Issue／PR 记录、仓库与 CI 核实事项的当前状态：已解决的不再提出，例行跟进（如按规则新建 known-gap Issue）直接完成，确需用户决定的逐项在对话中提出并附推荐。
-- 按原始目标持续推进；阶段 PR 合并后继续剩余授权工作。先验证高风险机制。父项受阻则交付原验收内独立部分，注明承接者、下一动作及恢复条件；条件满足即验证与合并。重复失败沿用调查与补丁并修正根因。按风险和改动范围选择本地必需检查，完整矩阵由 master CI 验证。
-- 用户指出一个例子时，先解决真实例子，再检查同一根因涉及的入口、调用方或同篇文档；不只改被点名的一处，也不据此扩展成无关的全仓治理。恢复或压缩会话后，从相关历史和当前仓库核对未完成目标，不用摘要中的“下一步”替代完整需求。
-- 新建工程或子工程用生态认可的初始化工具；只有明确的长期团队用途才保留新增脚本，一次性探查不升级成仓库必经工具。验收工具受阻时优先评估已有安全替代入口，不让工具排障取代产品交付。
-
-## 验证
-
-- 行为改动从正常入口实际运行，按任务覆盖成功、失败和关键状态变化；构建、mock 或静态截图不能替代真实体验。区分浏览器、原生 Tauri／IPC、安装包和生成 ECU 的验证范围，未运行的层级不算通过。隔离条件不满足时，不退回用户桌面操作，也不为方便验收修改宿主全局设置。
-- 必需与扩展检查见[测试说明](docs/development/testing/README.md#ci)。只报告实际触发的矩阵与运行平台，不自动添加 `full-ci`，不把 Linux 本地原生通过写成全平台通过。桌面 GUI／IPC 在 master 运行，Extended 仅手动运行桌面。
-- 测试要能证伪目标性质：拒绝测试只匹配共享错误码时，可能由另一项检查报告同一代码而通过，需同时断言对象位置；在 Issue 中声明某个边界“已有测试”前，先找到实际修改该输入的测试，并用放宽实现的变异确认它会失败。新增行为的每个可观察效果同样要有能杀死其变异的测试：删除某处写入或调用后全部测试仍通过、又找不到观察场景的，按死代码删除，不靠补 `Verifies:` 保留。
-- 不用放宽期限、弱化断言、重试、固定延时或扩大排除让检查通过；间歇失败先取得失败现场与输出，再按根因修复。子进程失败消息沿用已附带 stdout／stderr 的共用执行入口，不另写只报日志路径的错误。
-
-## 界面与用户文档
-
-- README 向新读者介绍能力、使用／开发入口、限制及真实截图，不放进度、代理叙述、设计解释或修复流水。证据归 PR，阶段结论归 Issue/Milestone，路线变化归 docs/roadmap/；用法或支持变化同步指南，核查冗余、层级和双语一致性。开发文档面向常规贡献者；特定环境或协作要求注明条件，不作默认门槛。
-- 从用户背景材料提炼通用需求；未经明确要求，不把个人经历、组织或项目来源写入文档、文件名、提交或 PR。
-- 项目文档按 [CONTRIBUTING](CONTRIBUTING.zh-CN.md#文档组织) 控制篇幅：单篇约 20 KB 以内、一篇一个主题，超出时拆为同名目录并以 `README.md` 索引组织，不让单一文件持续膨胀。
-
-## 维护本文件
-
-- 用户纠正工作方式、在对话中确定或调整开发流程（如合并标准、验证范围、Issue 推进方式），或实现、调试、验收中暴露重复性／高代价错误后，主动把已确认、可复用且尚未覆盖的内容写进仓库，无需等待用户再次提醒；不只记在个人或代理的会话记忆中，使任何接手者按同一流程工作。写成包含适用条件和正确做法的简短指令，不依赖特定代理的技能、记忆或会话工具，并在交付说明中指出更新内容。
-- 本文件与其他文档一样受 20 KiB 限制（`quality` 检查）：部分代理只加载有限的项目指令，如 Codex 默认 32 KiB，超出部分静默丢弃。跨任务规则写在这里；只在某类工作中适用的做法写进对应专题文档（影响人类贡献者的写进 CONTRIBUTING 或测试说明），并在“按任务先读”登记触发条件，新增或改名专题文档时同步该表。
-- 删除或改名功能、链路、工具或文件时，依据已不存在的条目删除，原则仍成立的改写示例。新增教训前先查已有规则，合并或替换同类旧条目，不让条目只增不减；只记录有实际依据的结论，不堆积会话日志、临时猜测或一次性要求。不为方便代理执行而放宽验收、数据保护或授权边界；已有约束仅在依据失效或用户明确调整时修订。
+- **先查同类成熟项目的通行做法**：做任何流程、工具或设计决策，先查同类成熟项目的通行做法，再选其中高效且可靠的方案；偏离通行做法要写明具体理由。
+- **Issue 粒度与父子拆分**：一个 Issue 应能由一个 PR 关闭。预计需要多个 PR 的工作，开工前拆成 GitHub 子 Issue，每个 PR 写 `Closes <子 Issue>`；`Refs` 只用于父 Issue。范围在创建时写成可数清单（如本批多少条规则、多少个场景）。父 Issue 正文顶部放一张状态表，原地更新；评论只记录决定、阻塞和范围变化，发现新工作就新建子 Issue，不悄悄扩大已有 Issue。分支用 `gh issue develop <子 Issue>` 关联到子 Issue，合并时直接关闭该子 Issue。
+- **使用正常开发入口**：采用 `npm`、`Cargo`、`uv` 与正常测试、Issue、PR 入口；不新增代理专用编排、报告、状态系统或独立台账。
+- **以原文与实证为依据**：AUTOSAR／MISRA 结论依据固定版次原文（含渲染图）；验证预期从标准独立定义；行为改动从正常入口实测成功、失败与关键状态变化；不通过放宽期限、弱化断言、重试或扩大排除让检查通过，只报告实际运行的平台与范围。
+- **维护目录与规则**：约定变更或高代价教训主动写入仓库，不留在会话记忆。本文件只留跨任务目录与核心原则并控制在 8 KB 以内；流程与专题细节放 [CONTRIBUTING](CONTRIBUTING.zh-CN.md) 或专题文档（单篇不超过 20 KiB），新增或改名专题文档时同步“按任务先读”表，工具或功能失效时清理或改写旧条目。

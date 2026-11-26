@@ -6,9 +6,11 @@
 
 ## 已选配置与行为
 
-主线只启用 ComM 输入：一个 `BSWM_IMMEDIATE` 的 `BswMModeRequestPort`，来源为引用 ComM 通道的 `BswMComMIndication`，初值为 `COMM_NO_COMMUNICATION`。三条规则分别以 `BSWM_EQUALS` 比较 NO、SILENT、FULL，各自的 true 动作列表以 `BSWM_CONDITION` 执行一个 `BswMUserCallout`，调用文本固定为 `Ecu_HostBusSM_ApplyMode(<通道>u, COMM_<模式>_COMMUNICATION)`。其他模块输入、DEFERRED 处理、事件与定时器、TRIGGER、false 列表、嵌套列表、其他动作、分区与 Det 都在生成前拒绝。
+主线只启用 ComM 输入：一个 `BSWM_IMMEDIATE` 的 `BswMModeRequestPort`，来源为引用 ComM 通道的 `BswMComMIndication`，初值为 `COMM_NO_COMMUNICATION`。三条规则分别以 `BSWM_EQUALS` 比较 NO、SILENT、FULL，各自的 true 动作列表以 `BSWM_CONDITION` 执行一个 `BswMUserCallout`，调用文本固定为 `Ecu_HostBusSM_ConfirmMode(<通道>u, COMM_<模式>_COMMUNICATION)`。其他模块输入、DEFERRED 处理、事件与定时器、TRIGGER、false 列表、嵌套列表、其他动作、分区与 Det 都在生成前拒绝。
 
 `BswM_ComM_CurrentMode` 在调用者上下文仲裁，只评估使用该输入的规则。BswM 按 [ADR 0018](../../adr/0018-per-module-exclusive-areas-without-cross-module-locking.md) 使用自己的 `BSWM_STATE`，动作列表在区外运行：动作期间到达的输入不递归执行，而是在当前动作之后各仲裁一次，仲裁前取最新指示值（`SWS_BswM_00069`、`00281`）。`BswM_Deinit` 之后的输入不再处理，正在运行的动作照常结束；`BswM_MainFunction` 没有 DEFERRED 输入可处理。
+
+HostBusSM 在通知 ComM 前已经应用方向。生成器执行三处配置的实际模式核验调用。旧源 ARXML 仍可导入。生成前会在旧的 `Ecu_HostBusSM_ApplyMode` 调用处提示需要手动替换的完整值。当前模式无法读取或已和指示不一致时，生成动作返回 `E_NOT_OK`。BswM 在区外调用失败回调，请求 HostBusSM 在后续 ECU 周期重新读取并发布实际模式。这样，迟到的 NO 指示也不会把已经恢复到 FULL 的 CAN 方向写回 OFFLINE。失败回调独立于标准 Det 报告配置。
 
 ## 处置与证据
 

@@ -15,7 +15,7 @@ static const Ecu_HostBusSM_ConfigType *bussm_configuration
 static ComM_ModeType requested_mode ECU_HOSTBUSSM_VAR_CLEARED; /**< Last accepted request. */
 static boolean transition_pending ECU_HOSTBUSSM_VAR_CLEARED;   /**< Controller transition. */
 static uint32 revision ECU_HOSTBUSSM_VAR_CLEARED; /**< Transition events; never reset. */
-/* Completions awaiting Ecu_HostBusSM_Publish; Init keeps a running publisher. */
+/* Pending mode observations; Init keeps a running publisher. */
 /* MR12 RULE 8.9 VIOLATION: Explicit VAR mapping requires file-static scope under SWS_MemMap_00023.
  */
 static struct {
@@ -29,17 +29,27 @@ static struct {
 #include "Ecu_HostBusSM_MemMap.h"
 static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Enter(void) { Can_HostAreaEnter(CAN_HOST_AREA_BUSSM); }
 static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Exit(void) { Can_HostAreaExit(CAN_HOST_AREA_BUSSM); }
-/* Publish the actual mode after a completion; a concurrent or reentrant completion is
- * published by the running publisher. Each round reads the actual mode, so a completion
- * that raced a later one cannot leave ComM with a stale mode. Repeated factual
- * publication lets a restarted ComM obtain the actual mode; ComM filters repeats. */
-static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(void)
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_QueueModePublication(void)
+{
+    Ecu_HostBusSM_Enter();
+    if (bussm_configuration != NULL_PTR) {
+        bussm_publication.due = TRUE;
+    }
+    Ecu_HostBusSM_Exit();
+}
+/* A completion queues an observation before claiming the publisher. The ECU cycle
+ * only drains observations already queued. A concurrent or reentrant publication is
+ * handled by the running publisher.
+ * Each round samples the actual mode; ComM filters repeated values. */
+static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(boolean completed)
 {
     boolean owner = FALSE;
     Ecu_HostBusSM_Enter();
     if (bussm_configuration != NULL_PTR) {
-        bussm_publication.due = TRUE;
-        if (!bussm_publication.running) {
+        if (completed) {
+            bussm_publication.due = TRUE;
+        }
+        if (bussm_publication.due && !bussm_publication.running) {
             bussm_publication.running = TRUE;
             owner = TRUE;
         }
@@ -65,6 +75,7 @@ static ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_Publish(void)
         }
     }
 }
+ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_PublishPendingMode(void) { Ecu_HostBusSM_Publish(FALSE); }
 /* The configuration for Channel, or NULL; read under the area, used outside it. */
 static ECU_HOSTBUSSM_CODE const Ecu_HostBusSM_ConfigType *Ecu_HostBusSM_Channel(
     NetworkHandleType Channel)
@@ -97,6 +108,7 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_DeInit(void)
     Ecu_HostBusSM_Enter();
     bussm_configuration = NULL_PTR;
     transition_pending = FALSE;
+    bussm_publication.due = FALSE;
     Ecu_HostBusSM_Exit();
 }
 ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_GetCurrentComMode(NetworkHandleType Channel,
@@ -153,6 +165,13 @@ ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ApplyMode(NetworkHandleType Chan
     }
     return result;
 }
+ECU_HOSTBUSSM_CODE Std_ReturnType Ecu_HostBusSM_ConfirmMode(NetworkHandleType Channel,
+                                                            ComM_ModeType ComMode)
+{
+    ComM_ModeType actual = COMM_NO_COMMUNICATION;
+    const Std_ReturnType observed = Ecu_HostBusSM_GetCurrentComMode(Channel, &actual);
+    return ((observed == E_OK) && (actual == ComMode)) ? E_OK : E_NOT_OK;
+}
 /* Register a controller transition, then ask CanIf. A refusal restores whether an older
  * transition is pending, unless a newer registration or a completion came meanwhile;
  * the refused mode stays requested, and ComM requests it again. */
@@ -203,7 +222,7 @@ Ecu_HostBusSM_Request(const Ecu_HostBusSM_ConfigType *config,
             Ecu_HostBusSM_Enter();
             requested_mode = ComMode;
             Ecu_HostBusSM_Exit();
-            Ecu_HostBusSM_Publish();
+            Ecu_HostBusSM_Publish(TRUE);
         }
     } else {
         result = Ecu_HostBusSM_Transition(config, ComMode);
@@ -245,10 +264,10 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerModeIndication(
     if (config != NULL_PTR) {
         if (ControllerMode == CAN_CS_STARTED) {
             if (Ecu_HostBusSM_ApplyMode(config->channel, requested) == E_OK) {
-                Ecu_HostBusSM_Publish();
+                Ecu_HostBusSM_Publish(TRUE);
             }
         } else if ((ControllerMode == CAN_CS_STOPPED) || (ControllerMode == CAN_CS_SLEEP)) {
-            Ecu_HostBusSM_Publish();
+            Ecu_HostBusSM_Publish(TRUE);
         } else {
             /* No completed communication mode for UNINIT. */
         }
@@ -273,7 +292,7 @@ ECU_HOSTBUSSM_CODE void Ecu_HostBusSM_ControllerBusOff(uint8 ControllerId)
             transition_pending = FALSE;
             ++revision;
             Ecu_HostBusSM_Exit();
-            Ecu_HostBusSM_Publish();
+            Ecu_HostBusSM_Publish(TRUE);
         } else if (actual == CAN_CS_STARTED) {
             ComM_ModeType requested;
             Ecu_HostBusSM_Enter();
