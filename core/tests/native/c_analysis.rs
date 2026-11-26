@@ -119,10 +119,9 @@ fn generated_can_object_sections_and_clear(project: &Path) {
         ("Can_Write", ".text"),
         ("Can_Init", ".text"),
         ("Can_MainFunction_Read", ".text"),
-        ("can_controller_mode", ".bss"),
+        ("controllers", ".bss"),
         ("can_initialized", ".bss"),
-        ("tx_payload", ".bss"),
-        ("rx_payload", ".bss"),
+        ("can_configuration", ".bss"),
         ("driver_lifetime", ".bss"),
     ] {
         assert!(
@@ -145,26 +144,31 @@ void CanIf_RxIndication(const Can_HwType *mailbox, const PduInfoType *info) {{ (
 Std_ReturnType Det_ReportRuntimeError(uint16_t module, uint8_t instance, uint8_t api, uint8_t error) {{
     (void)module; (void)instance; (void)api; (void)error; return E_OK;
 }}
-EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t length, const uint8_t *data, boolean brs, uint32 data_phase_bitrate) {{
+EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink, uint8 channel, PduIdType handle, uint32_t id, uint8_t length, const uint8_t *data, boolean brs, uint32 data_phase_bitrate) {{
     (void)brs; (void)data_phase_bitrate;
-    (void)sink; (void)handle; (void)id; (void)length; (void)data; return ECU_OK;
+    (void)sink; (void)channel; (void)handle; (void)id; (void)length; (void)data; return ECU_OK;
 }}
 int main(void) {{
-    uint8 i;
-    assert(can_controller_mode == 0 && can_bus_off == 0u &&
-           can_initialized == 0u && tx_sink == NULL_PTR);
-    assert(driver_lifetime == 0u && tx_pending == 0u && tx_in_flight == 0u && tx_cancelled == 0u);
-    assert(tx_id == 0u && tx_length == 0u && tx_handle == 0u);
-    assert(tx_confirmation_pending == 0u && tx_confirmation_handle == 0u && tx_confirming == 0u);
-    assert(interrupt_disable_count == 0u && mode_notification_pending == 0u &&
-           indication_processing[0] == 0u && indication_processing[1] == 0u);
-    assert(pending_controller_mode == 0 && busoff_notification_pending == 0u);
-    assert(rx_pending == 0u && rx_processing == 0u && rx_id == 0u && rx_length == 0u);
-    assert(rx_overrun_pending == 0u);
-#if CAN_HOST_QUEUED_COMPLETION == 1
-    assert(host_tx_sequence == 0u && host_tx_cancelled_through == 0u && host_tx_completed_through == 0u);
-#endif
-    for (i = 0u; i < CAN_FD_MAX_LENGTH; ++i) {{ assert(tx_payload[i] == 0u && rx_payload[i] == 0u); }}
+    assert(can_initialized == 0u && can_configuration == NULL_PTR && driver_lifetime == 0u);
+    for (uint16 index = 0u; index < CAN_CONTROLLER_CAPACITY; ++index) {{
+        const Can_ControllerRuntimeType *state = &controllers[index];
+        assert(state->controller == 0u && state->can_if == 0u && state->fd_tx_bitrate == 0u &&
+               state->fd_tx_brs == 0u && state->can_controller_mode == 0 && state->can_bus_off == 0u);
+        assert(state->tx_pending == 0u && state->tx_in_flight == 0u && state->tx_cancelled == 0u);
+        assert(state->tx_id == 0u && state->tx_length == 0u && state->tx_handle == 0u);
+        assert(state->tx_confirmation_pending == 0u && state->tx_confirmation_handle == 0u &&
+               state->tx_confirming == 0u);
+        assert(state->interrupt_disable_count == 0u && state->mode_notification_pending == 0u &&
+               state->indication_processing[0] == 0u && state->indication_processing[1] == 0u);
+        assert(state->pending_controller_mode == 0 && state->busoff_notification_pending == 0u);
+        assert(state->rx_pending == 0u && state->rx_processing == 0u && state->rx_id == 0u &&
+               state->rx_length == 0u && state->rx_overrun_pending == 0u);
+        assert(state->host_tx_sequence == 0u && state->host_tx_cancelled_through == 0u &&
+               state->host_tx_completed_through == 0u);
+        for (uint8 i = 0u; i < CAN_FD_MAX_LENGTH; ++i) {{
+            assert(state->tx_payload[i] == 0u && state->rx_payload[i] == 0u);
+        }}
+    }}
     return 0;
 }}
 "#, project.join("bsw/src/Can.c").display().to_string().replace('\\', "/"))).unwrap();

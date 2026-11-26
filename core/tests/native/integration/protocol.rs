@@ -86,8 +86,8 @@ fn host_batch_project() -> Built {
 #[test]
 fn generated_host_batch_keeps_configured_channels_isolated() {
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
-    // The 16-channel case also exercises the PduR and LSduR tables above 32 Rx routes.
-    for count in [2, 3, 4, 6, 16] {
+    // The 17-channel case also exercises the PduR and LSduR tables above 32 Rx routes.
+    for count in [2, 3, 4, 6, 17] {
         let scratch = super::Scratch::new();
         let sources = crate::support::multichannel::multichannel_sources(count);
         let plan = super::mainline::build(&sources)
