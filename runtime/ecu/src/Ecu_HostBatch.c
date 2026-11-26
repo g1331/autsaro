@@ -74,20 +74,23 @@ static boolean decode_payload(Ecu_BatchTokenType token, Ecu_BatchFrame *frame)
 static boolean decode_frame(const Ecu_BatchTokenType tokens[7], Ecu_BatchFrame *frame)
 {
     boolean extended = equals(tokens[2], "EXTENDED", 8u) != 0;
+    boolean fd = equals(tokens[3], "1", 1u) != 0;
     uint64_t id;
     uint64_t length;
-    boolean valid = (equals(tokens[1], "0", 1u) != 0) && (equals(tokens[3], "0", 1u) != 0) &&
+    boolean valid = (equals(tokens[1], "0", 1u) != 0) &&
+                    (fd || (equals(tokens[3], "0", 1u) != 0)) &&
                     (extended || (equals(tokens[2], "STANDARD", 8u) != 0));
     if (valid) {
         valid = number(tokens[4], extended ? CAN_ID_EXTENDED_MAX : CAN_ID_STANDARD_MAX, &id);
     }
     if (valid) {
-        valid = number(tokens[5], UINT64_C(8), &length);
+        valid = number(tokens[5], CAN_FD_MAX_LENGTH, &length);
     }
     if (valid) {
-        frame->id = (uint32_t)id | (extended ? CAN_ID_EXTENDED_FLAG : 0u);
+        frame->id =
+            (uint32_t)id | (extended ? CAN_ID_EXTENDED_FLAG : 0u) | (fd ? CAN_ID_FD_FLAG : 0u);
         frame->dlc = (uint8_t)length;
-        valid = decode_payload(tokens[6], frame);
+        valid = Can_IsWireLength(frame->id, frame->dlc) && decode_payload(tokens[6], frame);
     }
     return valid;
 }

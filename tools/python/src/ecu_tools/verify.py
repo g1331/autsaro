@@ -30,6 +30,15 @@ def verify(project: Path, build_directory: Path) -> None:
     period = inputs["periodMs"]
     if period <= 0 or inputs["receiveTimeoutMs"] <= 0 or not 0 <= inputs["did"] <= 65535:
         raise ValueError("Independent verification timing or DID input is invalid")
+    can_fd = inputs.get("canFd")
+    if type(can_fd) is not bool:
+        raise ValueError("Verification input lacks its CAN frame capability. Regenerate from the original ARXML.")
+    fd_timing = inputs.get("fdTiming")
+    if can_fd and (not isinstance(fd_timing, dict)
+                   or type(fd_timing.get("brs")) is not bool
+                   or any(type(fd_timing.get(name)) is not int or fd_timing[name] <= 0
+                          for name in ("nominalBitrate", "dataBitrate"))):
+        raise ValueError("Configured FD controller timing is incomplete")
     channels = inputs.get("channels")
     endpoints = inputs.get("endpoints")
     roles = {"receive": ("RX", 4), "transmit": ("TX", 4),
@@ -40,10 +49,14 @@ def verify(project: Path, build_directory: Path) -> None:
         raise ValueError("Actual endpoint/configuration inputs are incomplete")
     for role, (direction, length) in roles.items():
         endpoint = endpoints[role]
+        policies = {"CLASSICAL"}
+        if role == "receive":
+            policies.add("CLASSICAL_OR_FD")
+        if can_fd and role in ("receive", "transmit"):
+            policies.add("FD")
         if (not isinstance(endpoint, dict) or endpoint.get("module") != "CanIf"
                 or endpoint.get("direction") != direction or endpoint.get("channel") != 0
-                or endpoint.get("fdPolicy") not in (("CLASSICAL", "CLASSICAL_OR_FD") if direction == "RX"
-                                                    else ("CLASSICAL",))
+                or endpoint.get("fdPolicy") not in policies
                 or endpoint.get("format") not in ("STANDARD", "EXTENDED")
                 or type(endpoint.get("id")) is not int
                 or not 0 <= endpoint["id"] <= (0x7FF if endpoint["format"] == "STANDARD" else 0x1FFFFFFF)
@@ -51,13 +64,15 @@ def verify(project: Path, build_directory: Path) -> None:
                 or endpoint.get("logicalLength") != length or endpoint.get("wireLength") != length):
             raise ValueError(f"Invalid configured endpoint: {role}")
 
-    def receive_frame(role: str, data: str) -> str:
+    def receive_frame(role: str, data: str, fd: int | None = None) -> str:
         ep = endpoints[role]
-        return f"RX {ep['channel']} {ep['format']} 0 {ep['id']} {ep['wireLength']} {data}"
+        if fd is None:
+            fd = int(ep["fdPolicy"] == "FD" or (can_fd and ep["fdPolicy"] == "CLASSICAL_OR_FD"))
+        return f"RX {ep['channel']} {ep['format']} {fd} {ep['id']} {ep['wireLength']} {data}"
 
     def expected_frame(at: int, role: str, data: str) -> tuple[int, int, int, str, int, int, int, str]:
         ep = endpoints[role]
-        return at, ep["handle"], ep["channel"], ep["format"], 0, ep["id"], ep["wireLength"], data
+        return at, ep["handle"], ep["channel"], ep["format"], int(ep["fdPolicy"] == "FD"), ep["id"], ep["wireLength"], data
 
     binary = build(project, build_directory, "host-batch")
     logs = binary.parent / "logs"
@@ -195,13 +210,39 @@ def verify(project: Path, build_directory: Path) -> None:
         (recovery, [rx], "78563412", [], False),
         (recovery + 1, [rx, diagnostic(request)], "78563412", [response], False),
     ])
+    if can_fd:
+        policy = endpoints["receive"]["fdPolicy"]
+        actor("can-fd-policy", [
+            (period, [receive_frame("receive", "78563412", 0)],
+             initial if policy == "FD" else "78563412", [], False),
+            (2 * period, [receive_frame("receive", "2a000000", 1)],
+             "78563412" if policy == "CLASSICAL" else "2a000000", [], False),
+        ])
     actor("malformed", [], malformed=True)
     probe = build(project, build_directory / "probe", "probe")
-    probe_output = query([str(probe)], logs, "probe", timeout=60)
+    transmit = endpoints["transmit"]
+    ticks = max(20, period) if transmit["fdPolicy"] == "FD" else 20
+    probe_command = [str(probe)]
+    if ticks != 20:
+        probe_command.extend(["--ticks", str(ticks)])
+    probe_output = query(probe_command, logs, "probe", timeout=60)
     probe_lines = probe_output.splitlines()
-    if ("ecu_probe completed=20" not in probe_lines
+    if (f"ecu_probe completed={ticks}" not in probe_lines
             or not any(line.startswith("lifecycle=Closed state=Ready reason=0 ") for line in probe_lines)):
         raise AssertionError(f"Normal probe did not complete: {probe_output}")
-    print("probe=normal PASS ticks=20 COM diagnostics parsed")
+    if transmit["fdPolicy"] == "FD":
+        brs = fd_timing["brs"]
+        rate = fd_timing["dataBitrate" if brs else "nominalBitrate"]
+        can_id = transmit["id"] | 0x40000000
+        if transmit["format"] == "EXTENDED":
+            can_id |= 0x80000000
+        prefix = f" pdu={transmit['handle']} id={can_id} dlc={transmit['wireLength']}"
+        observations = [line for line in probe_lines
+                        if line.startswith("ecu_output ") and prefix + " " in line]
+        if (len(observations) != ticks // period
+                or any(not line.endswith(f" brs={int(brs)} data_bitrate={rate}") for line in observations)):
+            raise AssertionError(f"FD output bitrate switch or data phase rate differs: {probe_output}")
+        print(f"probe=can-fd-timing PASS brs={int(brs)} data_bitrate={rate}")
+    print(f"probe=normal PASS ticks={ticks} COM diagnostics parsed")
     sealed_sources(project)
     print("ECU_HANDOFF_VERIFY PASS: CAN/DID echo, single-HOH arbitration, two-DID boundary, real N_Cr timeout/recovery, malformed admission; host behavior only.")

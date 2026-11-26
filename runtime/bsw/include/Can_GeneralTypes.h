@@ -38,6 +38,78 @@ static inline boolean Can_IsClassicalId(Can_IdType id)
                ? ((id & ~CAN_ID_EXTENDED_FLAG) <= CAN_ID_EXTENDED_MAX)
                : (id <= CAN_ID_STANDARD_MAX);
 }
+#define CAN_CLASSICAL_MAX_LENGTH 8u  /**< Maximum Classical payload in bytes. */
+#define CAN_FD_MAX_LENGTH        64u /**< Maximum FD payload in bytes. */
+#define CAN_FD_MAX_DLC           15u /**< Largest raw CAN DLC. */
+
+/** Check an encoded CAN identifier.
+ * @param[in] id Encoded CAN identifier including the FD flag.
+ * @return TRUE for the four supported formats with an in-range numeric identifier.
+ * Preconditions: None.
+ * Context: Any.
+ * Reentrancy: Reentrant.
+ * Ownership: No shared state or retained references.
+ */
+static inline boolean Can_IsValidId(Can_IdType id)
+{
+    return Can_IsClassicalId(id & ~CAN_ID_FD_FLAG);
+}
+
+/** Decode a raw CAN FD DLC into a wire payload length.
+ * @param[in] dlc Raw DLC, 0 through CAN_FD_MAX_DLC.
+ * @return Wire payload bytes, or zero for an out-of-range DLC.
+ * Preconditions: None.
+ * Context: Any.
+ * Reentrancy: Reentrant.
+ * Ownership: No shared state or retained references.
+ */
+static inline uint8 Can_FdDlcToLength(uint8 dlc)
+{
+    static const uint8 lengths[CAN_FD_MAX_DLC + 1u] = {
+        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 12u, 16u, 20u, 24u, 32u, 48u, 64u};
+    return (dlc <= CAN_FD_MAX_DLC) ? lengths[dlc] : 0u;
+}
+
+/** Encode an FD request length, rounding up to the next available DLC.
+ * @param[in] length Logical payload bytes.
+ * @return Raw DLC, or UINT8_MAX when length exceeds CAN_FD_MAX_LENGTH.
+ * Preconditions: None.
+ * Context: Any.
+ * Reentrancy: Reentrant.
+ * Ownership: No shared state or retained references.
+ */
+static inline uint8 Can_FdLengthToDlc(uint8 length)
+{
+    uint8 dlc = length;
+    if (length > CAN_FD_MAX_LENGTH) {
+        dlc = (uint8)UINT8_MAX;
+    } else if (length > CAN_CLASSICAL_MAX_LENGTH) {
+        dlc = CAN_CLASSICAL_MAX_LENGTH + 1u;
+        while ((dlc < CAN_FD_MAX_DLC) && (Can_FdDlcToLength(dlc) < length)) {
+            ++dlc;
+        }
+    } else {
+        /* The byte count is already the DLC. */
+    }
+    return dlc;
+}
+
+/** Check the byte count of an already encoded wire frame.
+ * @param[in] id Encoded CAN identifier; only the FD flag is used.
+ * @param[in] length Payload bytes on the wire.
+ * @return TRUE if this frame format can carry exactly that byte count.
+ * Preconditions: None.
+ * Context: Any.
+ * Reentrancy: Reentrant.
+ * Ownership: No shared state or retained references.
+ */
+static inline boolean Can_IsWireLength(Can_IdType id, PduLengthType length)
+{
+    return (length <= CAN_CLASSICAL_MAX_LENGTH) ||
+           (((id & CAN_ID_FD_FLAG) != 0u) && (length <= CAN_FD_MAX_LENGTH) &&
+            (Can_FdDlcToLength(Can_FdLengthToDlc((uint8)length)) == length));
+}
+
 /** SWS_Can_00429 */
 typedef uint16 Can_HwHandleType;
 

@@ -145,7 +145,8 @@ void CanIf_RxIndication(const Can_HwType *mailbox, const PduInfoType *info) {{ (
 Std_ReturnType Det_ReportRuntimeError(uint16_t module, uint8_t instance, uint8_t api, uint8_t error) {{
     (void)module; (void)instance; (void)api; (void)error; return E_OK;
 }}
-EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t length, const uint8_t data[8]) {{
+EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t length, const uint8_t *data, boolean brs, uint32 data_phase_bitrate) {{
+    (void)brs; (void)data_phase_bitrate;
     (void)sink; (void)handle; (void)id; (void)length; (void)data; return ECU_OK;
 }}
 int main(void) {{
@@ -163,7 +164,7 @@ int main(void) {{
 #if CAN_HOST_QUEUED_COMPLETION == 1
     assert(host_tx_sequence == 0u && host_tx_cancelled_through == 0u && host_tx_completed_through == 0u);
 #endif
-    for (i = 0u; i < 8u; ++i) {{ assert(tx_payload[i] == 0u && rx_payload[i] == 0u); }}
+    for (i = 0u; i < CAN_FD_MAX_LENGTH; ++i) {{ assert(tx_payload[i] == 0u && rx_payload[i] == 0u); }}
     return 0;
 }}
 "#, project.join("bsw/src/Can.c").display().to_string().replace('\\', "/"))).unwrap();

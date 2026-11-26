@@ -135,8 +135,134 @@ fn host_batch_mixed_can_preserves_width_and_exact_id_on_one_channel() {
             ("30", "0", "0", "STANDARD", "0", "801", "4", "78563412"),
         ]
     );
-    assert_eq!(text.matches("REJECT ").count(), 2, "{text}");
+    assert_eq!(text.matches("REJECT ").count(), 1, "{text}");
     assert!(text.contains("COMMIT_OK batch=3 epoch=30 "), "{text}");
+}
+
+#[test]
+fn host_batch_fd_is_verified_by_the_moved_packages_own_tool() {
+    verify_moved_fd_package(true);
+    verify_moved_fd_package(false);
+}
+
+fn verify_moved_fd_package(brs: bool) {
+    let scratch = super::Scratch::new();
+    let mut sources = super::fd_can_sources();
+    super::mainline::parameter(
+        &mut sources,
+        "Fd",
+        "CanControllerTxBitRateSwitch",
+        if brs { "true" } else { "false" },
+    );
+    let plan = if brs {
+        super::build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"))
+    } else {
+        use autosar_config_core::integration::IntegrationEdit;
+        let mut workspace =
+            super::mainline::live_pipeline_workspace(&scratch.0.join("live"), &sources);
+        workspace
+            .edit_integration(IntegrationEdit {
+                application_period_ms: Some(250),
+                ..IntegrationEdit::default()
+            })
+            .unwrap();
+        let save = workspace.preview_integration_save().unwrap();
+        workspace
+            .save_integration_previewed(&save.revision)
+            .unwrap();
+        workspace.saved_integration_plan().unwrap()
+    };
+    let (project, _) =
+        super::single_component_project_from(&scratch.0, super::tooling::native_target(), &plan);
+    let moved = scratch.0.join("receiver");
+    fs::create_dir(&moved).unwrap();
+    let package = moved.join("package");
+    fs::rename(project, &package).unwrap();
+    let seal = fs::read(package.join("meta/files.sha256")).unwrap();
+    let settings = super::tooling::execution_settings();
+    let build = moved.join("verify");
+    let output = super::tooling::run_public_command(
+        Command::new(&settings.python)
+            .env_clear()
+            .envs(std::env::vars_os().filter(|(key, _)| {
+                [
+                    "SYSTEMROOT",
+                    "WINDIR",
+                    "COMSPEC",
+                    "SYSTEMDRIVE",
+                    "TEMP",
+                    "TMP",
+                    "TMPDIR",
+                    "PATH",
+                ]
+                .iter()
+                .any(|name| key == *name)
+            }))
+            .env("AUTOSAR_CC", settings.compiler)
+            .env("AUTOSAR_OBJDUMP", settings.objdump)
+            .env("AUTOSAR_GIT", settings.git)
+            .current_dir(&moved)
+            .args(["-I", "-S"])
+            .arg(package.join("tools/ecu-tool.py"))
+            .args(["verify", "--project"])
+            .arg(&package)
+            .arg("--build-directory")
+            .arg(&build),
+        &scratch.0,
+        "fd-offline-verify",
+        Duration::from_secs(300),
+    );
+    require_success(&output);
+    let evidence = String::from_utf8_lossy(&output.stdout);
+    assert!(evidence.contains("protocol=can-fd-policy PASS batches=2"));
+    let rate = if brs { 2_000_500 } else { 500_000 };
+    assert!(
+        evidence.contains(&format!(
+            "probe=can-fd-timing PASS brs={} data_bitrate={rate}",
+            u8::from(brs)
+        )),
+        "{evidence}"
+    );
+    assert_eq!(fs::read(package.join("meta/files.sha256")).unwrap(), seal);
+    if !brs {
+        assert!(
+            evidence.contains("probe=normal PASS ticks=250"),
+            "{evidence}"
+        );
+        return;
+    }
+    let binary = super::tooling::native_binary(&build, "ecu_host_batch");
+    let payload = format!("78563412{}", "a5".repeat(60));
+    let input = format!(
+        "BEGIN 10\nRX 0 STANDARD 1 800 64 {payload}\nCOMMIT\nBEGIN 20\nRX 0 STANDARD 1 800 4 2a000000\nRX 0 STANDARD 1 800 3 2a0000\nCOMMIT\nBEGIN 20\nRX 800 4 2a000000\nCOMMIT\nBEGIN 20\nCOMMIT\n"
+    );
+    let text = run(&binary, &moved.join("wire"), input.as_bytes());
+    assert_eq!(
+        text.lines()
+            .filter(|line| line.starts_with("REJECT "))
+            .map(|line| field(line, "epoch="))
+            .collect::<Vec<_>>(),
+        ["10", "10", "10"],
+        "{text}"
+    );
+    assert_eq!(
+        text.lines()
+            .filter(|line| line.starts_with("OUT "))
+            .map(|line| (
+                field(line, "epoch="),
+                field(line, "format="),
+                field(line, "fd="),
+                field(line, "id="),
+                field(line, "length="),
+                field(line, "data=")
+            ))
+            .collect::<Vec<_>>(),
+        [
+            ("10", "EXTENDED", "1", "801", "4", "78563412"),
+            ("20", "EXTENDED", "1", "801", "4", "78563412"),
+        ],
+        "{text}"
+    );
 }
 
 fn run(binary: &Path, directory: &Path, script: &[u8]) -> String {

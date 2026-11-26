@@ -3,6 +3,81 @@ use super::*;
 use autosar_config_core::integration::InputSource;
 use std::path::Path;
 
+/// Verifies: ECUC_Can_00473, ECUC_Can_00475, ECUC_Can_00481, ECUC_Can_00485
+#[test]
+fn fd_configuration_requires_the_selected_controller_and_preserves_brs_and_padding() {
+    let sources = fd_can_sources();
+    let validation = normal_validation(&sources);
+    assert!(
+        validation.diagnostics.is_empty(),
+        "{:?}",
+        validation.diagnostics
+    );
+    for brs in ["true", "false"] {
+        let mut configured = sources.clone();
+        parameter(&mut configured, "Fd", "CanControllerTxBitRateSwitch", brs);
+        let plan = build(&configured).unwrap_or_else(|issues| panic!("{issues:?}"));
+        let can = serde_json::to_value(&plan.description().communication_runtime).unwrap();
+        assert_eq!(can["can"]["nominalBitrate"], 500_000);
+        assert_eq!(can["can"]["dataBitrate"], 2_000_500);
+        assert_eq!(can["can"]["brs"], brs == "true");
+        assert_eq!(can["can"]["fdPadding"], 165);
+    }
+    for (owner, key, bad_value, code) in [
+        (
+            "DiagRequest",
+            "CanIfRxPduCanIdType",
+            "STANDARD_CAN",
+            "CAN_FD_CONFIGURATION",
+        ),
+        ("Fd", "CanControllerFdBaudRate", "0", "CAN_FD_CONFIGURATION"),
+        (
+            "Fd",
+            "CanControllerFdBaudRate",
+            "2000.0001",
+            "CAN_FD_CONFIGURATION",
+        ),
+        (
+            "Fd",
+            "CanControllerFdBaudRate",
+            "16001",
+            "CAN_FD_CONFIGURATION",
+        ),
+        ("Transmit", "CanFdPaddingValue", "256", "CAN_FD_PADDING"),
+    ] {
+        let mut invalid = sources.clone();
+        parameter(&mut invalid, owner, key, bad_value);
+        let issues = build(&invalid).err().unwrap();
+        assert!(
+            issues.iter().any(|issue| issue.code == code
+                && issue
+                    .object
+                    .as_deref()
+                    .is_some_and(|path| path.rsplit('/').next() == Some(owner))),
+            "{issues:?}"
+        );
+    }
+    let mut without_fd = sources;
+    xml_edit(
+        &mut without_fd,
+        "ecuc.arxml",
+        |node| {
+            node.tag_name().name() == "SUB-CONTAINERS"
+                && node
+                    .children()
+                    .any(|child| named(child, "ECUC-CONTAINER-VALUE", "Fd"))
+        },
+        |_| String::new(),
+    );
+    let issues = build(&without_fd).err().unwrap();
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.code == "CAN_FD_CONFIGURATION"),
+        "{issues:?}"
+    );
+}
+
 #[test]
 fn mixed_can_configuration_validates_width_format_and_conflicts() {
     let sources = mixed_can_sources();
@@ -1984,7 +2059,7 @@ fn can_definitions_outside_the_selection_are_refused_at_their_source() {
         "TARGET_PARAMETER_UNSUPPORTED",
     );
     // Unselected features (Verifies: ECUC_Can_00482／00434／00357／00491／00431／00524／
-    // 00492／00359／00530／00001／00499／00473／00512／00490／00485／00468／00002／00526／
+    // 00492／00359／00530／00001／00499／00512／00490／00468／00002／00526／
     // 00495／00486); partition mappings are refused (Verifies: SWS_Can_00507).
     // (owner, definition, "" for a container or "KIND:value", codes)
     for (owner, name, value, codes) in [
@@ -2025,8 +2100,6 @@ fn can_definitions_outside_the_selection_are_refused_at_their_source() {
         ("Controller", "CanTTController", "", unknown),
         // Rejects: ECUC_Can_00499
         ("Controller", "CanXLController", "", unknown),
-        // Rejects: ECUC_Can_00473
-        ("Baudrate", "CanControllerFdBaudrateConfig", "", unknown),
         // Rejects: ECUC_Can_00512
         ("Baudrate", "CanXLBaudrateConfig", "", unknown),
         // Rejects: ECUC_Can_00490
@@ -2036,8 +2109,6 @@ fn can_definitions_outside_the_selection_are_refused_at_their_source() {
             "BOOLEAN:true",
             unknown,
         ),
-        // Rejects: ECUC_Can_00485
-        ("Transmit", "CanFdPaddingValue", "INTEGER:0", unknown),
         // Rejects: ECUC_Can_00468
         ("Receive", "CanHwFilter", "", unknown),
         // Rejects: ECUC_Can_00002

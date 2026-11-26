@@ -190,7 +190,13 @@ fn can_declaration_views_and_memmap_enforce_the_public_boundary() {
 #include <stddef.h>
 #include <stdint.h>
 typedef struct { PduIdType handle; uint8_t length; uint32_t id; uint8_t *data; } ExpectedPdu;
-typedef struct { EcuStatus (*sink)(uint32_t, uint8_t, const uint8_t[8]); } ExpectedConfig;
+typedef struct {
+    EcuStatus (*sink)(uint32_t, uint8_t, const uint8_t *);
+    uint32_t nominal_bitrate;
+    uint32_t data_bitrate;
+    boolean brs;
+    uint8_t padding;
+} ExpectedConfig;
 typedef char Id32[(sizeof(Can_IdType) == 4u) ? 1 : -1];
 typedef char Hoh16[(sizeof(Can_HwHandleType) == 2u) ? 1 : -1];
 typedef char PduLayout[(sizeof(Can_PduType) == sizeof(ExpectedPdu) &&
@@ -199,7 +205,11 @@ typedef char PduLayout[(sizeof(Can_PduType) == sizeof(ExpectedPdu) &&
  offsetof(Can_PduType, id) == offsetof(ExpectedPdu, id) &&
  offsetof(Can_PduType, sdu) == offsetof(ExpectedPdu, data)) ? 1 : -1];
 typedef char ConfigLayout[(sizeof(Can_ConfigType) == sizeof(ExpectedConfig) &&
- offsetof(Can_ConfigType, sink) == 0u) ? 1 : -1];
+ offsetof(Can_ConfigType, sink) == offsetof(ExpectedConfig, sink) &&
+ offsetof(Can_ConfigType, nominal_bitrate) == offsetof(ExpectedConfig, nominal_bitrate) &&
+ offsetof(Can_ConfigType, data_bitrate) == offsetof(ExpectedConfig, data_bitrate) &&
+ offsetof(Can_ConfigType, brs) == offsetof(ExpectedConfig, brs) &&
+ offsetof(Can_ConfigType, fd_padding) == offsetof(ExpectedConfig, padding)) ? 1 : -1];
 void (*initialize)(const Can_ConfigType *) = Can_Init;
 Std_ReturnType (*write_frame)(uint16_t, const Can_PduType *) = Can_Write;
 "#;

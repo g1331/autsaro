@@ -222,6 +222,10 @@ export type CanRuntimeContract = {
   transmitPolling: boolean;
   busoffPolling: boolean;
   wakeupPolling: boolean;
+  nominalBitrate: number;
+  dataBitrate: number | null;
+  brs: boolean;
+  fdPadding: number;
 };
 
 export type Capabilities = {
@@ -1173,6 +1177,7 @@ export type SignalChannel = {
   canId: number;
   extended: boolean;
   acceptsFd: boolean;
+  fd: boolean;
   canIfHandle: number;
   receive: boolean;
   dlc: number;

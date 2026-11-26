@@ -198,16 +198,18 @@ fn can_link(
         ));
     }
     let can_if = found[0];
-    let (id, accepts_fd) = super::can_id::pdu_id(graph, can_if, receive).ok_or_else(|| {
-        reject(
-            graph,
-            can_if,
-            "CAN_ID_CONFLICT",
-            crate::product_message!(
-                "backend.integration.diagnostic.diagnostic_can_identifier_out_of_range"
-            ),
-        )
-    })?;
+    let (id, accepts_fd) = super::can_id::pdu_id(graph, can_if, receive)
+        .filter(|(id, _)| id & super::can_id::FD == 0)
+        .ok_or_else(|| {
+            reject(
+                graph,
+                can_if,
+                "CAN_ID_CONFLICT",
+                crate::product_message!(
+                    "backend.integration.diagnostic.diagnostic_can_identifier_out_of_range"
+                ),
+            )
+        })?;
     let handle = value(graph, can_if, &format!("{prefix}Id"), false)
         .and_then(|value| value.parse::<u16>().ok())
         .ok_or_else(|| {

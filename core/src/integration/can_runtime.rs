@@ -46,6 +46,10 @@ pub struct CanRuntimeContract {
     pub transmit_polling: bool,
     pub busoff_polling: bool,
     pub wakeup_polling: bool,
+    pub nominal_bitrate: u32,
+    pub data_bitrate: Option<u32>,
+    pub brs: bool,
+    pub fd_padding: u8,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -208,6 +212,52 @@ fn partition(
     })
 }
 
+fn bitrates(
+    graph: &Graph,
+    controller: usize,
+) -> Result<(u32, Option<u32>, bool), Vec<PlanDiagnostic>> {
+    let baud = value(graph, controller, "CanControllerDefaultBaudrate", true)
+        .and_then(|path| graph.objects.get(path).copied())
+        .filter(|index| {
+            definition_is(graph, *index, "CanControllerBaudrateConfig")
+                && graph.within(*index, controller)
+        })
+        .ok_or_else(|| fail(graph, controller, "CONTROLLER_MAPPING"))?;
+    let nominal = value(graph, baud, "CanControllerBaudRate", false)
+        .and_then(super::native_configuration::baudrate_kbit)
+        .and_then(|value| value.checked_mul(1000))
+        .ok_or_else(|| fail(graph, baud, "BAUDRATE_CONFLICT"))?;
+    let fd: Vec<_> = graph
+        .of_kind("ECUC-CONTAINER-VALUE")
+        .into_iter()
+        .filter(|index| definition_is(graph, *index, "CanControllerFdBaudrateConfig"))
+        .collect();
+    let [config] = fd.as_slice() else {
+        return if fd.is_empty() {
+            Ok((nominal, None, false))
+        } else {
+            Err(fail(graph, fd[1], "CAN_FD_CONFIGURATION"))
+        };
+    };
+    if graph.elements[*config]
+        .parent
+        .and_then(|parent| graph.elements[parent].parent)
+        != Some(baud)
+    {
+        return Err(fail(graph, *config, "CAN_FD_CONFIGURATION"));
+    }
+    let data = value(graph, *config, "CanControllerFdBaudRate", false)
+        .and_then(super::component::decimal_thousandths)
+        .filter(|rate| (1..=16_000_000).contains(rate))
+        .ok_or_else(|| fail(graph, *config, "CAN_FD_CONFIGURATION"))?;
+    let brs = match value(graph, *config, "CanControllerTxBitRateSwitch", false) {
+        Some("true" | "1") => true,
+        Some("false" | "0") => false,
+        _ => return Err(fail(graph, *config, "CAN_FD_CONFIGURATION")),
+    };
+    Ok((nominal, Some(data), brs))
+}
+
 pub(super) fn inspect(
     graph: &Graph,
     schedule: &ScheduleContract,
@@ -257,6 +307,8 @@ pub(super) fn inspect(
         }
     }
     let controller = one(graph, "CanController")?;
+    let (nominal_bitrate, data_bitrate, brs) = bitrates(graph, controller)?;
+    let mut fd_padding = 0;
     for name in [
         "CanRxProcessing",
         "CanTxProcessing",
@@ -307,6 +359,14 @@ pub(super) fn inspect(
             Some("TRANSMIT") => &mut transmit,
             _ => return Err(fail(graph, index, "CAN_HARDWARE_HANDLES")),
         };
+        if let Some(padding) = value(graph, index, "CanFdPaddingValue", false) {
+            if value(graph, index, "CanObjectType", false) != Some("TRANSMIT") {
+                return Err(fail(graph, index, "CAN_FD_PADDING"));
+            }
+            fd_padding = crate::definitions::unsigned_integer(padding)
+                .and_then(|padding| u8::try_from(padding).ok())
+                .ok_or_else(|| fail(graph, index, "CAN_FD_PADDING"))?;
+        }
         let id_type = match value(graph, index, "CanIdType", false) {
             Some(format @ ("STANDARD" | "EXTENDED" | "MIXED")) => format,
             _ => return Err(fail(graph, index, "CAN_ID_CONFLICT")),
@@ -395,6 +455,10 @@ pub(super) fn inspect(
             transmit_polling: true,
             busoff_polling: true,
             wakeup_polling: true,
+            nominal_bitrate,
+            data_bitrate,
+            brs,
+            fd_padding,
         },
     })
 }
