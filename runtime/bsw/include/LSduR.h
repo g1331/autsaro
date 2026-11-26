@@ -59,8 +59,8 @@ typedef struct {
     uint16 transmit_count; /**< Tx route count. */
 } LSduR_PBConfigType;
 /** Publish the first valid immutable route set (CP_SWS_LSduR_91006).
- * @param[in] ConfigPtr Generated configuration and tables; at most 32 routes in each table. NULL or
- * invalid sets are ignored.
+ * @param[in] ConfigPtr Generated configuration with immutable route tables. NULL or invalid sets
+ * are ignored.
  * @par Return
  * None.
  * Preconditions: Uninitialized; repeated calls after successful initialization leave the first set

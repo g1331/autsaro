@@ -116,8 +116,8 @@ typedef struct {
     uint16 transport_count; /**< TP route count. */
 } PduR_PBConfigType;
 /** Publish the first valid immutable route set (SWS_PduR_00334).
- * @param[in] ConfigPtr Generated configuration and tables; at most 32 routes in each table. NULL or
- * invalid sets are ignored.
+ * @param[in] ConfigPtr Generated configuration with immutable route tables. NULL or invalid sets
+ * are ignored.
  * @par Return
  * None.
  * Preconditions: Uninitialized; repeated calls after successful initialization leave the first set

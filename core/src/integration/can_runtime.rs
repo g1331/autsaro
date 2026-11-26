@@ -648,53 +648,56 @@ pub(super) fn profile_header(
     can_if_counts: [usize; 3],
 ) -> (String, Vec<u8>) {
     let can = &communication.can;
-    let profile = super::c_layout::defines(&[
-        (
-            "CAN_CONTROLLER_CAPACITY",
-            format!("{}u", communication.channels.len()),
-        ),
-        (
-            "CAN_HOH_CAPACITY",
-            format!("{}u", communication.hardware.len()),
-        ),
-        ("COM_MAX_PDUS", format!("{com_pdu_count}u")),
-        ("COMM_USER_CAPACITY", format!("{comm_user_count}u")),
-        ("COMM_CHANNEL_CAPACITY", format!("{comm_channel_count}u")),
-        (
-            "CANIF_CONTROLLER_CAPACITY",
-            format!("{}u", can_if_counts[0]),
-        ),
-        ("CANIF_RX_CAPACITY", format!("{}u", can_if_counts[1])),
-        ("CANIF_TX_CAPACITY", format!("{}u", can_if_counts[2].max(1))),
-        ("CAN_HOST_QUEUED_COMPLETION", "STD_ON".to_owned()),
-        ("CAN_RX_POLLING", "STD_ON".to_owned()),
-        ("CAN_TX_POLLING", "STD_ON".to_owned()),
-        ("CAN_BUSOFF_POLLING", "STD_ON".to_owned()),
-        (
-            "CAN_CONTROLLER_ID",
-            super::symbolic_names::name("Can", "CanController", &can.controller),
-        ),
-        (
-            "CAN_CANIF_CONTROLLER_ID",
-            super::symbolic_names::name("CanIf", "CanIfCtrlCfg", &can.can_if_controller),
-        ),
-        (
-            "CAN_RX_ID_TYPE",
-            format!("CAN_HOH_ID_{}", can.receive_id_type),
-        ),
-        (
-            "CAN_TX_ID_TYPE",
-            format!("CAN_HOH_ID_{}", can.transmit_id_type),
-        ),
-        (
-            "CAN_TX_HOH",
-            super::symbolic_names::name("Can", "CanHardwareObject", &can.transmit_hardware),
-        ),
-        (
-            "CAN_RX_HOH",
-            super::symbolic_names::name("Can", "CanHardwareObject", &can.receive_hardware),
-        ),
-    ]);
+    let profile = super::c_layout::commented_defines(
+        &[
+            (
+                "CAN_CONTROLLER_CAPACITY",
+                format!("{}u", communication.channels.len()),
+            ),
+            (
+                "CAN_HOH_CAPACITY",
+                format!("{}u", communication.hardware.len()),
+            ),
+            ("COM_MAX_PDUS", format!("{com_pdu_count}u")),
+            ("COMM_USER_CAPACITY", format!("{comm_user_count}u")),
+            ("COMM_CHANNEL_CAPACITY", format!("{comm_channel_count}u")),
+            (
+                "CANIF_CONTROLLER_CAPACITY",
+                format!("{}u", can_if_counts[0]),
+            ),
+            ("CANIF_RX_CAPACITY", format!("{}u", can_if_counts[1])),
+            ("CANIF_TX_CAPACITY", format!("{}u", can_if_counts[2].max(1))),
+            ("CAN_HOST_QUEUED_COMPLETION", "STD_ON".to_owned()),
+            ("CAN_RX_POLLING", "STD_ON".to_owned()),
+            ("CAN_TX_POLLING", "STD_ON".to_owned()),
+            ("CAN_BUSOFF_POLLING", "STD_ON".to_owned()),
+            (
+                "CAN_CONTROLLER_ID",
+                super::symbolic_names::name("Can", "CanController", &can.controller),
+            ),
+            (
+                "CAN_CANIF_CONTROLLER_ID",
+                super::symbolic_names::name("CanIf", "CanIfCtrlCfg", &can.can_if_controller),
+            ),
+            (
+                "CAN_RX_ID_TYPE",
+                format!("CAN_HOH_ID_{}", can.receive_id_type),
+            ),
+            (
+                "CAN_TX_ID_TYPE",
+                format!("CAN_HOH_ID_{}", can.transmit_id_type),
+            ),
+            (
+                "CAN_TX_HOH",
+                super::symbolic_names::name("Can", "CanHardwareObject", &can.transmit_hardware),
+            ),
+            (
+                "CAN_RX_HOH",
+                super::symbolic_names::name("Can", "CanHardwareObject", &can.receive_hardware),
+            ),
+        ],
+        "CAN profile.",
+    );
     (
         "include/Ecu_ProfileConfig.h".into(),
         format!(
