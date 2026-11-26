@@ -10,7 +10,7 @@
 
 ## 主机帧格式
 
-CanIf Rx 在匹配后检查配置的最小字节数，并向 LSduR 传递收到的线帧长度。Tx 从配置的标识符取格式，驱动负责将 FD 请求补到可编码的线帧长度。CanTp 的配置及生成路由继续使用 Classical N-PDU。
+CanIf Rx 在匹配后检查配置的最小字节数，并向 LSduR 传递收到的线帧长度。Tx 从配置的标识符取格式，驱动负责将 FD 请求补到可编码的线帧长度。FD controller 上连接 CanTp 的 Rx 配置须选择 Classical-only，生成路由继续使用 Classical N-PDU。
 
 ## 未由测试覆盖的条目
 

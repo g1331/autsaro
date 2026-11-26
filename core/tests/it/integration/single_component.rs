@@ -24,6 +24,12 @@ fn fd_configuration_requires_the_selected_controller_and_preserves_brs_and_paddi
         assert_eq!(can["can"]["fdPadding"], 165);
     }
     for (owner, key, bad_value, code) in [
+        (
+            "DiagRequest",
+            "CanIfRxPduCanIdType",
+            "STANDARD_CAN",
+            "CAN_FD_CONFIGURATION",
+        ),
         ("Fd", "CanControllerFdBaudRate", "0", "CAN_FD_CONFIGURATION"),
         (
             "Fd",

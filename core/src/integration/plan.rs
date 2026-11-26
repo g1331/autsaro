@@ -327,6 +327,30 @@ pub(super) fn inspect_composition(
         None => routing::inspect_optional(graph, &signals, None)?,
     };
     let communication_runtime = super::can_runtime::inspect(graph, &schedule, &composition)?;
+    if communication_runtime.can.data_bitrate.is_some()
+        && let Some(transport) = diagnostic_transport
+            .as_ref()
+            .filter(|tp| tp.request_accepts_fd)
+    {
+        let route = graph
+            .of_kind("ECUC-CONTAINER-VALUE")
+            .into_iter()
+            .find(|index| {
+                schedule::definition_is(graph, *index, "CanIfRxPduCfg")
+                    && schedule::value(graph, *index, "CanIfRxPduRef", true)
+                        == Some(transport.rx_npdu.as_str())
+            })
+            .unwrap_or(graph.index(&transport.rx_npdu)?);
+        return Err(vec![graph.diagnostic(
+            route,
+            DiagnosticCategory::Unsupported,
+            "CAN_FD_CONFIGURATION",
+            crate::product_message!(
+                "backend.integration.diagnostic.diagnostic_classical_can_npdu_required"
+            ),
+            crate::product_message!("backend.integration.composition.repair_contract"),
+        )]);
+    }
     let mode_runtime = super::mode::inspect(graph, &schedule)?;
     let configuration = match definition_catalog {
         Some(catalog) => configuration::inspect_native(graph, catalog)?,
