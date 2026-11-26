@@ -34,8 +34,11 @@ def load(root: Path, target: str, sample: str, binary: str | None = None) -> dic
         directory /= binary
     path = directory / (sample + ".json")
     refuse_links(path, root)
-    value = json.loads(path.read_text(encoding="utf-8"),
-                       object_pairs_hook=c_standard.unique_assessment_members)
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"),
+                           object_pairs_hook=c_standard.unique_assessment_members)
+    except (ValueError, RecursionError) as error:
+        raise ValueError(f"Cannot parse diagnostic disposition registry {path}: {error}") from error
     if (set(value) != {"format", "target", "sample", "proofs"}
             or (value["format"], value["target"], value["sample"]) != (FORMAT, target, sample)):
         raise ValueError(f"Diagnostic disposition matrix identity differs: {path}")
