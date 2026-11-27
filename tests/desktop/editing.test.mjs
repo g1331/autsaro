@@ -178,6 +178,7 @@ check('structure-and-incoming-reference-closure', async () => {
 });
 
 check('extended IDs through page and Edit menu survive save and reopen', async () => {
+  await refreshSurface();
   const { manifest } = await create('ExtendedIds');
   const view = await projection();
   const hardware = view.fields.filter((item) => item.definitionId.endsWith('/CanIdType'));
@@ -247,6 +248,7 @@ check('extended IDs through page and Edit menu survive save and reopen', async (
 });
 
 check('layer selection previews semantic differences and saves the selected variant', async () => {
+  await refreshSurface();
   const { directory, manifest } = await create('SchedulerVariants');
   const projectionBefore = await projection();
   const initialization = await invoke('preview_application_initialization');

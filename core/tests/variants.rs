@@ -270,7 +270,84 @@ fn selection_invalidates_save_and_generation_and_survives_offline_reopen() {
 fn incomplete_selection_saves_but_does_not_generate() {
     let scratch = Scratch::new();
     let project = scratch.0.join("live");
-    let mut workspace = fixture(&project, "1");
+    let workspace = fixture(&project, "1");
+    let mut broken = workspace.project_manifest().unwrap().clone();
+    let signal = workspace
+        .saved_integration_plan()
+        .unwrap()
+        .description()
+        .signals
+        .iter()
+        .find(|s| !s.receive)
+        .unwrap()
+        .clone();
+    let mut op = priority("1024");
+    op.target.object.path = signal.can_if_pdu;
+    op.target.object.definition_type = "/AUTOSAR/EcucDefs/CanIf/CanIfInitCfg/CanIfTxPduCfg".into();
+    op.target.field = Some(format!(
+        "{}/CanIfTxPduCanId",
+        op.target.object.definition_type
+    ));
+    broken
+        .layers
+        .as_mut()
+        .unwrap()
+        .groups
+        .get_mut("scheduler")
+        .unwrap()
+        .options
+        .insert(
+            "unpaired".into(),
+            ProjectLayer {
+                members: vec![],
+                operations: vec![op],
+            },
+        );
+    write(&project, &broken);
+    let mut workspace = open(&project);
+    let unpaired = selection("unpaired");
+    let errors = workspace
+        .preview_variant_selection(unpaired.clone())
+        .unwrap_err();
+    assert!(errors.iter().any(|issue| issue.code == "CAN_ID_CONFLICT"));
+    assert_eq!(
+        errors[0].code,
+        workspace
+            .edit_integration(autosar_config_core::integration::IntegrationEdit {
+                variant_selection: Some(unpaired),
+                ..Default::default()
+            })
+            .unwrap_err()[0]
+            .code
+    );
+    let invalid = selection("missing");
+    assert_eq!(
+        workspace
+            .preview_variant_selection(invalid.clone())
+            .unwrap_err()[0]
+            .code,
+        workspace
+            .edit_integration(autosar_config_core::integration::IntegrationEdit {
+                variant_selection: Some(invalid),
+                ..Default::default()
+            })
+            .unwrap_err()[0]
+            .code
+    );
+    workspace.select_project_variants(BTreeMap::new()).unwrap();
+    assert_eq!(
+        workspace
+            .preview_variant_selection(selection("urgent"))
+            .unwrap_err()[0]
+            .code,
+        "VARIANT_BASELINE_UNAVAILABLE"
+    );
+    workspace
+        .edit_integration(autosar_config_core::integration::IntegrationEdit {
+            variant_selection: Some(selection("urgent")),
+            ..Default::default()
+        })
+        .unwrap();
     for (selection, code) in [
         (BTreeMap::new(), "VARIANT_SELECTION_REQUIRED"),
         (

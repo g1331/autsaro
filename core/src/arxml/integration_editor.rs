@@ -119,11 +119,36 @@ impl Workspace {
         &self,
         selection: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
     ) -> Result<Vec<editor::VariantDifference>, Vec<PlanDiagnostic>> {
+        let (_, report, comparable) = self.validated_variant(selection)?;
+        if !comparable {
+            return Err(failure(
+                "VARIANT_BASELINE_UNAVAILABLE",
+                crate::product_message!("backend.integration.editor.variant_baseline_unavailable"),
+            ));
+        }
+        Ok(report
+            .layers
+            .expect("selected layered workspace")
+            .differences)
+    }
+
+    fn validated_variant(
+        &self,
+        selection: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+    ) -> Result<(Self, IntegrationInspection, bool), Vec<PlanDiagnostic>> {
         let mut candidate = self.clone();
         candidate
             .select_project_variants(selection)
             .map_err(|error| failure("VARIANT_SELECTION", error))?;
-        self.variant_differences(&candidate)
+        let mut report = candidate.inspect_integration();
+        if report.description.is_none() {
+            return Err(report.diagnostics);
+        }
+        let comparable = self.project_semantics().is_ok();
+        if comparable && let Some(layers) = &mut report.layers {
+            layers.differences = self.variant_differences(&candidate)?;
+        }
+        Ok((candidate, report, comparable))
     }
 
     pub fn edit_integration(
@@ -150,19 +175,7 @@ impl Workspace {
                     ),
                 ));
             }
-            let mut candidate = self.clone();
-            candidate
-                .select_project_variants(selection)
-                .map_err(|error| failure("VARIANT_SELECTION", error))?;
-            let mut report = candidate.inspect_integration();
-            if report.description.is_none() {
-                return Err(report.diagnostics);
-            }
-            if self.project_semantics().is_ok() {
-                if let Some(layers) = report.layers.as_mut() {
-                    layers.differences = self.variant_differences(&candidate)?;
-                }
-            }
+            let (candidate, report, _) = self.validated_variant(selection)?;
             *self = candidate;
             return Ok(report);
         }
@@ -434,12 +447,14 @@ impl Workspace {
             }
         }
         let connections = crate::integration::editor_connections::choices(description);
-        for choice in connections
-            .iter()
-            .filter(|choice| choice.definition == "wireLength")
-        {
+        for choice in connections.iter().filter(|choice| {
+            matches!(
+                choice.definition.as_str(),
+                "wireLength" | "frameFormat" | "minimumLength"
+            )
+        }) {
             edits.push((
-                format!("{}#wire-length", choice.object),
+                format!("{}#{}", choice.object, choice.definition),
                 IntegrationEdit {
                     connections: vec![crate::integration::ConnectionEdit {
                         object: choice.object.clone(),
@@ -492,21 +507,35 @@ impl Workspace {
             .into_iter()
             .filter_map(|(id, edit)| {
                 let edits = if let Some(connection) = edit.connections.first() {
-                    connection.resolve(description, &connections, &edit.signal_settings)?
+                    let mut projected = connection.clone();
+                    if projected.definition == "minimumLength" {
+                        projected.target = "8".into();
+                    }
+                    projected.resolve(description, &connections, &edit.signal_settings)?
                 } else {
                     editor::fields_including_unchanged(&plan, &edit, true).ok()?
                 };
-                let fields: Option<Vec<_>> = edits
-                    .iter()
-                    .map(|edit| {
-                        let field = source_fields
-                            .get(&(edit.object.as_str(), edit.field.as_str(), edit.parameter))?
-                            .as_ref()?;
-                        Some(((*field).clone(), edit.value.clone()))
-                    })
-                    .collect();
-                let kind = if !edit.connections.is_empty() {
-                    "transport-length"
+                let mut fields = Vec::new();
+                for field in &edits {
+                    match source_fields.get(&(
+                        field.object.as_str(),
+                        field.field.as_str(),
+                        field.parameter,
+                    )) {
+                        Some(Some(id)) => fields.push(((*id).clone(), field.value.clone())),
+                        None if matches!(
+                            field.field.as_str(),
+                            "CAN-FD-FRAME-SUPPORT" | "CanIfRxPduDataLength"
+                        ) => {}
+                        _ => return None,
+                    }
+                }
+                let kind = if let Some(connection) = edit.connections.first() {
+                    if connection.definition == "wireLength" {
+                        "transport-length"
+                    } else {
+                        "transport-policy"
+                    }
                 } else if !edit.signal_settings.is_empty() {
                     "signal-setting"
                 } else if edit.application_period_ms.is_none() {
@@ -520,7 +549,7 @@ impl Workspace {
                     kind: kind.into(),
                     id,
                     edit,
-                    fields: fields?,
+                    fields,
                 })
             })
             .collect()
@@ -580,9 +609,44 @@ impl Workspace {
                     .ok_or_else(invalid)?,
             );
         } else if let Some(connection) = edit.connections.first_mut() {
-            connection.target = crate::definitions::unsigned_integer(raw)
-                .ok_or_else(|| crate::product_message!("backend.integration.communication.invalid_signal_layout_field", "field" => &connection.definition))?
-                .to_string();
+            let invalid = || crate::product_message!("backend.integration.communication.invalid_signal_layout_field", "field" => &connection.definition);
+            connection.target = match connection.definition.as_str() {
+                "frameFormat" => {
+                    let fd = match raw {
+                        "true" | "1" => true,
+                        "false" | "0" => false,
+                        _ => {
+                            crate::integration::can_id::policy(
+                                raw,
+                                field
+                                    .view
+                                    .definition
+                                    .definition_id
+                                    .ends_with("/CanIfRxPduCanIdType"),
+                            )
+                            .ok_or_else(invalid)?
+                            .1 != 0
+                        }
+                    };
+                    if fd { "FD" } else { "CLASSICAL" }.into()
+                }
+                "minimumLength"
+                    if field
+                        .view
+                        .definition
+                        .definition_id
+                        .ends_with("/CanIfRxPduDataLengthCheck") =>
+                {
+                    match raw {
+                        "true" | "1" => "8".into(),
+                        "false" | "0" => "0".into(),
+                        _ => return Err(invalid()),
+                    }
+                }
+                _ => crate::definitions::unsigned_integer(raw)
+                    .ok_or_else(invalid)?
+                    .to_string(),
+            };
         } else if let Some((port, settings)) = edit.signal_settings.iter_mut().next() {
             let signal = plan
                 .description()

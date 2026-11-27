@@ -376,6 +376,7 @@ export async function openWorkbench(name, options) {
       'native capabilities restored',
     );
     if (manifest) return openMember(manifest);
+    if (!sources) return;
     await menu('导入 ARXML…');
     await input(field('ARXML 路径（每行一份）'), sources.join('\n'));
     await click('导入');

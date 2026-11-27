@@ -498,7 +498,19 @@ fn verify_moved_fd_package(brs: bool) {
     let plan = if brs {
         super::build(&sources).unwrap_or_else(|issues| panic!("{issues:?}"))
     } else {
-        use autosar_config_core::integration::IntegrationEdit;
+        use autosar_config_core::integration::{IntegrationEdit, SignalSetting};
+        super::mainline::parameter(
+            &mut sources,
+            "TxValue",
+            "CanIfTxPduCanIdType",
+            "EXTENDED_CAN",
+        );
+        super::mainline::xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |node| super::mainline::named(node, "CAN-FRAME-TRIGGERING", "TxValueTrigger"),
+            |xml| xml.replace("<CAN-FD-FRAME-SUPPORT>true", "<CAN-FD-FRAME-SUPPORT>false"),
+        );
         let mut workspace =
             super::mainline::live_pipeline_workspace(&scratch.0.join("live"), &sources);
         let tx = workspace
@@ -511,6 +523,7 @@ fn verify_moved_fd_package(brs: bool) {
             .unwrap();
         workspace
             .edit_integration(IntegrationEdit {
+                signal_settings: [(tx.port.clone(), vec![SignalSetting::Fd(true)])].into(),
                 can_ids: [(tx.port, 0x1234567)].into(),
                 application_period_ms: Some(250),
                 ..IntegrationEdit::default()

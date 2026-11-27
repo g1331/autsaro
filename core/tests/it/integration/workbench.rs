@@ -1336,4 +1336,29 @@ fn shared_signal_type_edit_updates_mapping_com_and_network_together() {
             .iter()
             .all(|signal| signal.native_type == "uint8" && signal.bit_length == 8)
     );
+    #[cfg(feature = "native-tests")]
+    {
+        use crate::support::{generated_packages::prepare, tooling};
+        let mut reopened = reopened;
+        let preview = reopened.preview_application_initialization().unwrap();
+        reopened.initialize_application_previewed(&preview).unwrap();
+        let package = scratch.0.join("narrow-signals");
+        prepare(&reopened, false).generate(&package).unwrap();
+        let result = tooling::run_public_command(
+            &mut tooling::ecu_production_build_command(
+                &package,
+                &scratch.0.join("narrow-build"),
+                "host-batch",
+                None,
+            ),
+            &scratch.0,
+            "narrow-build",
+            std::time::Duration::from_secs(180),
+        );
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
 }

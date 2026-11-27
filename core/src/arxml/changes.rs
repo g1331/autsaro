@@ -746,13 +746,14 @@ impl Workspace {
                     .ok_or_else(|| {
                         crate::product_message!("backend.arxml.changes.stale_field_id")
                     })?;
+                let start = linked_fields.len();
                 linked_fields.extend(candidate.workspace.linked_fields(group, field_id, value).map_err(|message| {
                     crate::message::LocalizedText::messages([
                         crate::product_message!("backend.arxml.changes.field_change_context", "change_id" => change_id, "field" => serde_json::to_string(&FieldRef::Existing { field_id: field_id.clone() }).unwrap()),
                         message,
                     ])
                 })?);
-                linked.push((change_id, field_id, group));
+                linked.push((change_id, field_id, start..linked_fields.len()));
             }
         }
         if !linked_fields.is_empty() {
@@ -767,19 +768,41 @@ impl Workspace {
                 })?;
             // The outer transaction owns the single published workspace revision.
             candidate.workspace.revision = before.revision;
-            for (change_id, _, group) in &linked {
-                for (id, _) in &group.fields {
-                    let original = &before.snapshot.fields[before.snapshot.field_by_id[id]];
-                    let updated = &candidate.workspace.snapshot.fields
-                        [candidate.workspace.snapshot.field_by_id[id]];
-                    if original.view.current != updated.view.current {
-                        let owner = object(&before, &original.view.object_id)?;
+            for (change_id, _, range) in &linked {
+                for edit in &linked_fields[range.clone()] {
+                    let updated = candidate
+                        .workspace
+                        .snapshot
+                        .fields
+                        .iter()
+                        .find(|field| {
+                            let owner = &candidate.workspace.snapshot.objects
+                                [candidate.workspace.snapshot.object_by_id[&field.view.object_id]];
+                            owner.view.path == edit.object
+                                && if edit.parameter {
+                                    field.view.definition.definition_id.rsplit('/').next()
+                                        == Some(edit.field.as_str())
+                                } else {
+                                    field.element == edit.field
+                                }
+                        })
+                        .ok_or_else(|| {
+                            crate::product_message!("backend.arxml.changes.stale_field_id")
+                        })?;
+                    let previous = before
+                        .snapshot
+                        .field_by_id
+                        .get(&updated.view.field_id)
+                        .map(|index| &before.snapshot.fields[*index].view.current)
+                        .unwrap_or(&ValueState::Absent);
+                    if previous != &updated.view.current {
+                        let owner = object(&candidate.workspace, &updated.view.object_id)?;
                         candidate.impacts.push(impact(
                             change_id,
-                            &before,
+                            &candidate.workspace,
                             owner,
-                            Some(original),
-                            serde_json::to_string(&original.view.current).unwrap(),
+                            Some(updated),
+                            serde_json::to_string(previous).unwrap(),
                             serde_json::to_string(&updated.view.current).unwrap(),
                             false,
                         ));

@@ -16,7 +16,7 @@
 mod arti;
 mod artifacts;
 mod c_layout;
-mod can_id;
+pub(crate) mod can_id;
 mod can_runtime;
 mod catalog;
 mod com;
