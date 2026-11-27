@@ -13,6 +13,7 @@
 | [Windows runner 性能取证](windows-runner-performance.md) | 失败工件里的进程耗时汇总、参照探针、宿主负载记录，以及 protocol 分片的期限余量 |
 | [官方对照](official.md) | 官方档案下载与对照、条款处置核算 |
 | [桌面场景](desktop.md) | Tauri WebDriver 驱动的真实应用与 IPC 场景 |
+| [R11 参考配置](desktop.md#r11-参考配置验收) | 双平台编辑、生成、离线包接收与主机通信验收 |
 | [模糊测试](fuzzing.md) | ARXML／工程导入与 CanTp／Dcm 接收路径的 cargo-fuzz 目标、崩溃转回归与限时 CI |
 
 ## 基础检查

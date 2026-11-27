@@ -484,6 +484,11 @@ pub(crate) fn multichannel_sources(count: usize) -> Vec<InputSource> {
 
 /// A ring of dedicated I-PDUs. Each local COM path remains separately configured.
 pub(crate) fn gateway_sources(count: usize) -> Vec<InputSource> {
+    gateway_ring_sources(count, count)
+}
+
+/// Select the first ingress channels of the ring and their next-channel destinations.
+pub(crate) fn gateway_ring_sources(count: usize, gateways: usize) -> Vec<InputSource> {
     let mut sources = multichannel_sources(count);
     let pdu_definition = "/AUTOSAR/EcucDefs/EcuC/EcucConfigSet/EcucPduCollection/Pdu";
     for source in &mut sources {
@@ -502,9 +507,12 @@ pub(crate) fn gateway_sources(count: usize) -> Vec<InputSource> {
             };
             let previous = (channel + count - 1) % count;
             for (direction, id) in [("Rx", 933), ("Tx", 934)] {
+                let is_rx = direction == "Rx";
+                if (if is_rx { channel } else { previous }) >= gateways {
+                    continue;
+                }
                 let original_name = format!("{direction}Value{suffix}");
                 let gateway = format!("{direction}Gateway{channel}");
-                let is_rx = direction == "Rx";
                 let fd = (if is_rx { channel } else { previous }) % 2 != 0;
                 let extended = !is_rx || fd;
                 let length = if fd { 12 } else { 4 };
@@ -628,7 +636,7 @@ pub(crate) fn gateway_sources(count: usize) -> Vec<InputSource> {
                     add(&mut edits, node, xml);
                 }
             }
-            if path == "ecuc.arxml" {
+            if path == "ecuc.arxml" && channel < gateways {
                 let node = doc
                     .descendants()
                     .find(|node| definition(*node, "PduRRoutingPath"))

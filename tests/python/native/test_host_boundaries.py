@@ -31,7 +31,7 @@ class HostBoundaryTests(unittest.TestCase):
         if not requested or not Path(requested).is_file():
             raise RuntimeError("Host boundary tests require the native GCC")
         cls.compiler = str(Path(requested).resolve())
-        # Delivered projects generate these two headers; the lock fixture needs only the policy type.
+        # The lock fixture needs only the generated policy type. Compile against the real execution ABI.
         generated = cls.directory / "generated"
         generated.mkdir()
         (generated / "Ecu_Config.h").write_text(
@@ -39,13 +39,10 @@ class HostBoundaryTests(unittest.TestCase):
             "typedef enum { ECU_TX_SYNCHRONOUS = 0, ECU_TX_QUEUED = 1 } EcuTxConfirmation;\n"
             "typedef struct { EcuTxConfirmation tx_confirmation; } EcuPolicyConfig;\n"
             "extern const EcuPolicyConfig Ecu_Policy;\n#endif\n", encoding="utf-8")
-        (generated / "Ecu_Execution.h").write_text(
-            '#ifndef ECU_EXECUTION_H\n#define ECU_EXECUTION_H\n#include "Ecu_Config.h"\n#include "Can_Host.h"\n'
-            "EcuStatus Ecu_ExecutionTransmit(Can_TxSinkType sink, PduIdType handle, uint32_t id, uint8_t dlc, const uint8_t *data, boolean brs, uint32 data_phase_bitrate);\n"
-            "uint64_t Ecu_ExecutionNow(void);\n#endif\n", encoding="utf-8")
         cls.flags = ["-std=c99", "-O1", "-Wall", "-Wextra", "-Werror", "-pedantic",
                      "-I" + str(ROOT / "runtime/bsw/src"), "-I" + str(ROOT / "runtime/bsw/include"),
                      "-I" + str(ROOT / "runtime/host/src"), "-I" + str(ROOT / "runtime/host/include"),
+                     "-I" + str(ROOT / "runtime/ecu/src"),
                      # The mainline CAN headers use the generated ComStack_Cfg.h widths.
                      "-I" + str(ROOT / "core/tests/fixtures/bsw-contracts"), "-I" + str(generated)]
         suffix = ".exe" if os.name == "nt" else ""

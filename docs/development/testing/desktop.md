@@ -63,3 +63,43 @@ Linux 的 responsiveness 与 standard-delivery 场景自动启用请求取证，
 核查每次运行的 commit、触发事件和 `run_attempt`，再从各分片的实际日志核对文件名单、执行／失败／跳过数量及 Node 场景耗时。构建依赖、验证版应用构建、分片准备、场景步骤和排队分别计时；并行分片的平台场景关键路径取最慢分片，不把所有分片相加，也不把构建到末片结束的墙钟时间称为场景耗时。部分选择的手动运行不能代替全量证据。jobs、日志或工件不可读时保留证据缺口，不凭汇总成功提升门禁。
 
 Development checks 复用 `desktop.yml` 的共享构建和分片，在 master 的 `Post-merge checks result` 汇总。Extended 的手动入口保留。#311 的历史请求归因须依其自身出口判断，后续绿色运行不构成其根因修复证明。
+
+## R11 参考配置验收
+
+两份 R24-11 工程共用组合与数据类型基座。项目覆盖层提供 ECU Extract、ECUC、应用接口与 BSW 调度，并分别选择控制器的 FD 位速率切换设置。跨项目语义差异核对第四路 CAN 网络的新增与 FD 控制器属性的变化。桌面从 `platform` 切换到 `commissioned` 时，应显示发送初值变化，保存重开后由第一个周期帧验证生效。
+
+| 工程 | 物理 CAN 通道 | HOH | CanIf Rx／Tx PDU | 周期输出 | 事件输出 |
+| --- | ---: | ---: | ---: | --- | --- |
+| `two-bus` | 2 | 7 | 7／5 | 两路 Classical CAN，主路初值 17 | 两条跨通道路由，一条转发 12 字节 FD |
+| `four-bus` | 4 | 17 | 12／5 | 扩展 ID FD，初值 −33 | 三条跨通道路由，其中一条转发 12 字节 FD |
+
+两份工程都覆盖标准／扩展 ID，8 位无符号、16 位有符号、32 位无符号信号与 Intel／Motorola 字节序。周期发送走 COM，事件发送由收到配置内网关 PDU 触发。表中的规模用于验收。
+
+### 本地重放
+
+按[本篇开头的桌面场景配置](#桌面场景)构建应用并声明工具，在仓库根目录运行。将 `AUTOSAR_R11_PROJECTS` 指向一个新的绝对路径，以便保留未编辑的输入工程。
+
+```sh
+export CARGO_BUILD_JOBS=2
+export AUTOSAR_R11_PROJECTS="$(mktemp -d)"
+cargo test --locked -p autosar-config-core --test r11_reference
+node --test tests/desktop/r11-reference.test.mjs
+uv run --locked python -m autosar_tooling requirements
+uv run --locked python -m autosar_tooling assets check
+uv run --locked python -m autosar_tooling quality --scope all --merge-base origin/master
+```
+
+GitHub 的 `Desktop acceptance` 入口在 Linux 和 Windows 分别从本次提交准备输入并执行同一场景。可以通过 `scenarios` 只选 `tests/desktop/r11-reference.test.mjs`。在两平台结果工件的 `r11-reference-*` 目录中查看 IPC、已保存工程、封存包和接收端的 `build.log`、`host-batch.log`。
+
+Windows 作业从已安装的 WebView2 Runtime 读取版本，核对 EdgeDriver 的前三段版本号。runner 自带的驱动不匹配时，从微软下载对应版本，核对后放到测试进程的 PATH 上。复核 Windows 日志时核对两项版本及原生会话启动结果。
+
+Linux 作业从 Ubuntu 固定快照单独提取目标锁定的 `objdump`，校验安装包与可执行文件摘要，并把绝对路径传给接收端。系统 binutils 仍由 runner 管理。更新目标锁时同步核对工作流的快照、软件包和摘要。
+
+### 复核
+
+- 在两份工程上比较变体，核对初值从 0 分别变为 17 与 −33。非法变体分别改变 Motorola 起始位和有符号信号位宽，验证预览拒绝、选择和保存字节保持原值。
+- 把桌面导出的包交给独立接收端。包内 `ecu-tool.py` 在外部目录校验文件清单、摘要和工具约束，然后用声明的 GCC／binutils 编译。接收端只用标准库 Python 与声明的本机工具，执行 ECU 的 HostBatchV2 入口。
+- 核对[独立向量](../../../tests/desktop/support/r11_receiver.py)的周期帧、路由帧和四字节应用读回。两份工程都先在错误通道送入同 ID、格式及长度的 FD 帧，验证无转发，再验证正确通道只向指定目的通道转发。向配置为 4 字节的 Classical COM PDU 送入 3 字节数据，检查拒绝、应用数据保留和后续合法输入。逐帧比较通道、ID 类型、FD 标志、长度、数据和发送时刻。
+- 核对 `requirements` 输出，涉及模块的未处置条目与失效引用均为 0。处置中登记的规范缺口仍按各模块的范围记录。
+
+主机 CAN FD 证据仅覆盖两份配置的主机数据通路、跨通道路由和已验证的 CanTp 传输向量，不外推到 MCU 或 CAN FD 诊断。
