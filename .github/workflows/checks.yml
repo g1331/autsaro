@@ -1670,8 +1670,10 @@ jobs:
     name: Post-merge checks result
     needs: [required, native-windows, native-os, native-sanitizers, desktop-scenarios, extended]
     if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
-    # Serialize the lookup and write for the rolling issue.
-    concurrency: master-ci-alert
+    # An older run can finish late and must not replace the current run in the queue.
+    concurrency:
+      group: master-ci-alert
+      queue: max
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

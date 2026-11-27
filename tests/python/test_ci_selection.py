@@ -1176,7 +1176,7 @@ class CiSelectionTests(unittest.TestCase):
         moved = {"native-windows", "native-os", "native-sanitizers", "desktop-scenarios"}
         self.assertEqual(set(reporter["needs"]), moved | {"required", "extended"})
         self.assertFalse(set(jobs["required"]["needs"]) & moved)
-        self.assertEqual(reporter["concurrency"], "master-ci-alert")
+        self.assertEqual(reporter["concurrency"], {"group": "master-ci-alert", "queue": "max"})
         self.assertEqual(reporter["permissions"], {"actions": "read", "contents": "read", "issues": "write"})
         for event, ref, expected in (
             ("push", "refs/heads/master", True),
