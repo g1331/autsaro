@@ -18,6 +18,8 @@ on:
         default: tests/desktop/*.test.mjs
 permissions:
   contents: read
+env:
+  CARGO_BUILD_JOBS: '2'
 jobs:
   build:
     strategy:
@@ -60,13 +62,17 @@ jobs:
       - run: npm ci --prefix ui
       - name: Build the WebDriver verification application
         run: npm run tauri --prefix ui -- build --debug --no-bundle --features native-webdriver -- --profile desktop-test
+      - name: Prepare R24-11 reference project inputs
+        env:
+          AUTOSAR_R11_PROJECTS: ${{ github.workspace }}/build/desktop-app/reference-projects
+        run: cargo test --locked --profile desktop-test -p autosar-config-core --test r11_reference
       - name: Stage the shared verification application and driver
         shell: python
         run: |
           import os, shutil
           from pathlib import Path
           output = Path('build/desktop-app')
-          output.mkdir(parents=True)
+          output.mkdir(parents=True, exist_ok=True)
           suffix = '.exe' if os.name == 'nt' else ''
           for name in ('autosar-config-desktop' + suffix, 'LICENSE', 'NOTICE'):
               shutil.copy2(Path('target/desktop-test') / name, output / name)
@@ -89,7 +95,7 @@ jobs:
           - os: ubuntu-24.04
             shard:
               id: 1
-              files: composition-editing editing responsiveness startup process-tree rejected-change
+              files: composition-editing editing responsiveness startup process-tree rejected-change r11-reference
           - os: ubuntu-24.04
             shard:
               id: 2
@@ -101,7 +107,7 @@ jobs:
           - os: windows-2025-vs2026
             shard:
               id: 2
-              files: composition-editing editing application incomplete-configuration rejected-change
+              files: composition-editing editing application incomplete-configuration rejected-change r11-reference
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -126,10 +132,24 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # The image's Edge WebDriver matches its Edge; WebView2 must match too.
-          $env:EDGEWEBDRIVER >> $env:GITHUB_PATH
-          & (Join-Path $env:EDGEWEBDRIVER msedgedriver.exe) --version
-          (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}').pv | ForEach-Object { "WebView2 runtime $_" }
+          $version = (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}').pv
+          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw "Invalid WebView2 version: $version" }
+          "WebView2 runtime $version"
+          $directory = $env:EDGEWEBDRIVER
+          $driverVersion = & (Join-Path $directory msedgedriver.exe) --version
+          $build = $version.Substring(0, $version.LastIndexOf('.'))
+          if ($driverVersion -notmatch "MSEdgeDriver $([regex]::Escape($build))\.") {
+            $zip = Join-Path $env:RUNNER_TEMP 'edge-webview2-driver.zip'
+            $directory = Join-Path $env:RUNNER_TEMP 'edge-webview2-driver'
+            Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile $zip
+            Expand-Archive $zip -DestinationPath $directory
+            $driverVersion = & (Join-Path $directory msedgedriver.exe) --version
+            if ($driverVersion -notmatch "MSEdgeDriver $([regex]::Escape($build))\.") {
+              throw "WebView2 $version does not match $driverVersion"
+            }
+          }
+          $driverVersion
+          $directory >> $env:GITHUB_PATH
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: desktop-app-${{ matrix.os }}
@@ -150,6 +170,7 @@ jobs:
               check=True, capture_output=True, text=True).stdout.strip()
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('AUTOSAR_DESKTOP_APP=' + str(application.resolve(strict=True)) + '\n')
+              output.write('AUTOSAR_R11_PROJECTS=' + str((application.parent / 'reference-projects').resolve(strict=True)) + '\n')
               for variable, name in tools.items():
                   output.write(variable + '=' + str(Path(shutil.which(name)).absolute()) + '\n')
               output.write('AUTOSAR_PYTHON=' + str(Path(python).absolute()) + '\n')
