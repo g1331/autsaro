@@ -1670,35 +1670,74 @@ jobs:
     name: Post-merge checks result
     needs: [required, native-windows, native-os, native-sanitizers, desktop-scenarios, extended]
     if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    # Serialize the lookup and write for the rolling issue.
+    concurrency: master-ci-alert
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
+      actions: read
+      contents: read
       issues: write
     steps:
-      - name: Summarize results and report unsuccessful runs
-        shell: bash
+      - name: Summarize results and update the master CI alert
+        shell: python
         env:
           GH_TOKEN: ${{ github.token }}
           RESULTS: ${{ toJSON(needs) }}
         run: |
-          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          title="Master CI failed (run $GITHUB_RUN_ID)"
-          {
-            printf 'Master commit %s · [run %s, attempt %s](%s/attempts/%s)\n\n' \
-              "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$run_url" "$GITHUB_RUN_ATTEMPT"
-            jq -r 'to_entries[] | "- \(.key): \(.value.result)"' <<< "$RESULTS"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if jq -e 'all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
-            exit 0
-          fi
-          existing=$(gh api --paginate \
-            "repos/$GITHUB_REPOSITORY/issues?state=all&labels=area%3Aquality-ci&per_page=100" |
-            jq -rs --arg title "$title" \
-              '[.[][] | select(.pull_request == null and .title == $title) | .number][0] // empty')
-          if [[ -n "$existing" ]]; then
-            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body-file "$GITHUB_STEP_SUMMARY"
-          else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label area:quality-ci \
-              --body-file "$GITHUB_STEP_SUMMARY"
-          fi
-          exit 1
+          import json
+          import os
+          import subprocess
+          import sys
+
+          def api(endpoint, paginate=False):
+              flags = ['--paginate', '--slurp'] if paginate else []
+              return json.loads(subprocess.check_output(['gh', 'api', *flags, f'repos/{repo}/{endpoint}']))
+
+          repo = os.environ['GITHUB_REPOSITORY']
+          sha = os.environ['GITHUB_SHA']
+          run = os.environ['GITHUB_RUN_ID']
+          attempt = os.environ['GITHUB_RUN_ATTEMPT']
+          run_url = f"{os.environ['GITHUB_SERVER_URL']}/{repo}/actions/runs/{run}/attempts/{attempt}"
+          revision = f"Master commit `{sha}` · [run {run}, attempt {attempt}]({run_url})"
+          results = {name: item['result'] for name, item in json.loads(os.environ['RESULTS']).items()}
+          passed = all(result == 'success' for result in results.values())
+          summary = revision + '\n\n' + ''.join(f'- `{name}`: {result}\n' for name, result in results.items())
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as output:
+              output.write(summary)
+
+          # Runs can finish out of order. Only the current master revision updates the alert.
+          if api('git/ref/heads/master')['object']['sha'] != sha:
+              print('Master has advanced. Results are recorded in the run summary.')
+              sys.exit(0 if passed else 1)
+
+          title = 'Master CI failed'
+          label = 'area:quality-ci'
+          pages = api('issues?state=open&labels=area%3Aquality-ci&per_page=100', paginate=True)
+          issue = next((str(item['number']) for page in pages for item in page
+                        if item['title'] == title and 'pull_request' not in item), None)
+          issue_command = ['gh', 'issue']
+          repo_flags = ['--repo', repo]
+          if passed:
+              if issue:
+                  recovery = f'Post-merge checks result passed. {revision}.'
+                  subprocess.run([*issue_command, 'close', issue, *repo_flags, '--reason', 'completed',
+                                  '--comment', recovery], check=True)
+              sys.exit(0)
+
+          pages = api(f'actions/runs/{run}/attempts/{attempt}/jobs?per_page=100', paginate=True)
+          failed_jobs = [
+              f"- [`{job['name']}`]({job['html_url']}): {job['conclusion']}\n"
+              for page in pages for job in page['jobs']
+              if job['status'] == 'completed'
+              and job['conclusion'] in {'action_required', 'failure', 'timed_out', 'startup_failure', 'cancelled'}
+          ]
+          body = 'Development checks failed. ' + summary
+          if failed_jobs:
+              body += '\nUnsuccessful jobs:\n\n' + ''.join(failed_jobs)
+          if issue:
+              command = [*issue_command, 'comment', issue]
+          else:
+              command = [*issue_command, 'create', '--title', title, '--label', label]
+          subprocess.run([*command, *repo_flags, '--body-file', '-'], input=body, text=True, check=True)
+          sys.exit(1)
