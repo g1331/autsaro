@@ -575,6 +575,7 @@ fn communication(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedText
     )?;
     a.integers(fd, "CanControllerSspOffset", "0", U8, 0)?;
     a.booleans(fd, "CanControllerTxBitRateSwitch", 1)?;
+    a.default(fd, "CanControllerTxBitRateSwitch", "true");
     let hardware = "Can/CanConfigSet/CanHardwareObject";
     a.container(hardware, 0, None)?;
     a.integers(hardware, "CanFdPaddingValue", "0", U8, 0)?;
@@ -1212,7 +1213,12 @@ fn operating_system(a: &mut Author<'_>) -> Result<(), crate::message::LocalizedT
     a.reference(source, "PduRSrcPduRef", PDU, 1, Some(1))?;
     a.integers(destination, "PduRDestPduHandleId", "0", U16, 0)?;
     a.booleans(destination, "PduRTransmissionConfirmation", 1)?;
-    a.enumeration(destination, "PduRDestPduDataProvision", "PDUR_DIRECT", 0)?;
+    a.enumeration(
+        destination,
+        "PduRDestPduDataProvision",
+        "PDUR_DIRECT PDUR_TRIGGERTRANSMIT",
+        0,
+    )?;
     a.reference(destination, "PduRDestPduRef", PDU, 1, Some(1))?;
     a.reference(route, "PduRDestPduRRef", destination, 1, Some(1))?;
     a.reference(route, "PduRSrcPduRRef", source, 1, Some(1))?;

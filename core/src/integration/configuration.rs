@@ -697,6 +697,7 @@ fn inspect_with_catalog(
         ("OsAlarmAutostartType", "RELATIVE"),
         ("OsScheduleTableAutostartType", "RELATIVE"),
         ("OsScheduleTblSyncStrategy", "NONE"),
+        ("PduRDestPduDataProvision", "PDUR_DIRECT"),
         ("DcmDspSessionForBoot", "DCM_NO_BOOT"),
         ("DcmDspDataScalingInfoSize", "0"),
         ("DcmDspMaxDidToRead", "2"),

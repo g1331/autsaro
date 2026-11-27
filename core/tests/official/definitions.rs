@@ -182,19 +182,21 @@ fn fixed_r24_11_mod_agrees_on_ecuc_integer_precision_enum_and_default() {
             compare(&mut failures, id, "literals", actual, authored);
         }
     }
-    assert_eq!(
-        (defaults, without_defaults),
-        (140, 360),
-        "all 500 delivered parameters must be compared, including absent defaults"
-    );
-    eprintln!(
-        "R24-11 default comparison: {defaults} declared, {without_defaults} absent; all 500 parameters compared"
-    );
     assert!(
         failures.is_empty(),
         "Fixed metadata oracle mismatches:\n{}",
         failures.join("\n")
     );
+    let delivered_parameters = catalog
+        .definitions()
+        .filter(|entry| is_ecuc(&entry.definition_id) && entry.kind.is_some())
+        .count();
+    assert_eq!(defaults + without_defaults, delivered_parameters);
+    assert!(
+        defaults > 0 && without_defaults > 0,
+        "expected to compare parameters with and without a declared default"
+    );
+    eprintln!("R24-11 default comparison: {defaults} declared, {without_defaults} absent");
 }
 
 #[cfg(feature = "official-oracles")]

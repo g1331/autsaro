@@ -2516,7 +2516,12 @@ fn pdur_features_outside_the_selection_are_refused_at_their_source() {
             object
         };
         if name == "PduRDestPduDataProvision" {
-            rejected_at(&sources, "VALUE_RANGE", "ecuc.arxml", &object);
+            rejected_at(
+                &sources,
+                "TARGET_PARAMETER_UNSUPPORTED",
+                "ecuc.arxml",
+                &object,
+            );
         } else {
             rejected_with(
                 &sources,
