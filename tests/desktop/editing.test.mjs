@@ -1,11 +1,24 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { openWorkbench, explicit, existing } from './support/workbench.mjs';
 
 const {
   check,
+  evaluate,
+  key,
+  exportSource,
   invoke,
   projection,
   input,
+  field,
+  menu,
+  click,
+  until,
+  unchanged,
+  sourceBytes,
+  awaitStandardInspectionReady,
   refreshSurface,
   changeSet,
   valueChange,
@@ -162,4 +175,159 @@ check('structure-and-incoming-reference-closure', async () => {
     },
   ]);
   await save();
+});
+
+check('extended IDs through page and Edit menu survive save and reopen', async () => {
+  await refreshSurface();
+  const { manifest } = await create('ExtendedIds');
+  const view = await projection();
+  const hardware = view.fields.filter((item) => item.definitionId.endsWith('/CanIdType'));
+  assert.ok(hardware.length);
+  await apply(
+    view,
+    hardware.map((item) => valueChange(item, 'MIXED')),
+  );
+  await save();
+  await refreshSurface(manifest);
+  await awaitStandardInspectionReady();
+  const original = await sourceBytes(await projection());
+  const tx = (await invoke('inspect_integration')).description.signals.find(
+    (item) => !item.receive,
+  );
+  const id = field('发送 CAN ID · ' + tx.port);
+  const format = field('CAN ID 格式 · ' + tx.port);
+  await input(format, 'true');
+  for (const [value, submit] of [
+    [0x1234567, click],
+    [0x1fffffff, menu],
+    [65, click],
+  ]) {
+    await input(id, String(value));
+    await submit('应用更改');
+    await until(
+      `document.querySelector('.integration-fields') && [...document.querySelectorAll('.integration-view button')].some(node => node.textContent.trim() === '应用更改' && node.disabled) && Boolean(document.querySelector('.integration-fields label:first-child input:not(:disabled)'))`,
+      'draft applied',
+    );
+    const report = await invoke('inspect_integration');
+    const edited = report.description.signals.find((item) => item.port === tx.port);
+    assert.equal(edited.canId, value);
+    assert.equal(edited.extended, true);
+    await unchanged(original);
+  }
+  await input(field('帧长度（字节） · ' + tx.port), '9');
+  await click('应用更改');
+  await until(
+    `document.querySelector('.integration-view [role=alert]')?.textContent.includes('FRAME-LENGTH')`,
+    'rejected frame size identifies the source field',
+  );
+  assert.equal(
+    (await invoke('inspect_integration')).description.signals.find((item) => item.port === tx.port)
+      .dlc,
+    tx.dlc,
+  );
+  await unchanged(original);
+  await click('还原更改');
+  await save();
+  await refreshSurface(manifest);
+  const reopened = (await invoke('inspect_integration')).description.signals.find(
+    (item) => item.port === tx.port,
+  );
+  assert.equal(reopened.canId, 65);
+  assert.equal(reopened.extended, true);
+  const result = await projection();
+  assert.ok(
+    result.fields.some(
+      (item) => item.linkedEdit?.kind === 'can-id' && item.linkedEdit.groupId === tx.port,
+    ),
+  );
+  const invalid = { changes: { canIds: { [tx.port]: 0x20000000 }, applicationPeriodMs: null } };
+  await refuse('edit_integration', invalid, '29-bit CAN ID range');
+  const initialization = await invoke('preview_application_initialization');
+  await invoke('initialize_application_previewed', { preview: initialization });
+  await exportSource('ExtendedIds');
+});
+
+check('layer selection previews semantic differences and saves the selected variant', async () => {
+  await refreshSurface();
+  const { directory, manifest } = await create('SchedulerVariants');
+  const projectionBefore = await projection();
+  const initialization = await invoke('preview_application_initialization');
+  await invoke('initialize_application_previewed', { preview: initialization });
+  const project = JSON.parse(await readFile(manifest, 'utf8'));
+  const members = project.inputs.map((item) => item.path).sort();
+  const digest = createHash('sha256');
+  function frame(bytes) {
+    const length = Buffer.alloc(8);
+    length.writeBigUInt64LE(BigInt(bytes.length));
+    digest.update(length).update(bytes);
+  }
+  frame(Buffer.from('autosar-project-base-v1'));
+  for (const member of members) {
+    frame(Buffer.from(member));
+    frame(
+      createHash('sha256')
+        .update(await readFile(path.join(directory, member)))
+        .digest(),
+    );
+  }
+  const reference = { baseId: 'shared', revision: 'first', sourceSha256: digest.digest('hex') };
+  const empty = { members: [], operations: [] };
+  const priority = fieldBy(projectionBefore, '/OsTaskPriority');
+  const owner = projectionBefore.objects.find((item) => item.objectId === priority.objectId);
+  const target = {
+    object: { release: 'R24-11', definitionType: owner.definitionId, path: owner.path },
+    field: priority.definitionId,
+  };
+  const selected = priority.current.value.lexeme === '8' ? '7' : '8';
+  project.layers = {
+    baseReference: reference,
+    base: {
+      reference,
+      release: 'R24-11',
+      rules: projectionBefore.ruleSetIdentity,
+      extensions: [],
+      members,
+    },
+    project: empty,
+    groups: {
+      scheduler: {
+        exactlyOne: true,
+        options: {
+          platform: empty,
+          urgent: {
+            members: [],
+            operations: [
+              {
+                target,
+                action: { action: 'set', values: [{ kind: 'integer', lexeme: selected }] },
+              },
+            ],
+          },
+        },
+      },
+    },
+    selection: { scheduler: ['platform'] },
+  };
+  await writeFile(manifest, JSON.stringify(project));
+  await refreshSurface(manifest);
+  await menu('标准输入');
+  const radio = field('urgent').expression;
+  await until(`Boolean(${radio})`, 'configured variant choice');
+  await evaluate(`(${radio}).focus()`);
+  await key(' ');
+  await click('比较变体');
+  await until(
+    `document.querySelector('.integration-view').innerText.includes('OsTaskPriority')`,
+    'semantic priority difference',
+  );
+  await click('应用更改');
+  await until(
+    `document.querySelector('.integration-view input[type=radio]:checked')?.parentElement.textContent.trim() === 'urgent' && [...document.querySelectorAll('.integration-view button')].some(node => node.textContent.trim() === '预览保存' && !node.disabled)`,
+    'selected variant applied',
+  );
+  await save();
+  await refreshSurface(manifest);
+  const reopened = await invoke('inspect_integration');
+  assert.deepEqual(reopened.layers.groups.scheduler.selected, ['urgent']);
+  await exportSource('SchedulerVariants');
 });

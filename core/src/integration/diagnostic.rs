@@ -79,6 +79,10 @@ pub struct DiagnosticTransportContract {
     #[serde(skip)]
     pub(super) rx_max_dl: u8,
     #[serde(skip)]
+    pub(super) rx_wire_objects: [String; 3],
+    #[serde(skip)]
+    pub(super) tx_wire_objects: [String; 3],
+    #[serde(skip)]
     pub(super) rx_min_dl: u8,
     #[serde(skip)]
     pub(super) tx_dl: u8,
@@ -245,6 +249,7 @@ fn transport_timer(
 }
 
 struct DiagnosticCanLink {
+    wire_objects: [String; 3],
     id: u32,
     handle: u16,
     accepts_fd: bool,
@@ -455,6 +460,8 @@ fn can_link(
         0
     };
     Ok(DiagnosticCanLink {
+        wire_objects: [frame, system_pdu, trigger]
+            .map(|index| graph.elements[index].object.clone()),
         id,
         handle,
         accepts_fd,
@@ -1125,6 +1132,8 @@ fn inspect_connection(
         response_extended: response.id & super::can_id::EXTENDED != 0,
         request_fd: request.id & super::can_id::FD != 0,
         response_fd: response.id & super::can_id::FD != 0,
+        rx_wire_objects: request.wire_objects,
+        tx_wire_objects: response.wire_objects,
         rx_max_dl: request.length,
         rx_min_dl: request.minimum,
         tx_dl: response.length,

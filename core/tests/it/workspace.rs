@@ -2572,6 +2572,7 @@ fn integration_patch_refusals_preserve_source_and_workspace_bytes() {
             .edit_integration(IntegrationEdit {
                 can_ids: [(channel.port.clone(), (channel.can_id + 1) % 0x800)].into(),
                 application_period_ms: None,
+                ..IntegrationEdit::default()
             })
             .unwrap_err();
         assert_eq!(issues.len(), 1, "{case}: {issues:?}");
@@ -2692,6 +2693,7 @@ fn integration_plan_refuses_missing_and_duplicate_patch_inputs_before_editing() 
             .edit_integration(IntegrationEdit {
                 can_ids: [(channel.port.clone(), channel.can_id + 1)].into(),
                 application_period_ms: None,
+                ..IntegrationEdit::default()
             })
             .unwrap_err();
         let (code, key) = match case {

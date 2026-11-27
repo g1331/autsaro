@@ -414,6 +414,9 @@ export function createBatchEditing(session: WorkbenchSession, dependencies: Depe
           acceptIntegration(report);
           if (integration.integrationUnapplied)
             patchState({
+              connectionDrafts: integration.connectionDrafts,
+              variantSelection: integration.variantSelection,
+              signalDrafts: integration.signalDrafts,
               integrationIds: integration.integrationIds,
               integrationPeriod: integration.integrationPeriod,
               integrationUnapplied: true,

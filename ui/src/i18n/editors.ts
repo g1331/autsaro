@@ -52,6 +52,9 @@ export const editorResources: {
   en: Record<string, string>;
 } = {
   'zh-CN': {
+    'editor.container.linked.transport-policy': '同步校验诊断帧格式和接收长度策略。',
+    'editor.container.linked.transport-length': '同步更新帧、N-PDU 和全局 PDU 的长度。',
+    'editor.container.linked.signal-setting': '同时更新关联的信号配置字段。',
     'editor.container.linked.can-id': '同时更新帧触发标识符和 CanIf PDU CAN ID。',
     'editor.container.linked.application-period': '同时更新关联定时事件和 OS 触发器。',
     'editor.container.linked.application-com-period':
@@ -273,6 +276,12 @@ export const editorResources: {
     'editor.window.restore': '还原窗口',
   },
   en: {
+    'editor.container.linked.transport-policy':
+      'Validates the linked diagnostic frame format and receive length policy.',
+    'editor.container.linked.transport-length':
+      'Updates the frame, N-PDU and global PDU length together.',
+    'editor.container.linked.signal-setting':
+      'Updates the linked signal configuration fields together.',
     'editor.container.linked.can-id':
       'Updates the frame triggering identifier and CanIf PDU CAN ID together.',
     'editor.container.linked.application-period':

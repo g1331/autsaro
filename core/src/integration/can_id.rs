@@ -57,7 +57,18 @@ pub(super) fn trigger_id(graph: &Graph, trigger: usize) -> Option<u32> {
 
 pub(super) fn pdu_id(graph: &Graph, pdu: usize, receive: bool) -> Option<(u32, bool)> {
     let prefix = if receive { "CanIfRxPdu" } else { "CanIfTxPdu" };
-    let (format, fd, accepts_fd) = match value(graph, pdu, &format!("{prefix}CanIdType"), false)? {
+    let (format, fd, accepts_fd) = policy(
+        value(graph, pdu, &format!("{prefix}CanIdType"), false)?,
+        receive,
+    )?;
+    Some((
+        encode(value(graph, pdu, &format!("{prefix}CanId"), false), format)? | fd,
+        accepts_fd,
+    ))
+}
+
+pub(crate) fn policy(raw: &str, receive: bool) -> Option<(&'static str, u32, bool)> {
+    Some(match raw {
         "STANDARD_CAN" => ("STANDARD", 0, receive),
         "EXTENDED_CAN" => ("EXTENDED", 0, receive),
         "STANDARD_NO_FD_CAN" if receive => ("STANDARD", 0, false),
@@ -65,11 +76,7 @@ pub(super) fn pdu_id(graph: &Graph, pdu: usize, receive: bool) -> Option<(u32, b
         "STANDARD_FD_CAN" => ("STANDARD", FD, false),
         "EXTENDED_FD_CAN" => ("EXTENDED", FD, false),
         _ => return None,
-    };
-    Some((
-        encode(value(graph, pdu, &format!("{prefix}CanId"), false), format)? | fd,
-        accepts_fd,
-    ))
+    })
 }
 
 pub(super) fn encoded(id: u32, extended: bool) -> u32 {

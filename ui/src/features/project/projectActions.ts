@@ -1,11 +1,12 @@
+import { integrationPayload } from '../editing/signalSettings';
 import { composedMessage, message, translate } from '../../i18n';
 import type { Text } from '../../i18n';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { IntegrationInspection, WorkspaceView } from '../../ipc/types';
 import { rememberDialogOpener } from '../../shared/ui/Dialog';
-import { errorText, intInRange } from '../../shared/ui/forms';
+import { errorText } from '../../shared/ui/forms';
 import { applicationPeriodDraft } from '../editing/applicationPeriod';
-import type { RunOperation } from '../../app/operationRunner';
+import { isPlanDiagnostics, type RunOperation } from '../../app/operationRunner';
 import type { DocumentTab } from './projectTypes';
 import { projectNeedsSave } from './state';
 import type { WorkbenchSession } from '../../app/session';
@@ -150,6 +151,9 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     patchState({
       integrationInspection: null,
       integrationIssues: [],
+      connectionDrafts: [],
+      variantSelection: null,
+      signalDrafts: {},
       integrationIds: {},
       integrationPeriod: '',
       integrationPreview: null,
@@ -216,6 +220,9 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
         operationIssues: [],
         integrationInspection: null,
         integrationIssues: [],
+        connectionDrafts: [],
+        variantSelection: null,
+        signalDrafts: {},
         integrationIds: {},
         integrationPeriod: '',
         integrationPreview: null,
@@ -320,6 +327,9 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       preparedChangeSet: null,
       applicationPreview: null,
       integrationUnapplied: false,
+      connectionDrafts: [],
+      variantSelection: null,
+      signalDrafts: {},
       integrationIds: current.integrationInspection?.description
         ? Object.fromEntries(
             current.integrationInspection.description.signals.map((signal) => [
@@ -364,23 +374,7 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
     let applied = false;
     try {
       if (current.integrationUnapplied) {
-        const canIds = Object.fromEntries(
-          Object.entries(current.integrationIds).map(([path, value]) => [
-            path,
-            intInRange(value, 'CAN ID', 0, 0x1fffffff),
-          ]),
-        );
-        const report = await call('edit_integration', {
-          changes: {
-            canIds,
-            applicationPeriodMs: intInRange(
-              current.integrationPeriod,
-              message('workflow.field.applicationPeriod'),
-              1,
-              2147483647,
-            ),
-          },
-        });
+        const report = await call('edit_integration', { changes: integrationPayload(current) });
         if (generation !== epoch.current) return false;
         applied = true;
         patchState({ integrationSavePending: true });
@@ -395,6 +389,12 @@ export function createProjectActions(session: WorkbenchSession, dependencies: De
       await refreshProjection();
     } catch (error) {
       if (generation !== epoch.current) return false;
+      if (!applied && current.integrationUnapplied && isPlanDiagnostics(error)) {
+        patchState({
+          integrationIssues: error,
+          integrationNotice: message('controller.integration.editRejected'),
+        });
+      }
       if (applied) invalidateAfterEdit();
       await refreshProjection();
       setNotice({

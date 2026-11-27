@@ -12,6 +12,8 @@ pub struct DataPort {
     pub element_name: String,
     pub application_type: String,
     pub implementation_type: String,
+    #[serde(skip)]
+    pub(super) mapping_set: String,
     pub c_type: String,
     pub read: bool,
     pub api_symbol: String,
@@ -170,7 +172,7 @@ pub(super) fn implementation(
     context: usize,
     behavior: usize,
     application: usize,
-) -> Result<usize, Vec<PlanDiagnostic>> {
+) -> Result<(usize, usize), Vec<PlanDiagnostic>> {
     let sets: Vec<_> = graph
         .descendants(behavior, "DATA-TYPE-MAPPING-REF")
         .iter()
@@ -211,7 +213,10 @@ pub(super) fn implementation(
             crate::product_message!("backend.integration.component.sr_integer_type_required"),
         ));
     }
-    Ok(implementation)
+    let set = graph
+        .ancestor(*mapping, "DATA-TYPE-MAPPING-SET")
+        .ok_or_else(|| PlanDiagnostic::plan_premise(&graph.elements[*mapping].object))?;
+    Ok((implementation, set))
 }
 
 /// Integer representations shared by the implementation and network layers.

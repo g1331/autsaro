@@ -190,6 +190,7 @@ fn mainline_integration_save_refuses_stale_preview_prior_backup_and_unsafe_edit(
         .edit_integration(IntegrationEdit {
             can_ids: [(port, 1100)].into(),
             application_period_ms: None,
+            ..IntegrationEdit::default()
         })
         .err()
         .unwrap();
@@ -1066,6 +1067,7 @@ fn template_quick_edit_changes_can_ids_and_application_period_on_the_mainline() 
         .edit_integration(IntegrationEdit {
             can_ids,
             application_period_ms: Some(20),
+            ..IntegrationEdit::default()
         })
         .unwrap_or_else(|issues| panic!("{issues:?}"));
     let after = report.description.unwrap();
@@ -1199,4 +1201,164 @@ fn multi_component_save_reopen_and_relocation_keep_source_and_user_bytes() {
         serde_json::to_vec(&reopened.inspect_integration()).unwrap(),
         integration
     );
+}
+
+#[test]
+fn extended_id_and_layout_survive_quick_edit_save_and_reopen() {
+    use autosar_config_core::{
+        Workspace,
+        integration::{IntegrationEdit, SignalSetting},
+    };
+    let scratch = Scratch::new();
+    let root = scratch.0.join("mixed");
+    let mut workspace = live_pipeline_workspace(&root, &mixed_can_sources());
+    let source = workspace.inspect_integration().description.unwrap();
+    let port = source
+        .signals
+        .iter()
+        .find(|signal| signal.receive)
+        .unwrap()
+        .port
+        .clone();
+    let report = workspace
+        .edit_integration(IntegrationEdit {
+            can_ids: [(port.clone(), 0x1234567)].into(),
+            signal_settings: [(
+                port.clone(),
+                vec![
+                    SignalSetting::Extended(true),
+                    SignalSetting::BigEndian(true),
+                    SignalSetting::StartBit(7),
+                ],
+            )]
+            .into(),
+            ..Default::default()
+        })
+        .unwrap();
+    let signal = report
+        .description
+        .as_ref()
+        .unwrap()
+        .signals
+        .iter()
+        .find(|signal| signal.port == port)
+        .unwrap();
+    assert!(signal.extended && signal.big_endian);
+    assert_eq!((signal.can_id, signal.start_bit), (0x1234567, 7));
+    let snapshot = serde_json::to_value(workspace.preview_integration_save().unwrap()).unwrap();
+    let invalid = workspace
+        .edit_integration(IntegrationEdit {
+            signal_settings: [(port.clone(), vec![SignalSetting::Extended(false)])].into(),
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(!invalid.is_empty());
+    assert_eq!(
+        snapshot,
+        serde_json::to_value(workspace.preview_integration_save().unwrap()).unwrap()
+    );
+
+    workspace
+        .edit_integration(IntegrationEdit {
+            can_ids: [(port.clone(), 0x41)].into(),
+            ..Default::default()
+        })
+        .unwrap();
+    workspace.save().unwrap();
+    let reopened =
+        Workspace::open_project_manifest(&root.join("workbench-project.json"), &root.join("cache"))
+            .unwrap();
+    let plan = reopened.saved_integration_plan().unwrap();
+    let signal = plan
+        .description()
+        .signals
+        .iter()
+        .find(|signal| signal.port == port)
+        .unwrap();
+    assert!(signal.extended && signal.big_endian);
+    assert_eq!((signal.can_id, signal.start_bit), (0x41, 7));
+    let view = reopened
+        .project_projection(&reopened.input_fingerprint().unwrap())
+        .unwrap();
+    assert!(view.fields.iter().any(|field| {
+        field
+            .linked_edit
+            .as_ref()
+            .is_some_and(|group| group.kind == "can-id" && group.group_id == port)
+    }));
+}
+
+#[test]
+fn shared_signal_type_edit_updates_mapping_com_and_network_together() {
+    use autosar_config_core::{
+        Workspace,
+        integration::{ConnectionEdit, IntegrationEdit},
+    };
+    let scratch = Scratch::new();
+    let root = scratch.0.join("signal-type");
+    let mut workspace = live_pipeline_workspace(&root, &single_component_sources());
+    let before = workspace.inspect_integration();
+    let choice = before
+        .connections
+        .iter()
+        .find(|entry| {
+            entry.current == "/Types/uint32"
+                && entry.options.iter().any(|path| path == "/Types/uint8")
+        })
+        .unwrap();
+    let edit = ConnectionEdit {
+        object: choice.object.clone(),
+        definition: choice.definition.clone(),
+        target: "/Types/uint8".into(),
+    };
+    let report = workspace
+        .edit_integration(IntegrationEdit {
+            connections: vec![edit],
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(
+        report
+            .description
+            .unwrap()
+            .signals
+            .iter()
+            .all(|signal| signal.native_type == "uint8" && signal.bit_length == 8)
+    );
+    workspace.save().unwrap();
+    let reopened =
+        Workspace::open_project_manifest(&root.join("workbench-project.json"), &root.join("cache"))
+            .unwrap();
+    let plan = reopened.saved_integration_plan().unwrap();
+    assert!(
+        plan.description()
+            .signals
+            .iter()
+            .all(|signal| signal.native_type == "uint8" && signal.bit_length == 8)
+    );
+    #[cfg(feature = "native-tests")]
+    {
+        use crate::support::{generated_packages::prepare, tooling};
+        let mut reopened = reopened;
+        let preview = reopened.preview_application_initialization().unwrap();
+        reopened.initialize_application_previewed(&preview).unwrap();
+        let package = scratch.0.join("narrow-signals");
+        prepare(&reopened, false).generate(&package).unwrap();
+        let result = tooling::run_public_command(
+            &mut tooling::ecu_production_build_command(
+                &package,
+                &scratch.0.join("narrow-build"),
+                "host-batch",
+                None,
+            ),
+            &scratch.0,
+            "narrow-build",
+            std::time::Duration::from_secs(180),
+        );
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
 }

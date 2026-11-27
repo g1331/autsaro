@@ -1,3 +1,5 @@
+import type { ConnectionEdit } from '../../ipc/bindings';
+import type { SignalDrafts } from './signalSettings';
 import { message } from '../../i18n';
 import type { Text } from '../../i18n';
 import type { IntegrationInspection, PlanDiagnostic, SavePreview } from '../../ipc/types';
@@ -14,6 +16,9 @@ export type EditingState = {
   rejection: Rejection | null;
   integrationInspection: IntegrationInspection | null;
   integrationIssues: PlanDiagnostic[];
+  connectionDrafts: ConnectionEdit[];
+  variantSelection: Record<string, string[]> | null;
+  signalDrafts: SignalDrafts;
   integrationIds: Record<string, string>;
   integrationPeriod: string;
   integrationUnapplied: boolean;
@@ -32,6 +37,9 @@ export function initialEditingState(): EditingState {
     rejection: null,
     integrationInspection: null,
     integrationIssues: [],
+    connectionDrafts: [],
+    variantSelection: null,
+    signalDrafts: {},
     integrationIds: {},
     integrationPeriod: '',
     integrationUnapplied: false,

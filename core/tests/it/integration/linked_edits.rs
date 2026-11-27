@@ -402,3 +402,68 @@ fn linked_grid_can_id_removal_preserves_incomplete_configuration_editing() {
         );
     }
 }
+
+#[test]
+fn grid_fd_edits_preview_signal_and_diagnostic_trigger_writes() {
+    let scratch = Scratch::new();
+    let mut sources = single_component_sources();
+    enable_can_fd(&mut sources, "");
+    parameter(&mut sources, "Transmit", "CanIdType", "MIXED");
+    for owner in ["TxValueTrigger", "DiagResponseTrigger"] {
+        xml_edit(
+            &mut sources,
+            "extract.arxml",
+            |n| named(n, "CAN-FRAME-TRIGGERING", owner),
+            |s| s.replace("<CAN-FD-FRAME-SUPPORT>false</CAN-FD-FRAME-SUPPORT>", ""),
+        );
+    }
+    let root = scratch.0.join("fd-grid");
+    let mut workspace = live_pipeline_workspace(&root, &sources);
+    for (owner, target) in [
+        ("TxValue", "EXTENDED_CAN"),
+        ("TxValue", "STANDARD_CAN"),
+        ("TxValue", "STANDARD_FD_CAN"),
+        ("DiagResponse", "EXTENDED_FD_CAN"),
+    ] {
+        let view = projection(&workspace);
+        let field = view
+            .fields
+            .iter()
+            .find(|f| {
+                f.definition.definition_id.ends_with("/CanIfTxPduCanIdType")
+                    && view
+                        .objects
+                        .iter()
+                        .any(|o| o.object_id == f.object_id && o.short_name == owner)
+            })
+            .unwrap();
+        let batch = change(&view, field, target);
+        let preview = workspace.prepare_change(&batch).unwrap();
+        let trigger_impacts: Vec<_> = preview
+            .impacts
+            .iter()
+            .filter(|impact| impact.path.ends_with(&format!("/{owner}Trigger")))
+            .map(|impact| impact.after.as_str())
+            .collect();
+        assert_eq!(
+            trigger_impacts.iter().any(|after| after.contains("true")),
+            target.contains("FD")
+        );
+        if target != "STANDARD_FD_CAN" {
+            let addressing = target.split_once('_').unwrap().0;
+            assert!(
+                trigger_impacts
+                    .iter()
+                    .any(|after| after.contains(addressing))
+            );
+        }
+        workspace
+            .apply_change(&batch, &preview.change_revision)
+            .unwrap();
+    }
+    workspace.save().unwrap();
+    Workspace::open_project_manifest(&root.join("workbench-project.json"), &root.join("cache"))
+        .unwrap()
+        .saved_integration_plan()
+        .unwrap();
+}

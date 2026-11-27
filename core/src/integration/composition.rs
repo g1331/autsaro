@@ -1290,7 +1290,8 @@ fn inspect_with_transport(
                 {
                     return Err(fail(graph, element, "TYPE_CONFLICT"));
                 }
-                let implementation = implementation(graph, port, behavior, application)?;
+                let (implementation, mapping_set) =
+                    implementation(graph, port, behavior, application)?;
                 let integer = super::component::SignalInteger::read(graph, implementation)?;
                 let specification = one(
                     graph,
@@ -1382,6 +1383,7 @@ fn inspect_with_transport(
                     element_name: name(graph, element),
                     application_type: path(graph, application),
                     implementation_type: path(graph, implementation),
+                    mapping_set: path(graph, mapping_set),
                     c_type: c_name(&name(graph, implementation)),
                     read,
                     api_symbol: format!(

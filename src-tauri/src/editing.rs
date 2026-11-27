@@ -48,6 +48,31 @@ pub(super) async fn inspect_integration(
 }
 #[tauri::command]
 #[cfg_attr(test, specta::specta)]
+pub(super) async fn preview_variant_selection(
+    state: State<'_, Arc<AppState>>,
+    fingerprint: String,
+    selection: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+) -> Result<Reply<Vec<autosar_config_core::integration::VariantDifference>>, Vec<PlanDiagnostic>> {
+    integration_background(state, move |state| {
+        let operation = state
+            .begin(
+                &fingerprint,
+                autosar_config_core::product_message!("backend.operation.inspect_integration"),
+                OperationKind::Read,
+            )
+            .map_err(integration_failure)?;
+        let value = operation
+            .snapshot
+            .workspace()
+            .map_err(integration_failure)?
+            .preview_variant_selection(selection)?;
+        operation.commit(|_| Ok(value)).map_err(integration_failure)
+    })
+    .await
+}
+
+#[tauri::command]
+#[cfg_attr(test, specta::specta)]
 pub(super) async fn edit_integration(
     state: State<'_, Arc<AppState>>,
     fingerprint: String,

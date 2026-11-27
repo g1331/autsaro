@@ -47,7 +47,108 @@ impl Workspace {
     }
 
     pub fn inspect_integration(&self) -> IntegrationInspection {
-        inspection(self.integration_plan())
+        let mut report = inspection(self.integration_plan());
+        report.layers = self
+            .project_manifest()
+            .and_then(|manifest| manifest.layers.as_ref())
+            .map(|layers| editor::VariantEditor {
+                base: layers.base_reference.base_id.clone(),
+                revision: layers.base_reference.revision.clone(),
+                project_members: layers.project.members.clone(),
+                project_fields: layers
+                    .project
+                    .operations
+                    .iter()
+                    .map(|op| {
+                        if let Some(field) = &op.target.field {
+                            format!("{} · {}", op.target.object.path, field)
+                        } else {
+                            op.target.object.path.clone()
+                        }
+                    })
+                    .collect(),
+                base_digest: layers.base_reference.source_sha256.clone(),
+                groups: layers
+                    .groups
+                    .iter()
+                    .map(|(name, group)| {
+                        (
+                            name.clone(),
+                            editor::VariantChoices {
+                                exactly_one: group.exactly_one,
+                                options: group.options.keys().cloned().collect(),
+                                selected: layers
+                                    .selection
+                                    .get(name)
+                                    .into_iter()
+                                    .flatten()
+                                    .cloned()
+                                    .collect(),
+                            },
+                        )
+                    })
+                    .collect(),
+                differences: Vec::new(),
+            });
+        report
+    }
+
+    fn variant_differences(
+        &self,
+        candidate: &Self,
+    ) -> Result<Vec<editor::VariantDifference>, Vec<PlanDiagnostic>> {
+        Ok(self
+            .compare_project(candidate)?
+            .semantics
+            .into_iter()
+            .map(|item| editor::VariantDifference {
+                object: item.target.object.path,
+                field: item.target.field,
+                changes: item
+                    .changes
+                    .iter()
+                    .map(|change| format!("{change:?}"))
+                    .collect(),
+                before: item.before.map(|entry| entry.values).unwrap_or_default(),
+                after: item.after.map(|entry| entry.values).unwrap_or_default(),
+            })
+            .collect())
+    }
+
+    pub fn preview_variant_selection(
+        &self,
+        selection: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+    ) -> Result<Vec<editor::VariantDifference>, Vec<PlanDiagnostic>> {
+        let (_, report, comparable) = self.validated_variant(selection)?;
+        if !comparable {
+            return Err(failure(
+                "VARIANT_BASELINE_UNAVAILABLE",
+                crate::product_message!("backend.integration.editor.variant_baseline_unavailable"),
+            ));
+        }
+        Ok(report
+            .layers
+            .expect("selected layered workspace")
+            .differences)
+    }
+
+    fn validated_variant(
+        &self,
+        selection: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+    ) -> Result<(Self, IntegrationInspection, bool), Vec<PlanDiagnostic>> {
+        let mut candidate = self.clone();
+        candidate
+            .select_project_variants(selection)
+            .map_err(|error| failure("VARIANT_SELECTION", error))?;
+        let mut report = candidate.inspect_integration();
+        if report.description.is_none() {
+            return Err(report.diagnostics);
+        }
+        let comparable = self.project_semantics().is_ok();
+        if comparable && let Some(layers) = &mut report.layers {
+            layers.differences = self.variant_differences(&candidate)?;
+        }
+        Ok((candidate, report, comparable))
     }
 
     pub fn edit_integration(
@@ -61,6 +162,23 @@ impl Workspace {
         &mut self,
         changes: IntegrationEdit,
     ) -> Result<IntegrationInspection, Vec<PlanDiagnostic>> {
+        if let Some(selection) = changes.variant_selection {
+            if !changes.connections.is_empty()
+                || !changes.signal_settings.is_empty()
+                || !changes.can_ids.is_empty()
+                || changes.application_period_ms.is_some()
+            {
+                return Err(failure(
+                    "LAYER_EDIT_REQUIRED",
+                    crate::product_message!(
+                        "backend.integration.editor.separate_variant_selection"
+                    ),
+                ));
+            }
+            let (candidate, report, _) = self.validated_variant(selection)?;
+            *self = candidate;
+            return Ok(report);
+        }
         if self
             .project_manifest()
             .is_some_and(|manifest| manifest.layers.is_some())
@@ -97,7 +215,43 @@ impl Workspace {
                 }) {
                     // The validated plan already requires each edited scalar. Count
                     // actual leaves here so source selection has one owner.
-                    let leaves: Vec<_> = if field.parameter {
+                    let leaves: Vec<_> = if !field.parameter
+                        && node.has_tag_name("DATA-TYPE-MAPPING-SET")
+                        && field.field.starts_with('/')
+                    {
+                        node.descendants()
+                            .filter(|item| {
+                                item.has_tag_name("DATA-TYPE-MAP")
+                                    && child_text(*item, "APPLICATION-DATA-TYPE-REF").as_deref()
+                                        == Some(field.field.as_str())
+                            })
+                            .flat_map(|item| {
+                                item.children().filter(|child| {
+                                    child.has_tag_name("IMPLEMENTATION-DATA-TYPE-REF")
+                                })
+                            })
+                            .collect()
+                    } else if !field.parameter
+                        && node.has_tag_name("I-SIGNAL")
+                        && field.field == "BASE-TYPE-REF"
+                    {
+                        node.descendants()
+                            .filter(|item| item.has_tag_name("BASE-TYPE-REF"))
+                            .collect()
+                    } else if field.parameter && field.field.starts_with('/') {
+                        node.children()
+                            .filter(|item| item.has_tag_name("REFERENCE-VALUES"))
+                            .flat_map(|group| group.children())
+                            .filter(|entry| {
+                                super::definition(*entry).as_deref() == Some(field.field.as_str())
+                            })
+                            .flat_map(|entry| {
+                                entry
+                                    .children()
+                                    .filter(|child| child.has_tag_name("VALUE-REF"))
+                            })
+                            .collect()
+                    } else if field.parameter {
                         node.descendants()
                             .filter(|parameter| {
                                 parameter.is_element()
@@ -122,6 +276,45 @@ impl Workspace {
                             })
                             .collect()
                     };
+                    if leaves.is_empty()
+                        && field.field == "CAN-FD-FRAME-SUPPORT"
+                        && node.has_tag_name("CAN-FRAME-TRIGGERING")
+                    {
+                        found += 1;
+                        if field.value == "true" {
+                            super::changes::standard_insert(
+                                &file.text,
+                                node.range(),
+                                &field.field,
+                                "<CAN-FD-FRAME-SUPPORT>true</CAN-FD-FRAME-SUPPORT>",
+                                &mut patches[index],
+                            )
+                            .map_err(|error| {
+                                editor::issue(&plan, "EDIT_UNSAFE", &field.object, error)
+                            })?;
+                        }
+                    }
+                    if leaves.is_empty()
+                        && field.field == "CanIfRxPduDataLength"
+                        && field.value == "8"
+                        && let Some(definition) = super::definition(node)
+                        && definition.ends_with("/CanIfRxPduCfg")
+                    {
+                        let entry = format!(
+                            r#"<ECUC-NUMERICAL-PARAM-VALUE><DEFINITION-REF DEST="ECUC-INTEGER-PARAM-DEF">{definition}/CanIfRxPduDataLength</DEFINITION-REF><VALUE>8</VALUE></ECUC-NUMERICAL-PARAM-VALUE>"#
+                        );
+                        super::changes::group_insert(
+                            &file.text,
+                            node.range(),
+                            "PARAMETER-VALUES",
+                            &entry,
+                            &mut patches[index],
+                        )
+                        .map_err(|error| {
+                            editor::issue(&plan, "EDIT_UNSAFE", &field.object, error)
+                        })?;
+                        found += 1;
+                    }
                     for leaf in leaves {
                         found += 1;
                         patch_text(leaf, field.value.clone(), &mut patches[index]).map_err(
@@ -151,7 +344,25 @@ impl Workspace {
         candidate
             .check_configuration_transition(self)
             .map_err(|error| failure("EDIT_UNSAFE", error))?;
-        let checked = candidate.integration_plan()?;
+        let checked = candidate.integration_plan().map_err(|mut issues| {
+            for diagnostic in &mut issues {
+                let mut affected: Vec<_> = fields.iter()
+                    .filter(|field| diagnostic.object.as_ref() == Some(&field.object))
+                    .collect();
+                if affected.is_empty() {
+                    affected.extend(fields);
+                }
+                let locations = affected.iter()
+                    .map(|field| format!("{} · {}", field.object, field.field))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                diagnostic.message = crate::message::LocalizedText::messages([
+                    diagnostic.message.clone(),
+                    crate::product_message!("backend.integration.editor.rejected_fields", "fields" => locations),
+                ]);
+            }
+            issues
+        })?;
         candidate.revision += 1;
         let result = inspection(Ok(checked));
         *self = candidate;
@@ -180,11 +391,15 @@ fn inspection(
 ) -> IntegrationInspection {
     match result {
         Ok(plan) => IntegrationInspection {
+            connections: crate::integration::editor_connections::choices(plan.description()),
+            layers: None,
             profile: plan.description().profile.clone(),
             description: Some(plan.description().clone()),
             diagnostics: Vec::new(),
         },
         Err(diagnostics) => IntegrationInspection {
+            connections: Vec::new(),
+            layers: None,
             profile: crate::integration::PROFILE.into(),
             description: None,
             diagnostics,
@@ -215,10 +430,41 @@ impl Workspace {
                     IntegrationEdit {
                         can_ids: [(signal.port.clone(), signal.can_id)].into(),
                         application_period_ms: None,
+                        ..IntegrationEdit::default()
                     },
                 )
             })
             .collect();
+        for signal in &description.signals {
+            for setting in crate::integration::SignalSetting::current(signal) {
+                edits.push((
+                    format!("{}#{}", signal.port, setting.name()),
+                    IntegrationEdit {
+                        signal_settings: [(signal.port.clone(), vec![setting])].into(),
+                        ..IntegrationEdit::default()
+                    },
+                ));
+            }
+        }
+        let connections = crate::integration::editor_connections::choices(description);
+        for choice in connections.iter().filter(|choice| {
+            matches!(
+                choice.definition.as_str(),
+                "wireLength" | "frameFormat" | "minimumLength"
+            )
+        }) {
+            edits.push((
+                format!("{}#{}", choice.object, choice.definition),
+                IntegrationEdit {
+                    connections: vec![crate::integration::ConnectionEdit {
+                        object: choice.object.clone(),
+                        definition: choice.definition.clone(),
+                        target: choice.current.clone(),
+                    }],
+                    ..Default::default()
+                },
+            ));
+        }
         if let Some(application) = description
             .schedule
             .entities
@@ -230,35 +476,69 @@ impl Workspace {
                 IntegrationEdit {
                     can_ids: Default::default(),
                     application_period_ms: Some(application.period_ms),
+                    ..IntegrationEdit::default()
                 },
             ));
+        }
+        let mut source_fields = std::collections::BTreeMap::new();
+        for field in &self.snapshot.fields {
+            let owner = &self.snapshot.objects[self.snapshot.object_by_id[&field.view.object_id]];
+            let is_parameter = matches!(
+                field.element.as_str(),
+                "ECUC-TEXTUAL-PARAM-VALUE" | "ECUC-NUMERICAL-PARAM-VALUE"
+            );
+            let name = if is_parameter {
+                field
+                    .view
+                    .definition
+                    .definition_id
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("")
+            } else {
+                field.element.as_str()
+            };
+            source_fields
+                .entry((owner.view.path.as_str(), name, is_parameter))
+                .and_modify(|id| *id = None)
+                .or_insert(Some(&field.view.field_id));
         }
         edits
             .into_iter()
             .filter_map(|(id, edit)| {
-                let edits = editor::fields_including_unchanged(&plan, &edit, true).ok()?;
-                let fields: Option<Vec<_>> = edits
-                    .iter()
-                    .map(|edit| {
-                        let mut found = self.snapshot.fields.iter().filter(|field| {
-                            let owner = &self.snapshot.objects
-                                [self.snapshot.object_by_id[&field.view.object_id]];
-                            owner.view.path == edit.object
-                                && if edit.parameter {
-                                    field.view.definition.definition_id.rsplit('/').next()
-                                        == Some(edit.field.as_str())
-                                } else {
-                                    field.element == edit.field
-                                }
-                        });
-                        let field = found.next()?;
-                        if found.next().is_some() {
-                            return None;
-                        }
-                        Some((field.view.field_id.clone(), edit.value.clone()))
-                    })
-                    .collect();
-                let kind = if edit.application_period_ms.is_none() {
+                let edits = if let Some(connection) = edit.connections.first() {
+                    let mut projected = connection.clone();
+                    if projected.definition == "minimumLength" {
+                        projected.target = "8".into();
+                    }
+                    projected.resolve(description, &connections, &edit.signal_settings)?
+                } else {
+                    editor::fields_including_unchanged(&plan, &edit, true).ok()?
+                };
+                let mut fields = Vec::new();
+                for field in &edits {
+                    match source_fields.get(&(
+                        field.object.as_str(),
+                        field.field.as_str(),
+                        field.parameter,
+                    )) {
+                        Some(Some(id)) => fields.push(((*id).clone(), field.value.clone())),
+                        None if matches!(
+                            field.field.as_str(),
+                            "CAN-FD-FRAME-SUPPORT" | "CanIfRxPduDataLength"
+                        ) => {}
+                        _ => return None,
+                    }
+                }
+                let kind = if let Some(connection) = edit.connections.first() {
+                    if connection.definition == "wireLength" {
+                        "transport-length"
+                    } else {
+                        "transport-policy"
+                    }
+                } else if !edit.signal_settings.is_empty() {
+                    "signal-setting"
+                } else if edit.application_period_ms.is_none() {
                     "can-id"
                 } else if edits.iter().any(|field| field.field.starts_with("Com")) {
                     "application-com-period"
@@ -269,7 +549,7 @@ impl Workspace {
                     kind: kind.into(),
                     id,
                     edit,
-                    fields: fields?,
+                    fields,
                 })
             })
             .collect()
@@ -302,6 +582,10 @@ impl Workspace {
             .validate_value(&field.view.definition.definition_id, value)?;
         let mut edit = group.edit.clone();
         let raw = value.lexeme.trim();
+        let plan = self.integration_plan().map_err(|issues| {
+            crate::message::LocalizedText::messages(issues.into_iter().map(|issue| issue.message))
+        })?;
+        let mut diagnostic_addressing = None;
         if let Some(period) = edit.application_period_ms {
             let seconds = field.view.definition.kind == Some(ValueKind::Float);
             let numeric = |raw: &str| -> Option<u32> {
@@ -325,18 +609,94 @@ impl Workspace {
                     .and_then(|value| value.checked_add(offset))
                     .ok_or_else(invalid)?,
             );
+        } else if let Some(connection) = edit.connections.first_mut() {
+            let invalid = || crate::product_message!("backend.integration.communication.invalid_signal_layout_field", "field" => &connection.definition);
+            connection.target = match connection.definition.as_str() {
+                "frameFormat" => {
+                    let fd = match raw {
+                        "true" | "1" => true,
+                        "false" | "0" => false,
+                        _ => {
+                            let (addressing, fd, _) = crate::integration::can_id::policy(
+                                raw,
+                                field
+                                    .view
+                                    .definition
+                                    .definition_id
+                                    .ends_with("/CanIfRxPduCanIdType"),
+                            )
+                            .ok_or_else(invalid)?;
+                            diagnostic_addressing = Some(addressing);
+                            fd != 0
+                        }
+                    };
+                    if fd { "FD" } else { "CLASSICAL" }.into()
+                }
+                "minimumLength"
+                    if field
+                        .view
+                        .definition
+                        .definition_id
+                        .ends_with("/CanIfRxPduDataLengthCheck") =>
+                {
+                    match raw {
+                        "true" | "1" => "8".into(),
+                        "false" | "0" => "0".into(),
+                        _ => return Err(invalid()),
+                    }
+                }
+                _ => crate::definitions::unsigned_integer(raw)
+                    .ok_or_else(invalid)?
+                    .to_string(),
+            };
+        } else if let Some((port, settings)) = edit.signal_settings.iter_mut().next() {
+            let signal = plan
+                .description()
+                .signals
+                .iter()
+                .find(|signal| &signal.port == port)
+                .ok_or_else(invalid)?;
+            let name = if field.element.starts_with("ECUC-") {
+                field
+                    .view
+                    .definition
+                    .definition_id
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("")
+            } else {
+                &field.element
+            };
+            let invalid_field = || crate::product_message!("backend.integration.communication.invalid_signal_layout_field", "field" => name);
+            if matches!(name, "CanIfTxPduCanIdType" | "CanIfRxPduCanIdType") {
+                *settings = crate::integration::SignalSetting::can_if_settings(raw, signal)
+                    .ok_or_else(invalid_field)?;
+            } else {
+                settings[0] = settings[0]
+                    .parse_cell(signal, name, raw)
+                    .ok_or_else(invalid_field)?;
+            }
         } else {
             let id = crate::definitions::unsigned_integer(raw).ok_or_else(invalid)?;
             for value in edit.can_ids.values_mut() {
                 *value = id;
             }
         }
-        let plan = self.integration_plan().map_err(|issues| {
-            crate::message::LocalizedText::messages(issues.into_iter().map(|issue| issue.message))
-        })?;
         let mut edits = editor::fields(&plan, &edit).map_err(|issues| {
             crate::message::LocalizedText::messages(issues.into_iter().map(|issue| issue.message))
         })?;
+        if let Some(addressing) = diagnostic_addressing {
+            let trigger = edits
+                .iter()
+                .find(|edit| edit.field == "CAN-FD-FRAME-SUPPORT")
+                .ok_or_else(invalid)?;
+            edits.push(editor::FieldEdit {
+                object: trigger.object.clone(),
+                field: "CAN-ADDRESSING-MODE".into(),
+                parameter: false,
+                value: addressing.into(),
+            });
+        }
         let index = group
             .fields
             .iter()
@@ -353,7 +713,22 @@ impl Workspace {
             source.value = value.lexeme.clone();
             edits.push(source);
         } else {
-            edits[index].value = value.lexeme.clone();
+            let owner = &self.snapshot.objects[self.snapshot.object_by_id[&field.view.object_id]]
+                .view
+                .path;
+            let edited = edits
+                .iter_mut()
+                .find(|edit| {
+                    edit.object == *owner
+                        && if edit.parameter {
+                            field.view.definition.definition_id.rsplit('/').next()
+                                == Some(edit.field.as_str())
+                        } else {
+                            edit.field == field.element
+                        }
+                })
+                .ok_or_else(invalid)?;
+            edited.value = value.lexeme.clone();
         }
         Ok(edits)
     }
