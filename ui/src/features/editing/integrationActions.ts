@@ -1,3 +1,4 @@
+import { integrationPayload } from './signalSettings';
 import { useEffect, useEffectEvent } from 'react';
 import { message } from '../../i18n';
 import type { Text } from '../../i18n';
@@ -6,7 +7,7 @@ import type { IntegrationInspection, WorkspaceView } from '../../ipc/types';
 import type { RunOperation } from '../../app/operationRunner';
 import type { WorkbenchSession } from '../../app/session';
 import type { Stage, StageState } from '../delivery/stages';
-import { errorText, intInRange } from '../../shared/ui/forms';
+import { errorText } from '../../shared/ui/forms';
 import { applicationPeriodDraft, applicationPeriodMs } from './applicationPeriod';
 
 interface Dependencies {
@@ -28,6 +29,9 @@ export function createIntegrationActions(session: WorkbenchSession, dependencies
       integrationIssues: report.diagnostics,
       integrationPreview: null,
       integrationUnapplied: false,
+      connectionDrafts: [],
+      variantSelection: null,
+      signalDrafts: {},
       integrationIds: report.description
         ? Object.fromEntries(
             report.description.signals.map((signal) => [signal.port, String(signal.canId)]),
@@ -68,27 +72,21 @@ export function createIntegrationActions(session: WorkbenchSession, dependencies
   }
 
   function applyIntegration() {
-    if (applicationPeriodMs(state.integrationInspection?.description) === null) {
+    if (
+      !state.variantSelection &&
+      applicationPeriodMs(state.integrationInspection?.description) === null
+    ) {
       setIntegrationNotice(message('shell.integration.parametersUnavailable'));
       return;
     }
-    const ids: Record<string, number> = {};
     try {
-      for (const [path, value] of Object.entries(state.integrationIds)) {
-        ids[path] = intInRange(value, 'CAN ID', 0, 0x1fffffff);
-      }
-      const period = intInRange(
-        state.integrationPeriod,
-        message('controller.field.applicationPeriod'),
-        1,
-        2147483647,
-      );
+      const changes = integrationPayload(state);
       void run(
         { kind: 'integrationEdit', label: message('activity.apply') },
         async () => {
           const generation = epoch.current;
           const report = await call('edit_integration', {
-            changes: { canIds: ids, applicationPeriodMs: period },
+            changes,
           });
           if (generation !== epoch.current) return;
           patchState({ integrationSavePending: true });
@@ -108,7 +106,25 @@ export function createIntegrationActions(session: WorkbenchSession, dependencies
     }
   }
 
-  return { acceptIntegration, inspectIntegration, applyIntegration, restoreIntegrationDraft };
+  async function previewVariantSelection(
+    show: (rows: import('../../ipc/bindings').VariantDifference[]) => void,
+  ) {
+    const selection = state.variantSelection;
+    if (selection)
+      await run(
+        { kind: 'action', label: message('activity.compareVariants') },
+        () => call('preview_variant_selection', { selection }),
+        show,
+      );
+  }
+
+  return {
+    previewVariantSelection,
+    acceptIntegration,
+    inspectIntegration,
+    applyIntegration,
+    restoreIntegrationDraft,
+  };
 }
 
 export function useInspectIntegration(

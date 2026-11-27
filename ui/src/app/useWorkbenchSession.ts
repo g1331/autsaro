@@ -220,7 +220,14 @@ export function useWorkbenchSession(): WorkbenchSession & {
           : value;
       const patch = {
         [key]: resolved,
-        ...(['integrationIds', 'integrationPeriod', 'changes'].includes(key as string)
+        ...([
+          'connectionDrafts',
+          'variantSelection',
+          'signalDrafts',
+          'integrationIds',
+          'integrationPeriod',
+          'changes',
+        ].includes(key as string)
           ? { changePreview: null, preparedChangeSet: null, applicationPreview: null }
           : {}),
       } as Partial<WorkbenchState>;

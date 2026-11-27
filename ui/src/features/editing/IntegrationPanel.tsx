@@ -1,3 +1,4 @@
+import { VariantEditor } from './VariantEditor';
 import type { Workbench } from '../../app/useWorkbench';
 import { useLocale } from '../../i18n';
 import { displayPath } from '../../pathDisplay';
@@ -8,6 +9,13 @@ export const integrationFields = [
   'busy',
   'inspectIntegration',
   'integrationIds',
+  'signalDrafts',
+  'variantSelection',
+  'previewVariantSelection',
+  'connectionDrafts',
+  'setConnectionDrafts',
+  'setVariantSelection',
+  'setSignalDrafts',
   'integrationInspection',
   'integrationIssues',
   'integrationNotice',
@@ -64,6 +72,33 @@ export function IntegrationPanel({ controller }: { controller: IntegrationView }
   const plan = inspection?.description;
   // The historical chain and the mainline both plan one shared application period.
   const planned = applicationPeriodMs(plan);
+  function updateDirty({
+    numericIds = ids,
+    periodText = period,
+    settings = controller.signalDrafts,
+    connections = controller.connectionDrafts,
+  }: {
+    numericIds?: typeof ids;
+    periodText?: string;
+    settings?: typeof controller.signalDrafts;
+    connections?: typeof controller.connectionDrafts;
+  }) {
+    onDraftChange(
+      connections.length > 0 ||
+        Object.keys(settings).length > 0 ||
+        periodText !== String(planned) ||
+        Boolean(plan?.signals.some((item) => numericIds[item.port] !== String(item.canId))),
+    );
+    setPreview(null);
+  }
+  const connections =
+    inspection?.connections?.filter((binding) => binding.options.length > 1) ?? [];
+  const choices = {
+    extended: [t('shell.integration.standardId'), t('shell.integration.extendedId')],
+    fd: ['Classical CAN', 'CAN FD'],
+    dual: [t('shell.integration.singleFormat'), t('shell.integration.bothFormats')],
+    bigEndian: ['Intel', 'Motorola'],
+  };
   return (
     <div className="workflow-page integration-view" aria-label={t('shell.integration.workspace')}>
       <div className="section-header">
@@ -100,6 +135,38 @@ export function IntegrationPanel({ controller }: { controller: IntegrationView }
             </div>
           ))}
         </div>
+      )}
+      {inspection?.layers && (
+        <>
+          <VariantEditor
+            key={JSON.stringify([workspace.name, inspection.layers.base])}
+            preview={controller.previewVariantSelection}
+            layers={inspection.layers}
+            draft={controller.variantSelection}
+            disabled={locked}
+            update={(next) => {
+              controller.setVariantSelection(next);
+              onDraftChange(next !== null);
+              setPreview(null);
+            }}
+          />
+          <div className="section-actions">
+            <button onClick={apply} disabled={locked || !changed}>
+              {t('action.apply')}
+            </button>
+            <button onClick={restoreIntegrationDraft} disabled={locked || !changed}>
+              {t('action.revert')}
+            </button>
+            <button
+              onClick={showPreview}
+              disabled={
+                locked || changed || (!workspace.dirty && !controller.integrationSavePending)
+              }
+            >
+              {t('action.previewSave')}
+            </button>
+          </div>
+        </>
       )}
       {plan && (
         <>
@@ -140,7 +207,7 @@ export function IntegrationPanel({ controller }: { controller: IntegrationView }
               ))}
             </div>
           )}
-          {planned !== null && (
+          {planned !== null && !inspection?.layers && (
             <div className="inspector-block">
               <h3>{t('shell.integration.parameters')}</h3>
               <div className="integration-fields">
@@ -157,33 +224,125 @@ export function IntegrationPanel({ controller }: { controller: IntegrationView }
                       onChange={(event) => {
                         const next = { ...ids, [signal.port]: event.target.value };
                         setIds(next);
-                        onDraftChange(
-                          period !== String(planned) ||
-                            plan.signals.some((item) => next[item.port] !== String(item.canId)),
-                        );
-                        setPreview(null);
+                        updateDirty({ numericIds: next });
                       }}
                       disabled={busy || locked}
                       inputMode="numeric"
                     />
                   </label>
                 ))}
+                {plan.signals.map((signal) => {
+                  const values = {
+                    extended: signal.extended,
+                    fd: signal.fd,
+                    ...(signal.receive ? { dual: signal.acceptsFd } : {}),
+                    bitLength: signal.bitLength,
+                    startBit: signal.startBit,
+                    bigEndian: signal.bigEndian,
+                    frameLength: signal.dlc,
+                    pduLength: signal.pduLength,
+                  };
+                  return (Object.keys(values) as (keyof typeof values)[]).map((field) => {
+                    const value =
+                      controller.signalDrafts[signal.port]?.[field] ?? String(values[field]);
+                    const update = (next: string) => {
+                      const drafts = { ...controller.signalDrafts };
+                      const row = { ...drafts[signal.port] };
+                      if (next === String(values[field])) delete row[field];
+                      else row[field] = next;
+                      if (Object.keys(row).length) drafts[signal.port] = row;
+                      else delete drafts[signal.port];
+                      controller.setSignalDrafts(drafts);
+                      updateDirty({ settings: drafts });
+                    };
+                    return (
+                      <label className="field" key={signal.port + field}>
+                        <span>
+                          {t(`shell.integration.${field}`)} · {signal.port}
+                        </span>
+                        {field === 'extended' ||
+                        field === 'fd' ||
+                        field === 'dual' ||
+                        field === 'bigEndian' ? (
+                          <select
+                            disabled={locked}
+                            value={value}
+                            onChange={(event) => update(event.target.value)}
+                          >
+                            <option value="false">{choices[field][0]}</option>
+                            <option value="true">{choices[field][1]}</option>
+                          </select>
+                        ) : (
+                          <input
+                            disabled={locked}
+                            inputMode="numeric"
+                            value={value}
+                            onChange={(event) => update(event.target.value)}
+                          />
+                        )}
+                      </label>
+                    );
+                  });
+                })}
                 <label className="field">
                   <span>{t('shell.integration.period')}</span>
                   <input
                     value={period}
                     onChange={(event) => {
                       setPeriod(event.target.value);
-                      onDraftChange(
-                        event.target.value !== String(planned) ||
-                          plan.signals.some((item) => ids[item.port] !== String(item.canId)),
-                      );
-                      setPreview(null);
+                      updateDirty({ periodText: event.target.value });
                     }}
                     disabled={busy || locked}
                     inputMode="numeric"
                   />
                 </label>
+                {connections.length > 0 && (
+                  <details className="integration-connections">
+                    <summary>{t('shell.integration.connections')}</summary>
+                    <div className="integration-fields">
+                      {connections.map((binding) => {
+                        const same = (item: { object: string; definition: string }) =>
+                          item.object === binding.object && item.definition === binding.definition;
+                        const value =
+                          controller.connectionDrafts.find(same)?.target ?? binding.current;
+                        return (
+                          <label
+                            className="field"
+                            key={JSON.stringify([binding.object, binding.definition])}
+                          >
+                            <span>
+                              {binding.definition.startsWith('/')
+                                ? binding.definition.split('/').at(-1)
+                                : t(`shell.integration.${binding.definition}`)}{' '}
+                              · {binding.object}
+                            </span>
+                            <select
+                              disabled={locked}
+                              value={value}
+                              onChange={(event) => {
+                                const drafts = controller.connectionDrafts.filter(
+                                  (item) => !same(item),
+                                );
+                                if (event.target.value !== binding.current)
+                                  drafts.push({
+                                    object: binding.object,
+                                    definition: binding.definition,
+                                    target: event.target.value,
+                                  });
+                                controller.setConnectionDrafts(drafts);
+                                updateDirty({ connections: drafts });
+                              }}
+                            >
+                              {binding.options.map((option) => (
+                                <option key={option}>{option}</option>
+                              ))}
+                            </select>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </details>
+                )}
               </div>
               {plan.diagnostic && (
                 <p>

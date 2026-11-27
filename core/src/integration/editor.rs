@@ -9,6 +9,12 @@ pub struct IntegrationEdit {
     /// Selected S/R port identities, never short names or inferred routes.
     #[serde(default)]
     pub can_ids: BTreeMap<String, u32>,
+    #[serde(default)]
+    pub signal_settings: BTreeMap<String, Vec<super::SignalSetting>>,
+    #[serde(default)]
+    pub variant_selection: Option<BTreeMap<String, std::collections::BTreeSet<String>>>,
+    #[serde(default)]
+    pub connections: Vec<super::ConnectionEdit>,
     pub application_period_ms: Option<u32>,
 }
 
@@ -16,9 +22,45 @@ pub struct IntegrationEdit {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct IntegrationInspection {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layers: Option<VariantEditor>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub connections: Vec<super::ConnectionChoice>,
     pub profile: String,
     pub description: Option<PlanDescription>,
     pub diagnostics: Vec<PlanDiagnostic>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
+pub struct VariantEditor {
+    pub base: String,
+    pub revision: String,
+    pub project_members: Vec<String>,
+    pub project_fields: Vec<String>,
+    pub base_digest: String,
+    pub groups: BTreeMap<String, VariantChoices>,
+    pub differences: Vec<VariantDifference>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
+pub struct VariantChoices {
+    pub exactly_one: bool,
+    pub options: Vec<String>,
+    pub selected: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "ipc-types", derive(specta::Type))]
+pub struct VariantDifference {
+    pub object: String,
+    pub field: Option<String>,
+    pub before: Vec<String>,
+    pub after: Vec<String>,
+    pub changes: Vec<String>,
 }
 
 pub(crate) struct FieldEdit {
@@ -63,11 +105,11 @@ pub(crate) fn fields_including_unchanged(
 ) -> Result<Vec<FieldEdit>, Vec<PlanDiagnostic>> {
     let description = plan.description();
     let mut edits: BTreeMap<(String, String, bool), String> = BTreeMap::new();
-    for (port, id) in &changes.can_ids {
-        let channel = description
+    let selected_signal = |port: &str| {
+        description
             .signals
             .iter()
-            .find(|channel| &channel.port == port)
+            .find(|signal| signal.port == port)
             .ok_or_else(|| {
                 issue(
                     plan,
@@ -77,8 +119,76 @@ pub(crate) fn fields_including_unchanged(
                         "backend.integration.editor.only_selected_sr_can_ids_editable"
                     ),
                 )
-            })?;
-        let maximum = if channel.extended {
+            })
+    };
+    if !changes.connections.is_empty() {
+        let choices = super::editor_connections::choices(description);
+        for connection in &changes.connections {
+            let fields = connection.resolve(description, &choices, &changes.signal_settings).ok_or_else(|| issue(plan, "EDIT_REFERENCE", &connection.object, crate::product_message!("backend.integration.communication.invalid_signal_layout_field", "field" => &connection.definition)))?;
+            for field in fields {
+                if edits
+                    .insert(
+                        (field.object, field.field, field.parameter),
+                        field.value.clone(),
+                    )
+                    .is_some_and(|previous| previous != field.value)
+                {
+                    return Err(issue(
+                        plan,
+                        "EDIT_CONFLICT",
+                        &connection.object,
+                        crate::product_message!("backend.integration.communication.invalid_signal_layout_field", "field" => &connection.definition),
+                    ));
+                }
+            }
+        }
+    }
+    let mut formats = BTreeMap::new();
+    for (port, settings) in &changes.signal_settings {
+        let mut channel = selected_signal(port)?.clone();
+        for setting in settings {
+            match setting {
+                super::SignalSetting::Extended(extended) => channel.extended = *extended,
+                super::SignalSetting::Fd(fd) => channel.fd = *fd,
+                super::SignalSetting::Dual(dual) if channel.receive || !dual => {
+                    channel.accepts_fd = *dual
+                }
+                super::SignalSetting::Dual(_) => {
+                    return Err(issue(
+                        plan,
+                        "EDIT_UNSUPPORTED",
+                        port,
+                        crate::product_message!("backend.integration.communication.invalid_signal_layout_field", "field" => "CanIfTxPduCanIdType"),
+                    ));
+                }
+                _ => {}
+            }
+        }
+        for setting in settings {
+            if let super::SignalSetting::Extended(extended) = setting {
+                formats.insert(port, *extended);
+            }
+            for field in setting.fields(&channel) {
+                let key = (field.object, field.field, field.parameter);
+                if edits
+                    .insert(key, field.value.clone())
+                    .is_some_and(|previous| previous != field.value)
+                {
+                    return Err(issue(
+                        plan,
+                        "EDIT_CONFLICT",
+                        port,
+                        crate::product_message!(
+                            "backend.integration.editor.plan_repair_preview_required"
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+    for (port, id) in &changes.can_ids {
+        let channel = selected_signal(port)?;
+        let maximum = if formats.get(port).copied().unwrap_or(channel.extended) {
             super::can_id::EXTENDED_MAX
         } else {
             0x7ff

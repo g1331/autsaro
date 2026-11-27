@@ -183,9 +183,20 @@ fn selection_invalidates_save_and_generation_and_survives_offline_reopen() {
     let package = scratch.0.join("moved-handoff");
     let old_delivery = prepare(&workspace, true).preview(&package).unwrap();
 
-    workspace
-        .select_project_variants(selection("urgent"))
+    let report = workspace
+        .edit_integration(autosar_config_core::integration::IntegrationEdit {
+            variant_selection: Some(selection("urgent")),
+            ..Default::default()
+        })
         .unwrap();
+    assert!(
+        report
+            .layers
+            .unwrap()
+            .differences
+            .iter()
+            .any(|row| row.field.as_deref() == Some(PRIORITY))
+    );
     assert!(workspace.save_previewed(&old_preview.revision).is_err());
     workspace.save().unwrap();
     assert!(
@@ -204,8 +215,29 @@ fn selection_invalidates_save_and_generation_and_survives_offline_reopen() {
             .generate_previewed(&package, &old_delivery.revision)
             .is_err()
     );
+    let workspace = open(&project);
     let application = workspace.generation_snapshot().unwrap().applications;
     prepare(&workspace, true).generate(&package).unwrap();
+    #[cfg(feature = "native-tests")]
+    {
+        let result = tooling::run_public_command(
+            &mut tooling::ecu_production_build_command(
+                &package,
+                &scratch.0.join("variant-build"),
+                "host-batch",
+                None,
+            ),
+            &scratch.0,
+            "variant-build",
+            std::time::Duration::from_secs(180),
+        );
+        assert!(
+            result.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
     fs::remove_dir_all(&project).unwrap();
     let receiver = scratch.0.join("receiver");
     let reopened = autosar_config_core::generator::delivery::open_handoff(

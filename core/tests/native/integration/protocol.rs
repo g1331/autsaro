@@ -96,15 +96,112 @@ fn generated_host_batch_keeps_configured_channels_isolated() {
         (17, false),
     ] {
         let scratch = super::Scratch::new();
-        let sources = if shared_tx {
+        let mut sources = if shared_tx {
             crate::support::multichannel::shared_tx_diagnostic_sources()
         } else if count == 2 {
             crate::support::multichannel::multichannel_diagnostic_sources()
         } else {
             crate::support::multichannel::multichannel_sources(count)
         };
-        let plan = super::mainline::build(&sources)
-            .unwrap_or_else(|issues| panic!("{count} channels: {issues:#?}"));
+        let plan = if count == 2 && !shared_tx {
+            use super::mainline::{named, parameter, xml_edit};
+            use autosar_config_core::integration::{ConnectionEdit, IntegrationEdit};
+            parameter(&mut sources, "DiagResponse1Pdu", "PduLength", "16");
+            for (tag, owner) in [
+                ("CAN-FRAME", "DiagResponse1Frame"),
+                ("N-PDU", "DiagResponse1Pdu"),
+            ] {
+                xml_edit(
+                    &mut sources,
+                    "extract.arxml",
+                    |node| named(node, tag, owner),
+                    |xml| xml.replace(">12<", ">16<"),
+                );
+            }
+            let root = scratch.0.join("transport");
+            let mut workspace = super::mainline::live_pipeline_workspace(&root, &sources);
+            let report = workspace.inspect_integration();
+            let binding = report
+                .connections
+                .iter()
+                .find(|item| item.definition == "wireLength" && item.current == "16")
+                .unwrap();
+            workspace
+                .edit_integration(IntegrationEdit {
+                    connections: vec![ConnectionEdit {
+                        object: binding.object.clone(),
+                        definition: binding.definition.clone(),
+                        target: "12".into(),
+                    }],
+                    ..Default::default()
+                })
+                .unwrap();
+            workspace.save().unwrap();
+            autosar_config_core::Workspace::open_project_manifest(
+                &root.join("workbench-project.json"),
+                &root.join("cache"),
+            )
+            .unwrap()
+            .saved_integration_plan()
+            .unwrap()
+        } else if count == 3 {
+            use autosar_config_core::integration::{ConnectionEdit, IntegrationEdit};
+            let first = "/Configuration/Can/Config/Controller";
+            let second = "/Configuration/Can/Config/Controller1";
+            super::mainline::xml_edit(
+                &mut sources,
+                "ecuc.arxml",
+                |node| node.has_tag_name("AUTOSAR"),
+                |xml| {
+                    xml.replace(&format!("{first}<"), "/swap<")
+                        .replace(&format!("{second}<"), &format!("{first}<"))
+                        .replace("/swap<", &format!("{second}<"))
+                },
+            );
+            let root = scratch.0.join("controllers");
+            let mut workspace = super::mainline::live_pipeline_workspace(&root, &sources);
+            let report = workspace.inspect_integration();
+            let connections: Vec<_> = report
+                .connections
+                .iter()
+                .filter(|item| {
+                    item.definition.ends_with("/CanControllerRef")
+                        || item.definition.ends_with("/CanIfCtrlCanCtrlRef")
+                })
+                .filter_map(|item| {
+                    let target = if item.current == first {
+                        second
+                    } else if item.current == second {
+                        first
+                    } else {
+                        return None;
+                    };
+                    Some(ConnectionEdit {
+                        object: item.object.clone(),
+                        definition: item.definition.clone(),
+                        target: target.into(),
+                    })
+                })
+                .collect();
+            assert_eq!(connections.len(), 6, "{:?}", report.diagnostics);
+            workspace
+                .edit_integration(IntegrationEdit {
+                    connections,
+                    ..Default::default()
+                })
+                .unwrap();
+            workspace.save().unwrap();
+            autosar_config_core::Workspace::open_project_manifest(
+                &root.join("workbench-project.json"),
+                &root.join("cache"),
+            )
+            .unwrap()
+            .saved_integration_plan()
+            .unwrap()
+        } else {
+            super::mainline::build(&sources)
+                .unwrap_or_else(|issues| panic!("{count} channels: {issues:#?}"))
+        };
         let fixture = fs::read_to_string(
             root().join("core/tests/fixtures/component-pipeline/applications/Ingress.c"),
         )
@@ -404,8 +501,17 @@ fn verify_moved_fd_package(brs: bool) {
         use autosar_config_core::integration::IntegrationEdit;
         let mut workspace =
             super::mainline::live_pipeline_workspace(&scratch.0.join("live"), &sources);
+        let tx = workspace
+            .inspect_integration()
+            .description
+            .unwrap()
+            .signals
+            .into_iter()
+            .find(|s| !s.receive)
+            .unwrap();
         workspace
             .edit_integration(IntegrationEdit {
+                can_ids: [(tx.port, 0x1234567)].into(),
                 application_period_ms: Some(250),
                 ..IntegrationEdit::default()
             })
@@ -414,7 +520,13 @@ fn verify_moved_fd_package(brs: bool) {
         workspace
             .save_integration_previewed(&save.revision)
             .unwrap();
-        workspace.saved_integration_plan().unwrap()
+        autosar_config_core::Workspace::open_project_manifest(
+            &scratch.0.join("live/workbench-project.json"),
+            &scratch.0.join("cache"),
+        )
+        .unwrap()
+        .saved_integration_plan()
+        .unwrap()
     };
     let (project, _) =
         super::single_component_project_from(&scratch.0, super::tooling::native_target(), &plan);
@@ -1924,7 +2036,45 @@ fn host_batch_maps_signed_intel_rx_to_motorola_tx_in_independent_frame_positions
     use autosar_config_core::{ApplicationSource, prepare_ecu_project_with_applications};
 
     let scratch = Scratch::new();
-    let plan = super::build(&super::integer_signal_sources()).unwrap();
+    use super::mainline::{named, parameter, xml_edit};
+    use autosar_config_core::integration::{IntegrationEdit, SignalSetting};
+    let mut sources = super::integer_signal_sources();
+    xml_edit(
+        &mut sources,
+        "extract.arxml",
+        |node| named(node, "I-SIGNAL-TO-I-PDU-MAPPING", "TxValueMap"),
+        |xml| xml.replace("MOST-SIGNIFICANT-BYTE-FIRST", "MOST-SIGNIFICANT-BYTE-LAST"),
+    );
+    parameter(
+        &mut sources,
+        "TxValue",
+        "ComSignalEndianness",
+        "LITTLE_ENDIAN",
+    );
+    let root = scratch.0.join("signal-layout");
+    let mut workspace = super::mainline::live_pipeline_workspace(&root, &sources);
+    let tx = workspace
+        .inspect_integration()
+        .description
+        .unwrap()
+        .signals
+        .into_iter()
+        .find(|s| !s.receive)
+        .unwrap();
+    workspace
+        .edit_integration(IntegrationEdit {
+            signal_settings: [(tx.port, vec![SignalSetting::BigEndian(true)])].into(),
+            ..Default::default()
+        })
+        .unwrap();
+    workspace.save().unwrap();
+    let plan = autosar_config_core::Workspace::open_project_manifest(
+        &root.join("workbench-project.json"),
+        &root.join("cache"),
+    )
+    .unwrap()
+    .saved_integration_plan()
+    .unwrap();
     let source = scratch.0.join("Ingress.c");
     fs::write(
         &source,
@@ -1989,7 +2139,47 @@ fn generated_host_batch_forwards_cross_channel_pdus_and_preserves_com_state() {
     for count in [2, 4, 6] {
         let scratch = super::Scratch::new();
         let sources = crate::support::multichannel::gateway_sources(count);
-        let plan = super::build(&sources).unwrap_or_else(|issues| panic!("{count}: {issues:#?}"));
+        let plan = if count == 4 {
+            use autosar_config_core::integration::{ConnectionEdit, IntegrationEdit};
+            let root = scratch.0.join("route-edit");
+            let mut workspace = super::mainline::live_pipeline_workspace(&root, &sources);
+            let report = workspace.inspect_integration();
+            let destinations: Vec<_> = ["Gateway0", "Gateway2"]
+                .map(|name| {
+                    report
+                        .connections
+                        .iter()
+                        .find(|entry| {
+                            entry.object.ends_with(&format!("/{name}"))
+                                && entry.definition.ends_with("/PduRDestPduRRef")
+                        })
+                        .unwrap()
+                })
+                .into();
+            let connections = [0, 1]
+                .map(|index| ConnectionEdit {
+                    object: destinations[index].object.clone(),
+                    definition: destinations[index].definition.clone(),
+                    target: destinations[1 - index].current.clone(),
+                })
+                .into();
+            workspace
+                .edit_integration(IntegrationEdit {
+                    connections,
+                    ..Default::default()
+                })
+                .unwrap();
+            workspace.save().unwrap();
+            autosar_config_core::Workspace::open_project_manifest(
+                &root.join("workbench-project.json"),
+                &root.join("cache"),
+            )
+            .unwrap()
+            .saved_integration_plan()
+            .unwrap()
+        } else {
+            super::build(&sources).unwrap_or_else(|issues| panic!("{count}: {issues:#?}"))
+        };
         let fixture = fs::read_to_string(
             root().join("core/tests/fixtures/component-pipeline/applications/Ingress.c"),
         )
@@ -2107,7 +2297,11 @@ fn generated_host_batch_forwards_cross_channel_pdus_and_preserves_com_state() {
         let mut expected = Vec::new();
         for source in 0..count {
             let from = count - 1 - source;
-            let next = (source + 1) % count;
+            let next = if count == 4 && source % 2 == 0 {
+                (source + 3) % count
+            } else {
+                (source + 1) % count
+            };
             let to = count - 1 - next;
             let epoch = source + 1;
             let (format, fd, length, payload) = if source % 2 == 0 {

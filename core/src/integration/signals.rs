@@ -9,6 +9,14 @@ use std::collections::{BTreeMap, BTreeSet};
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct SignalChannel {
+    #[serde(skip)]
+    pub(super) mapping_set: String,
+    #[serde(skip)]
+    pub(super) application_type: String,
+    #[serde(skip)]
+    pub(super) implementation_type: String,
+    #[serde(skip)]
+    pub(super) network_from_com_spec: bool,
     pub port: String,
     pub system_signal: String,
     pub signal: String,
@@ -740,6 +748,11 @@ pub(super) fn inspect_ports(
             (Some(period_ms), unused)
         };
         channels.push(SignalChannel {
+            mapping_set: port.mapping_set.clone(),
+            application_type: port.application_type.clone(),
+            implementation_type: port.implementation_type.clone(),
+            network_from_com_spec: graph.text(signal, "DATA-TYPE-POLICY")
+                == Some("NETWORK-REPRESENTATION-FROM-COM-SPEC"),
             port: port.path.clone(),
             system_signal: graph.elements[system_signal].object.clone(),
             signal: graph.elements[signal].object.clone(),

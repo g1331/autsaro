@@ -8,6 +8,31 @@ import type { Stage, StageState } from '../features/delivery/stages';
 import type { WorkbenchOperation } from './operation';
 import type { WorkbenchSession } from './session';
 
+export function isPlanDiagnostics(error: unknown): error is PlanDiagnostic[] {
+  return (
+    Array.isArray(error) &&
+    error.length > 0 &&
+    error.every(
+      (issue: unknown) =>
+        typeof issue === 'object' &&
+        issue !== null &&
+        'category' in issue &&
+        typeof issue.category === 'string' &&
+        ['input', 'unsupported', 'dependency', 'tool'].includes(issue.category) &&
+        'code' in issue &&
+        typeof issue.code === 'string' &&
+        'file' in issue &&
+        (issue.file === null || typeof issue.file === 'string') &&
+        'object' in issue &&
+        (issue.object === null || typeof issue.object === 'string') &&
+        'message' in issue &&
+        isLocalizedText(issue.message) &&
+        'remedy' in issue &&
+        isLocalizedText(issue.remedy),
+    )
+  );
+}
+
 export type RunOperation = <T>(
   operation: WorkbenchOperation,
   job: () => Promise<T>,
@@ -68,30 +93,8 @@ export function createOperationRunner(
       });
       if (operation.kind === 'handoffImport') field('handoffImportOpen')(true);
       if (stateRef.current.settingsOpen) setSettingsNotice({ tone: 'error', text });
-      if (
-        workspace?.integrationCandidate &&
-        Array.isArray(error) &&
-        error.length > 0 &&
-        error.every(
-          (issue: unknown) =>
-            typeof issue === 'object' &&
-            issue !== null &&
-            'category' in issue &&
-            typeof issue.category === 'string' &&
-            ['input', 'unsupported', 'dependency', 'tool'].includes(issue.category) &&
-            'code' in issue &&
-            typeof issue.code === 'string' &&
-            'file' in issue &&
-            (issue.file === null || typeof issue.file === 'string') &&
-            'object' in issue &&
-            (issue.object === null || typeof issue.object === 'string') &&
-            'message' in issue &&
-            isLocalizedText(issue.message) &&
-            'remedy' in issue &&
-            isLocalizedText(issue.remedy),
-        )
-      ) {
-        setIntegrationIssues(error as PlanDiagnostic[]);
+      if (workspace?.integrationCandidate && isPlanDiagnostics(error)) {
+        setIntegrationIssues(error);
         setIntegrationNotice(
           operation.kind === 'integrationEdit'
             ? message('controller.integration.editRejected')

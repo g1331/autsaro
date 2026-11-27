@@ -95,6 +95,11 @@ export const commands = {
       fingerprint,
       changes,
     }),
+  previewVariantSelection: (fingerprint: string, selection: { [key in string]: string[] }) =>
+    __TAURI_INVOKE<Reply<VariantDifference[]>>('preview_variant_selection', {
+      fingerprint,
+      selection,
+    }),
   previewIntegrationSave: (fingerprint: string) =>
     __TAURI_INVOKE<Reply<SavePreview>>('preview_integration_save', { fingerprint }),
   saveIntegration: (fingerprint: string, revision: string) =>
@@ -429,6 +434,19 @@ export type Connection = {
   service: boolean;
 };
 
+export type ConnectionChoice = {
+  object: string;
+  definition: string;
+  current: string;
+  options: string[];
+};
+
+export type ConnectionEdit = {
+  object: string;
+  definition: string;
+  target: string;
+};
+
 export type ContractArgument = {
   name: string;
   nativeType: string;
@@ -726,6 +744,9 @@ export type InstanceDefinitionTemplate = {
 export type IntegrationEdit = {
   /**  Selected S/R port identities, never short names or inferred routes. */
   canIds?: { [key in string]: number };
+  signalSettings?: { [key in string]: SignalSetting[] };
+  variantSelection?: { [key in string]: string[] } | null;
+  connections?: ConnectionEdit[];
   applicationPeriodMs: number | null;
 };
 
@@ -733,12 +754,16 @@ export type IntegrationInspection =
   IntegrationInspection_Serialize | IntegrationInspection_Deserialize;
 
 export type IntegrationInspection_Deserialize = {
+  layers: VariantEditor | null;
+  connections: ConnectionChoice[];
   profile: string;
   description: PlanDescription_Deserialize | null;
   diagnostics: PlanDiagnostic[];
 };
 
 export type IntegrationInspection_Serialize = {
+  layers?: VariantEditor | null;
+  connections?: ConnectionChoice[];
   profile: string;
   description: PlanDescription_Serialize | null;
   diagnostics: PlanDiagnostic[];
@@ -1268,6 +1293,16 @@ export type SignalChannel = {
   transmitPeriodMs: number | null;
 };
 
+export type SignalSetting =
+  | { field: 'extended'; value: boolean }
+  | { field: 'startBit'; value: number }
+  | { field: 'bigEndian'; value: boolean }
+  | { field: 'frameLength'; value: number }
+  | { field: 'fd'; value: boolean }
+  | { field: 'dual'; value: boolean }
+  | { field: 'bitLength'; value: number }
+  | { field: 'pduLength'; value: number };
+
 export type SourceIdentity = {
   logicalPath: string;
   rawSha256: string;
@@ -1310,6 +1345,30 @@ export type ValueKind =
   'integer' | 'float' | 'boolean' | 'enumeration' | 'string' | 'function-name' | 'reference';
 
 export type ValueState = { state: 'absent' } | { state: 'explicit'; value: TypedValue };
+
+export type VariantChoices = {
+  exactlyOne: boolean;
+  options: string[];
+  selected: string[];
+};
+
+export type VariantDifference = {
+  object: string;
+  field: string | null;
+  before: string[];
+  after: string[];
+  changes: string[];
+};
+
+export type VariantEditor = {
+  base: string;
+  revision: string;
+  projectMembers: string[];
+  projectFields: string[];
+  baseDigest: string;
+  groups: { [key in string]: VariantChoices };
+  differences: VariantDifference[];
+};
 
 export type WorkspaceView = WorkspaceView_Serialize | WorkspaceView_Deserialize;
 
@@ -1487,6 +1546,13 @@ export type CommandMap = {
       changes: Parameters<typeof commands.editIntegration>[1];
     };
     result: Awaited<ReturnType<typeof commands.editIntegration>>;
+  };
+  preview_variant_selection: {
+    args: {
+      fingerprint: Parameters<typeof commands.previewVariantSelection>[0];
+      selection: Parameters<typeof commands.previewVariantSelection>[1];
+    };
+    result: Awaited<ReturnType<typeof commands.previewVariantSelection>>;
   };
   preview_integration_save: {
     args: { fingerprint: Parameters<typeof commands.previewIntegrationSave>[0] };

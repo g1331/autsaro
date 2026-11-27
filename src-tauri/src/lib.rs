@@ -27,6 +27,7 @@ macro_rules! ipc_commands {
             project::workspace_view,
             editing::inspect_integration,
             editing::edit_integration,
+            editing::preview_variant_selection,
             editing::preview_integration_save,
             editing::save_integration,
             project::create_project,

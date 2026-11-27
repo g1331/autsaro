@@ -155,7 +155,7 @@ pub(super) fn group_insert(
     Ok(())
 }
 
-fn standard_insert(
+pub(super) fn standard_insert(
     text: &str,
     owner: std::ops::Range<usize>,
     element: &str,

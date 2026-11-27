@@ -150,6 +150,21 @@
 }
 .integration-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: 12px;
+}
+
+.integration-connections {
+  grid-column: 1 / -1;
+}
+.integration-connections summary {
+  cursor: pointer;
+  padding-block: 8px;
+}
+.integration-fields label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.integration-fields select {
+  max-width: 100%;
 }

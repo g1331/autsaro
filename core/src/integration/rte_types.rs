@@ -91,6 +91,8 @@ pub(super) fn standard() -> Result<String, Vec<super::PlanDiagnostic>> {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "ipc-types", derive(specta::Type))]
 pub struct RteDataType {
+    #[serde(skip)]
+    pub(super) base_reference: Option<String>,
     pub path: String,
     pub symbol: String,
     pub native_type: String,
@@ -137,6 +139,10 @@ pub(super) fn inspect(
     let insert = |table: &mut BTreeMap<String, RteDataType>, index, native_type, array_length| {
         let symbol = graph.text(index, "SHORT-NAME").unwrap_or("").to_owned();
         let item = RteDataType {
+            base_reference: match graph.descendants(index, "BASE-TYPE-REF").as_slice() {
+                [base] => Some(graph.elements[*base].text.clone()),
+                _ => None,
+            },
             path: graph.elements[index].object.clone(),
             symbol: symbol.clone(),
             native_type,
