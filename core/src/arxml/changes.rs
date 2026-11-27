@@ -770,25 +770,26 @@ impl Workspace {
             candidate.workspace.revision = before.revision;
             for (change_id, _, range) in &linked {
                 for edit in &linked_fields[range.clone()] {
-                    let updated = candidate
-                        .workspace
-                        .snapshot
-                        .fields
-                        .iter()
-                        .find(|field| {
-                            let owner = &candidate.workspace.snapshot.objects
-                                [candidate.workspace.snapshot.object_by_id[&field.view.object_id]];
-                            owner.view.path == edit.object
-                                && if edit.parameter {
-                                    field.view.definition.definition_id.rsplit('/').next()
-                                        == Some(edit.field.as_str())
-                                } else {
-                                    field.element == edit.field
-                                }
-                        })
-                        .ok_or_else(|| {
-                            crate::product_message!("backend.arxml.changes.stale_field_id")
-                        })?;
+                    let updated = candidate.workspace.snapshot.fields.iter().find(|field| {
+                        let owner = &candidate.workspace.snapshot.objects
+                            [candidate.workspace.snapshot.object_by_id[&field.view.object_id]];
+                        owner.view.path == edit.object
+                            && if edit.parameter {
+                                field.view.definition.definition_id.rsplit('/').next()
+                                    == Some(edit.field.as_str())
+                            } else {
+                                field.element == edit.field
+                            }
+                    });
+                    let Some(updated) = updated else {
+                        // A missing FD flag already means Classical. The writer leaves it absent.
+                        if edit.field == "CAN-FD-FRAME-SUPPORT" && edit.value == "false" {
+                            continue;
+                        }
+                        return Err(crate::product_message!(
+                            "backend.arxml.changes.stale_field_id"
+                        ));
+                    };
                     let previous = before
                         .snapshot
                         .field_by_id

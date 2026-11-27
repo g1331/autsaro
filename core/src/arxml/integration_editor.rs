@@ -585,6 +585,7 @@ impl Workspace {
         let plan = self.integration_plan().map_err(|issues| {
             crate::message::LocalizedText::messages(issues.into_iter().map(|issue| issue.message))
         })?;
+        let mut diagnostic_addressing = None;
         if let Some(period) = edit.application_period_ms {
             let seconds = field.view.definition.kind == Some(ValueKind::Float);
             let numeric = |raw: &str| -> Option<u32> {
@@ -616,7 +617,7 @@ impl Workspace {
                         "true" | "1" => true,
                         "false" | "0" => false,
                         _ => {
-                            crate::integration::can_id::policy(
+                            let (addressing, fd, _) = crate::integration::can_id::policy(
                                 raw,
                                 field
                                     .view
@@ -624,8 +625,9 @@ impl Workspace {
                                     .definition_id
                                     .ends_with("/CanIfRxPduCanIdType"),
                             )
-                            .ok_or_else(invalid)?
-                            .1 != 0
+                            .ok_or_else(invalid)?;
+                            diagnostic_addressing = Some(addressing);
+                            fd != 0
                         }
                     };
                     if fd { "FD" } else { "CLASSICAL" }.into()
@@ -683,6 +685,18 @@ impl Workspace {
         let mut edits = editor::fields(&plan, &edit).map_err(|issues| {
             crate::message::LocalizedText::messages(issues.into_iter().map(|issue| issue.message))
         })?;
+        if let Some(addressing) = diagnostic_addressing {
+            let trigger = edits
+                .iter()
+                .find(|edit| edit.field == "CAN-FD-FRAME-SUPPORT")
+                .ok_or_else(invalid)?;
+            edits.push(editor::FieldEdit {
+                object: trigger.object.clone(),
+                field: "CAN-ADDRESSING-MODE".into(),
+                parameter: false,
+                value: addressing.into(),
+            });
+        }
         let index = group
             .fields
             .iter()
